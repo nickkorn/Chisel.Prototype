@@ -55,6 +55,16 @@ namespace Chisel.Components
         }
 
 
+        public static HashSet<T> Common<T>(this HashSet<T> A, HashSet<T> B)
+        {
+            var self = new HashSet<T>();
+            foreach (var item in A)
+                if (B.Contains(item))
+                    self.Add(item);
+            return self;
+        }
+
+
         public static bool AddRange<T>(this HashSet<T> self, HashSet<T> other)
         {
             if (other == null)

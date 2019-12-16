@@ -52,24 +52,20 @@ namespace Chisel.Core
         private bool RayCastMulti(MeshQuery[]						meshQuery,
                                   Vector3							worldRayStart,
                                   Vector3							worldRayEnd,
+                                  Matrix4x4                         treeLocalToWorldMatrix,
                                   int								filterLayerParameter0,
                                   out CSGTreeBrushIntersection[]	intersections,
                                   CSGTreeNode[]						ignoreNodes = null)
         {
-            return CSGManager.RayCastMulti(meshQuery, worldRayStart, worldRayEnd, filterLayerParameter0, out intersections, ignoreNodes);
+            return CSGManager.RayCastMulti(this, meshQuery, worldRayStart, worldRayEnd, treeLocalToWorldMatrix, filterLayerParameter0, out intersections, ignoreNodes);
         }
         
-        private bool GetNodesInFrustum(Plane[]			 planes, 
+        private bool GetNodesInFrustum(MeshQuery[]       meshQuery,
+                                       Plane[]			 planes, 
                                        out CSGTreeNode[] nodes)
         {
-            return CSGManager.GetNodesInFrustum(planes, out nodes);
+            return CSGManager.GetNodesInFrustum(meshQuery, planes, out nodes);
 
-        }
-        
-        private bool GetUserIDsInFrustum(Plane[]	 planes, 
-                                         out Int32[] userIDs)
-        {
-            return CSGManager.GetUserIDsInFrustum(planes, out userIDs);
         }
 #endif
     }

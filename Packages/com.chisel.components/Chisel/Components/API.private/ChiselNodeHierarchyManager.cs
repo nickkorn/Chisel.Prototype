@@ -666,6 +666,10 @@ namespace Chisel.Components
                 ChiselBrushContainerAssetManager.Update();
                 ChiselBrushMaterialManager.Update();
                 UpdateTrampoline();
+                // TODO: fix that generators create brushes inside the trampoline, requiring us to call things twice
+                ChiselBrushContainerAssetManager.Update();
+                ChiselBrushMaterialManager.Update();
+                UpdateTrampoline();
             }
             // If we get an exception we don't want to end up infinitely spawning this exception ..
             finally
@@ -1296,6 +1300,7 @@ namespace Chisel.Components
             if (destroyNodesList.Count > 0)
             {                
                 // Destroy all old nodes after we created new nodes, to make sure we don't get conflicting IDs
+                // TODO: add 'generation' to indices to avoid needing to do this
                 CSGManager.Destroy(destroyNodesList.ToArray());
                 destroyNodesList.Clear();
             }

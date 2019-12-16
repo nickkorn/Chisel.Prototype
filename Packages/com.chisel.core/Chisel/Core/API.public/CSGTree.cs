@@ -180,6 +180,7 @@ namespace Chisel.Core
             return intersections;
         }
 
+#if !USE_MANAGED_CSG_IMPLEMENTATION
         // TODO: add description
         public CSGTreeNode[] GetNodesInFrustum(Plane[]		planes)
         {
@@ -188,6 +189,16 @@ namespace Chisel.Core
                 return null;
             return nodes;
         }
+#else
+        // TODO: add description
+        public CSGTreeNode[] GetNodesInFrustum(MeshQuery[] meshQuery, Plane[] planes)
+        {
+            CSGTreeNode[] nodes;
+            if (!GetNodesInFrustum(meshQuery, planes, out nodes))
+                return null;
+            return nodes;
+        }
+#endif
         
         // TODO: add description / make this more consistent
         public static CSGTree	Find(int userID)			{ return new CSGTree { treeNodeID = FindTreeByUserID(userID) }; }
@@ -198,9 +209,22 @@ namespace Chisel.Core
         public static bool operator == (CSGTree left, CSGTree right) { return left.treeNodeID == right.treeNodeID; }
         [EditorBrowsable(EditorBrowsableState.Never)]
         public static bool operator != (CSGTree left, CSGTree right) { return left.treeNodeID != right.treeNodeID; }
+		[EditorBrowsable(EditorBrowsableState.Never)]
+		public static bool operator ==(CSGTree left, CSGTreeNode right) { return left.treeNodeID == right.nodeID; }
+		[EditorBrowsable(EditorBrowsableState.Never)]
+		public static bool operator !=(CSGTree left, CSGTreeNode right) { return left.treeNodeID != right.nodeID; }
+		[EditorBrowsable(EditorBrowsableState.Never)]
+		public static bool operator ==(CSGTreeNode left, CSGTree right) { return left.nodeID == right.treeNodeID; }
+		[EditorBrowsable(EditorBrowsableState.Never)]
+		public static bool operator !=(CSGTreeNode left, CSGTree right) { return left.nodeID != right.treeNodeID; }
 
         [EditorBrowsable(EditorBrowsableState.Never)]
-        public override bool Equals(object obj) { if (!(obj is CSGTree)) return false; var other = (CSGTree)obj; return treeNodeID == other.treeNodeID; }
+        public override bool Equals(object obj)
+		{
+			if (obj is CSGTree) return treeNodeID == ((CSGTree)obj).treeNodeID;
+			if (obj is CSGTreeNode) return treeNodeID == ((CSGTreeNode)obj).nodeID;
+			return false;
+		}
         [EditorBrowsable(EditorBrowsableState.Never)]
         public override int GetHashCode() { return treeNodeID.GetHashCode(); }
         #endregion

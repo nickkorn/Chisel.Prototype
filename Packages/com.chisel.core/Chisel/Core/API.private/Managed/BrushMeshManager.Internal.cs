@@ -19,9 +19,9 @@ namespace Chisel.Core
             {
                 var nodeIndex = brushMeshInstanceID - 1;
                 if (nodeIndex >= 0 && nodeIndex < brushMeshes.Count)
-                    Debug.LogError("Invalid ID " + brushMeshInstanceID);
+                    Debug.LogError($"Invalid ID {brushMeshInstanceID}");
                 else
-                    Debug.LogError("Invalid ID " + brushMeshInstanceID + ", outside of bounds");
+                    Debug.LogError($"Invalid ID {brushMeshInstanceID}, outside of bounds (min 1, max {brushMeshes.Count})");
                 return false;
             }
             return true;
