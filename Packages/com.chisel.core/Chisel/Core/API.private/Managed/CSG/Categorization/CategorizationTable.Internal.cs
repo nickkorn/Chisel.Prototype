@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -22,6 +23,7 @@ namespace Chisel.Core
         public static readonly CategoryRoutingRow invalid   = new CategoryRoutingRow(CategoryGroupIndex.Invalid, CategoryGroupIndex.Invalid, CategoryGroupIndex.Invalid, CategoryGroupIndex.Invalid);
         public static readonly CategoryRoutingRow identity  = new CategoryRoutingRow((CategoryGroupIndex)CategoryIndex.Inside, (CategoryGroupIndex)CategoryIndex.Aligned, (CategoryGroupIndex)CategoryIndex.ReverseAligned, (CategoryGroupIndex)CategoryIndex.Outside);
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public CategoryRoutingRow(CategoryGroupIndex inside, CategoryGroupIndex aligned, CategoryGroupIndex reverseAligned, CategoryGroupIndex outside)
 		{
 			destination[(int)CategoryIndex.Inside]		    = (int)inside;
@@ -30,6 +32,7 @@ namespace Chisel.Core
 			destination[(int)CategoryIndex.Outside]		    = (int)outside;
 		}
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public CategoryRoutingRow(CategoryGroupIndex value)
         {
             destination[(int)CategoryIndex.Inside] = (int)value;
@@ -38,24 +41,32 @@ namespace Chisel.Core
             destination[(int)CategoryIndex.Outside] = (int)value;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool AreAllTheSame() { for (var i = 1; i < Length; i++) { if (destination[i - 1] != destination[i]) return false; } return true; }
-		public bool Equals(CategoryRoutingRow other) { for (var i = 0; i < Length; i++) { if (other.destination[i] != destination[i]) return false; } return true; }
-	
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool Equals(CategoryRoutingRow other) { for (var i = 0; i < Length; i++) { if (other.destination[i] != destination[i]) return false; } return true; }
+
         public CategoryGroupIndex this[CategoryIndex index]
         {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get { return (CategoryGroupIndex)destination[(int)index]; }
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             set { destination[(int)index] = (int)value; }
         }
 
         public CategoryGroupIndex this[CategoryGroupIndex index]
         {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get { return (CategoryGroupIndex)destination[(int)index]; }
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             set { destination[(int)index] = (int)value; }
         }
 
         public CategoryGroupIndex this[int index]
         {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get { return (CategoryGroupIndex)destination[index]; }
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             set { destination[index] = (int)value; }
         }
 
@@ -64,6 +75,7 @@ namespace Chisel.Core
         // Is PolygonGroupIndex instead of int, but C# doesn't like that
         fixed int	destination[Length];
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void RouteFrom(CategoryRoutingRow input, CategoryIndex inside, CategoryIndex aligned, CategoryIndex revAligned, CategoryIndex outside)
 		{
 			var insideDestination		= input.destination[(int)inside];
@@ -76,7 +88,8 @@ namespace Chisel.Core
 			destination[(int)CategoryIndex.Outside]		    = outsideDestination;
 		}
 
-		public void RouteAllFrom(CategoryRoutingRow input, CategoryIndex all)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void RouteAllFrom(CategoryRoutingRow input, CategoryIndex all)
 		{
 			var allDestination = input.destination[(int)all];
 			destination[(int)CategoryIndex.Inside]		    = allDestination;
@@ -85,7 +98,8 @@ namespace Chisel.Core
 			destination[(int)CategoryIndex.Outside]		    = allDestination;
 		}
 
-		public void Reroute(CategoryIndex inside, CategoryIndex aligned, CategoryIndex revAligned, CategoryIndex outside)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void Reroute(CategoryIndex inside, CategoryIndex aligned, CategoryIndex revAligned, CategoryIndex outside)
 		{
 			var insideDestination		= destination[(int)inside];
 			var alignedDestination		= destination[(int)aligned];
@@ -95,9 +109,10 @@ namespace Chisel.Core
 			destination[(int)CategoryIndex.Aligned]		    = alignedDestination;
 			destination[(int)CategoryIndex.ReverseAligned]	= revAlignedDestination;
 			destination[(int)CategoryIndex.Outside]		    = outsideDestination;
-		} 
+		}
 
-		public void RerouteAll(CategoryIndex all)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void RerouteAll(CategoryIndex all)
 		{
 			var allDestination = destination[(int)all];
 			destination[(int)CategoryIndex.Inside]		    = allDestination;
@@ -106,7 +121,8 @@ namespace Chisel.Core
 			destination[(int)CategoryIndex.Outside]		    = allDestination;
 		}
 
-		public override string ToString()
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public override string ToString()
 		{
 			return string.Format("({0}, {1}, {2}, {3})", destination[(int)CategoryIndex.Inside], destination[(int)CategoryIndex.Aligned], destination[(int)CategoryIndex.ReverseAligned], destination[(int)CategoryIndex.Outside]);
 		}
@@ -413,8 +429,9 @@ namespace Chisel.Core
 			
 			stackIterator.Add(new CSGStackData(first_sibling_index, last_sibling_index, stack_node_counter, currentStackNodeIndex, categorization_node));
 		}
-		
-		static void SetUsedNodesBits(CSGTreeBrush brush, BrushIntersectionLookup bitset)
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static void SetUsedNodesBits(CSGTreeBrush brush, BrushIntersectionLookup bitset)
 		{
 			var brushNodeIndex = brush.NodeID - 1; 
 
@@ -885,6 +902,7 @@ namespace Chisel.Core
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal void SetInvalid() { routingRow = CategoryRoutingRow.invalid; }
     }
 #endif

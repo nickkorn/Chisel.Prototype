@@ -1,6 +1,7 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Runtime.CompilerServices;
 using Unity.Mathematics;
 using UnityEngine;
 
@@ -31,6 +32,7 @@ namespace Chisel.Core
         public Int32[] invisibleInnerLines;
         public Int32[] invalidLines;
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Reset()
         {
             visibleOuterLines   = new Int32[0];
@@ -48,6 +50,7 @@ namespace Chisel.Core
         public Outline[]    surfaceOutlines;
         public Vector3[]    vertices;
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Reset()
         {
             brushOutline.Reset();
@@ -88,9 +91,13 @@ namespace Chisel.Core
             public MeshQuery	meshQuery;
             public Int32		surfaceParameter;
 
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static bool operator ==(MeshID left, MeshID right) { return (left.meshQuery == right.meshQuery && left.surfaceParameter == right.surfaceParameter); }
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static bool operator !=(MeshID left, MeshID right) { return (left.meshQuery != right.meshQuery || left.surfaceParameter != right.surfaceParameter); }
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public override bool Equals(object obj) { if (ReferenceEquals(this, obj)) return true; if (!(obj is MeshID)) return false; var other = (MeshID)obj; return other == this; }
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public override int GetHashCode() { return surfaceParameter.GetHashCode() ^ meshQuery.GetHashCode(); }
         };
 
@@ -111,6 +118,7 @@ namespace Chisel.Core
 
             public readonly RoutingTable    routingTable        = new RoutingTable();
 
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void Reset()
             {
                 brushOutlineGeneration  = 0;

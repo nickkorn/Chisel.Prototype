@@ -1,10 +1,12 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 
 namespace Chisel.Components
 {
     public static class HashSetExtensions
     {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool Set<T>(this HashSet<T> self, HashSet<T> other)
         {
             var modified = !self.ContentsEquals(other);
@@ -16,6 +18,7 @@ namespace Chisel.Components
             return modified;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool Set<T>(this HashSet<T> self, IEnumerable<T> other)
         {
             var modified = !self.ContentsEquals(other);
@@ -28,6 +31,7 @@ namespace Chisel.Components
         }
 
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool SetCommon<T>(this HashSet<T> self, HashSet<T> A, HashSet<T> B)
         {
             var minCount = (A.Count >= B.Count) ? B.Count : A.Count;
@@ -55,6 +59,7 @@ namespace Chisel.Components
         }
 
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static HashSet<T> Common<T>(this HashSet<T> A, HashSet<T> B)
         {
             var self = new HashSet<T>();
@@ -65,6 +70,7 @@ namespace Chisel.Components
         }
 
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool AddRange<T>(this HashSet<T> self, HashSet<T> other)
         {
             if (other == null)
@@ -75,6 +81,7 @@ namespace Chisel.Components
             return modified;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool AddRange<T>(this HashSet<T> self, IEnumerable<T> other)
         {
             if (other == null)
@@ -85,7 +92,7 @@ namespace Chisel.Components
             return modified;
         }
 
-        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool RemoveRange<T>(this HashSet<T> self, HashSet<T> other)
         {
             if (other == null)
@@ -96,6 +103,7 @@ namespace Chisel.Components
             return modified;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool RemoveRange<T>(this HashSet<T> self, IEnumerable<T> other)
         {
             if (other == null)
@@ -105,8 +113,9 @@ namespace Chisel.Components
                 modified = self.Remove(item) || modified;
             return modified;
         }
-        
 
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool ContentsEquals<T>(this HashSet<T> self, HashSet<T> other)
         {
             if (other.Count != self.Count)
@@ -117,7 +126,8 @@ namespace Chisel.Components
                     return false;
             return true;
         }
-        
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool ContentsEquals<T>(this HashSet<T> self, IEnumerable<T> other)
         {
             if (other.Count() != self.Count)
@@ -129,7 +139,8 @@ namespace Chisel.Components
             return true;
         }
 
-        
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool ContainsAll<T>(this HashSet<T> self, HashSet<T> other)
         {
             if (other.Count > self.Count)
@@ -140,7 +151,8 @@ namespace Chisel.Components
                     return false;
             return true;
         }
-        
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool ContainsAll<T>(this HashSet<T> self, IEnumerable<T> other)
         {
             foreach (var item in other)
@@ -148,7 +160,8 @@ namespace Chisel.Components
                     return false;
             return true;
         }
-        
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool ContainsAny<T>(this HashSet<T> self, IEnumerable<T> other)
         {
             foreach (var item in other)

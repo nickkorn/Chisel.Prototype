@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using UnityEngine;
 
@@ -28,10 +29,13 @@ namespace Chisel.Core
         public Int32[]		InvisibleInnerLines     { get { return invisibleInnerLines; } }
         public Int32[]		InvalidLines            { get { return invalidLines; } }
 
-        public bool	Dirty { get { return outlineGeneration != GetBrushOutlineGeneration(originBrushID); }  }
+        public bool	Dirty { [MethodImpl(MethodImplOptions.AggressiveInlining)] get { return outlineGeneration != GetBrushOutlineGeneration(originBrushID); }  }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ChiselWireframe CreateWireframe(CSGTreeBrush brush) { if (!brush.Valid) return null; return CreateBrushWireframe(brush.NodeID); }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ChiselWireframe CreateWireframe(CSGTreeBrush brush, int surfaceID) { if (!brush.Valid) return null; return CreateSurfaceWireframe(brush.NodeID, surfaceID); }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool UpdateWireframe() { if (originSurfaceID == 0) return UpdateBrushWireframe(this); else  return UpdateSurfaceWireframe(this);  }
     }
 }

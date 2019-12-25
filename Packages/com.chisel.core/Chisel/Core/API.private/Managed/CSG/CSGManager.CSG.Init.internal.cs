@@ -9,6 +9,7 @@ using Unity.Collections.LowLevel.Unsafe;
 using Unity.Jobs;
 using Unity.Mathematics;
 using ReadOnlyAttribute = Unity.Collections.ReadOnlyAttribute;
+using System.Runtime.CompilerServices;
 
 namespace Chisel.Core
 {
@@ -21,7 +22,8 @@ namespace Chisel.Core
         const float         kNormalEpsilon			= 0.9999f;
         const float         kPlaneDistanceEpsilon	= kDistanceEpsilon;
 
-        
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static bool IsDegenerate(VertexSoup soup, List<ushort> indices)
         {
             if (indices.Count < 3)

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using UnityEngine;
 using Unity.Mathematics;
+using System.Runtime.CompilerServices;
 
 namespace Chisel.Core
 {
@@ -20,6 +21,7 @@ namespace Chisel.Core
         private static readonly Vector3 NegativeY = new Vector3(0, -1, 0);
         private static readonly Vector3 PositiveZ = new Vector3(0, 0, 1);
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector3 ClosestTangentAxis(Vector3 vector)
         {
             var absX = Mathf.Abs(vector.x);
@@ -31,6 +33,8 @@ namespace Chisel.Core
 
             return NegativeY;
         }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool Equals(this Vector3 self, Vector3 other, double epsilon)
         {
             return System.Math.Abs(self.x - other.x) <= epsilon &&
@@ -38,6 +42,7 @@ namespace Chisel.Core
                    System.Math.Abs(self.z - other.z) <= epsilon;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool Equals(this Vector3 self, Vector3 other, float epsilon)
         {
             return System.Math.Abs(self.x - other.x) <= epsilon &&
@@ -45,13 +50,14 @@ namespace Chisel.Core
                    System.Math.Abs(self.z - other.z) <= epsilon;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Matrix4x4 RotateAroundAxis(Vector3 center, Vector3 normal, float angle)
         {
             var rotation = Quaternion.AngleAxis(angle, normal);
             return MathExtensions.RotateAroundPoint(center, rotation);
         }
 
-
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Matrix4x4 RotateAroundPoint(Vector3 center, Quaternion rotation)
         {
             return Matrix4x4.TRS(center, Quaternion.identity, Vector3.one) *
@@ -65,11 +71,13 @@ namespace Chisel.Core
             binormal = Vector3.Cross(normal, tangent).normalized;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector3 CalculateTangent(Vector3 normal)
         {
             return Vector3.Cross(normal, ClosestTangentAxis(normal)).normalized;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Matrix4x4 GenerateLocalToPlaneSpaceMatrix(Vector4 planeVector)
         {
             Vector3 normal = -(Vector3)planeVector;
@@ -87,11 +95,13 @@ namespace Chisel.Core
             };
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector3 CalculateBinormal(Vector3 normal)
         {
             return Vector3.Cross(normal, CalculateTangent(normal));
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Matrix4x4 GenerateLocalToPlaneSpaceMatrix(Plane plane)
         {
             Vector3 normal = -plane.normal;
@@ -108,8 +118,9 @@ namespace Chisel.Core
                 m30 = 0.0f,		  m31 = 0.0f,		m32 = 0.0f,			m33 = 1.0f
             };
         }
-        
-		public static bool IsInside(this Plane plane, in Bounds bounds)
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool IsInside(this Plane plane, in Bounds bounds)
 		{
             var normal = plane.normal;
 			var backward_x = normal.x < 0 ? bounds.min.x : bounds.max.x;
@@ -119,7 +130,8 @@ namespace Chisel.Core
 			return (distance < -kDistanceEpsilon);
 		}
 
-		public static bool IsOutside(this Plane plane, Bounds bounds)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool IsOutside(this Plane plane, Bounds bounds)
 		{
             var normal = plane.normal;
 			var backward_x = normal.x >= 0 ? bounds.min.x : bounds.max.x;
@@ -129,7 +141,7 @@ namespace Chisel.Core
             return (distance > kDistanceEpsilon);
 		}
 
-
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         static bool Intersect(Vector2 p1, Vector2 d1, Vector2 p2, Vector2 d2, out Vector2 intersection)
         {
             const float kEpsilon = 0.0001f;
@@ -149,6 +161,7 @@ namespace Chisel.Core
         }
 
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static float SignedAngle(Vector3 v1, Vector3 v2, Vector3 n)
         {
             //  Acute angle [0,180]
@@ -162,6 +175,7 @@ namespace Chisel.Core
             return signedAngle;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector2 Lerp(Vector2 A, Vector2 B, float t)
         {
             return new Vector2(
@@ -170,6 +184,7 @@ namespace Chisel.Core
                 );
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector3 Lerp(Vector3 A, Vector3 B, float t)
         {
             return new Vector3(
@@ -179,12 +194,14 @@ namespace Chisel.Core
                 );
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Quaternion Lerp(Quaternion A, Quaternion B, float t)
         {
             return Quaternion.Slerp(A, B, t);
         }
-        
+
         // Transforms a plane by this matrix.
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Plane Transform(this Matrix4x4 matrix, in Plane plane)
         {
             var ittrans = matrix.inverse;
@@ -201,6 +218,7 @@ namespace Chisel.Core
             return new Plane(normal / magnitude, d / magnitude);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Plane Transform(this Matrix4x4 matrix, in Vector4 planeVector)
         {
             var ittrans = matrix.inverse;
@@ -218,6 +236,7 @@ namespace Chisel.Core
         }
 
         // Transforms a plane by this matrix.
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Plane InverseTransform(this Matrix4x4 matrix, in Plane plane)
         {
             var ittrans = matrix.transpose;
@@ -228,6 +247,7 @@ namespace Chisel.Core
             return new Plane(normal / magnitude, result.w / magnitude);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Plane InverseTransform(this Matrix4x4 matrix, in Vector4 planeVector)
         {
             var ittrans = matrix.transpose;
@@ -237,6 +257,7 @@ namespace Chisel.Core
             return new Plane(normal / magnitude, result.w / magnitude);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static float4 InverseTransform(this float4x4 ittrans, in float4 planeVector)
         {
             // note: a transpose is part of this transformation
@@ -249,6 +270,7 @@ namespace Chisel.Core
         }
 
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void Set(this Transform transform, in Matrix4x4 matrix)
         {
             var position = matrix.GetColumn(3);
@@ -283,6 +305,8 @@ namespace Chisel.Core
         public const float kDistanceEpsilon = 0.00001f;
 
         // Check if bounds is inside/outside or intersects with plane
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static IntersectionResult Intersection(this Plane plane, Bounds bounds)
         {
             var min = bounds.min;
@@ -307,6 +331,7 @@ namespace Chisel.Core
             return IntersectionResult.Intersecting;	// closest point is intersecting
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static IntersectionResult Intersection(this Plane plane, Vector3 min, Vector3 max)
         {
             var normal = plane.normal;
@@ -328,6 +353,7 @@ namespace Chisel.Core
             return IntersectionResult.Intersecting;	// closest point is intersecting
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector3 Intersection(Vector3 v1, Vector3 v2, float d1, float d2)
         {
             var prevDistance	= d1;
@@ -351,8 +377,9 @@ namespace Chisel.Core
                 return currVertex - (vector * delta);
             }
         }
-        
+
         // http://matthias-mueller-fischer.ch/publications/stablePolarDecomp.pdf
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void ExtractRotation(in Matrix4x4 input, out Quaternion output, uint maxIter = 10)
         {
             const float kEpsilon = 1.0e-9f;

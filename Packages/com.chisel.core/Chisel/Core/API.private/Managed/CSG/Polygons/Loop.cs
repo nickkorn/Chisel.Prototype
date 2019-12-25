@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Unity.Burst;
 using Unity.Collections;
@@ -48,10 +49,12 @@ namespace Chisel.Core
         [NonSerialized] public bool                 convex              = false;
 
 
-        public bool Valid { get { return indices.Count >= 3; } }
+        public bool Valid { [MethodImpl(MethodImplOptions.AggressiveInlining)] get { return indices.Count >= 3; } }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public Loop() { }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public Loop(Loop original)
         {
             this.edges  .AddRange(original.edges);
@@ -61,6 +64,7 @@ namespace Chisel.Core
             this.convex             = original.convex;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void CopyDetails(Loop other)
         {
             info                = other.info;
@@ -68,17 +72,20 @@ namespace Chisel.Core
             interiorCategory    = other.interiorCategory;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ClearAllIndices()
         {
             indices.Clear();
             edges.Clear();
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void AddIndex(VertexSoup soup, ushort newIndex)
         {
             indices.Add(newIndex);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Loop FindOrAddLoop(List<Loop> loops, int basePlaneIndex, CSGTreeBrush brush, bool isConvex = true)
         {
             Loop loop = null;
@@ -102,6 +109,7 @@ namespace Chisel.Core
 
         static HashSet<Edge> s_UniqueEdges = new HashSet<Edge>();
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void AddEdges(List<ushort> indices)
         {
             if (indices.Count == 0)
@@ -124,6 +132,7 @@ namespace Chisel.Core
             edges.AddRange(s_UniqueEdges);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void AddEdges(List<Edge> addEdges)
         {
             if (addEdges.Count == 0)
@@ -149,6 +158,7 @@ namespace Chisel.Core
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int IndexOf(Edge edge)
         {
             for (int e = 0; e < edges.Count; e++)
@@ -159,6 +169,7 @@ namespace Chisel.Core
             return -1;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int IndexOf(Edge edge, out bool inverted)
         {
             inverted = false;
@@ -169,7 +180,8 @@ namespace Chisel.Core
             }
             return -1;
         }
-        
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public CategoryIndex CategorizeEdge(VertexSoup soup, Edge edge)
         {
             if (IndexOf(edge, out bool inverted) != -1)

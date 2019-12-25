@@ -1,8 +1,9 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.ComponentModel;
 using UnityEngine;
+using System.Runtime.CompilerServices;
 
 namespace Chisel.Core
 {
@@ -63,7 +64,8 @@ namespace Chisel.Core
 
             return IntersectionType.Intersection;//*/
         }
-    
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         static int WhichSide(Vector3[] vertices, Plane plane, double epsilon)
         {
             {
@@ -91,6 +93,7 @@ namespace Chisel.Core
         }
 
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         static Plane[] TransformOtherIntoBrushSpace(CSGTreeBrush brush0, CSGTreeBrush brush1, BrushMesh.Surface[] srcPlanes1)
         {
             // inverse of (otherTransform.localToWorldSpace * this->worldToLocalSpace)

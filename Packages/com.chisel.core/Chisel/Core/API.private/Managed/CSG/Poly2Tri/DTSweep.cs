@@ -1,4 +1,4 @@
-﻿/* Poly2Tri
+/* Poly2Tri
  * Copyright (c) 2009-2010, Poly2Tri Contributors
  * http://code.google.com/p/poly2tri/
  *
@@ -83,6 +83,7 @@ namespace Poly2Tri
             public fixed ushort neighbors[3];
             fixed byte          edgeFlags[3];
 
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public DelaunayTriangle(ushort p1, ushort p2, ushort p3)
             {
                 indices[0] = p1;
@@ -149,6 +150,7 @@ namespace Poly2Tri
             /// <param name="p1">Point 1 of the shared edge</param>
             /// <param name="p2">Point 2 of the shared edge</param>
             /// <param name="t">This triangle's new neighbor</param>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void MarkNeighbor(ushort p1, ushort p2, ushort triangleIndex)
             {
                 ushort i = EdgeIndex(p1, p2);
@@ -381,7 +383,8 @@ namespace Poly2Tri
             FinalizationPolygon();
             return triangleIndices.ToArray();
         }
-        
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         void Clear(int pointCount)
         {
             if (edges == null || 
@@ -413,9 +416,10 @@ namespace Poly2Tri
         }
 
         quaternion rotation;
-        
 
 
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         void AddTriangle(in DelaunayTriangle triangle)
         {
             triangles.Add(triangle);
@@ -423,9 +427,12 @@ namespace Poly2Tri
         }
 
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         bool HasNext(ushort nodeIndex) { if (nodeIndex == ushort.MaxValue) return false; return advancingFrontNodes[nodeIndex].nextNodeIndex != ushort.MaxValue; }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         bool HasPrev(ushort nodeIndex) { if (nodeIndex == ushort.MaxValue) return false; return advancingFrontNodes[nodeIndex].prevNodeIndex != ushort.MaxValue; }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         ushort LocateNode(float x)
         {
             var nodeIndex = searchNodeIndex;
@@ -458,6 +465,7 @@ namespace Poly2Tri
             return ushort.MaxValue;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal ushort CreateAdvancingFrontNode(float2 point, ushort pointIndex, ushort prevIndex, ushort nextIndex)
         {
             var newIndex = (ushort)advancingFrontNodes.Count;
@@ -519,6 +527,7 @@ namespace Poly2Tri
         }
 
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         void MeshClean(ushort triangleIndex)
         {
             if (triangleIndex == ushort.MaxValue || triangleInterior[triangleIndex])
@@ -550,6 +559,7 @@ namespace Poly2Tri
 
 
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         void CreateAdvancingFront(int index)
         {
             // Initial triangle
@@ -617,6 +627,7 @@ namespace Poly2Tri
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         int PointComparerMethod(ushort i1, ushort i2)
         {
             var pt1 = points[i1];
@@ -1076,7 +1087,8 @@ namespace Poly2Tri
             }
         }
 
-        
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         bool IsEdgeSideOfTriangle(ushort triangleIndex, ushort epIndex, ushort eqIndex)
         {
             if (triangleIndex == ushort.MaxValue)
@@ -1245,6 +1257,7 @@ namespace Poly2Tri
         /// the point in current triangle that is the opposite point to the next
         /// triangle. 
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         bool NextFlipPoint(ushort epIndex, ushort eqIndex, ushort otherTriangleIndex, ushort opIndex, out ushort newP)
         {
             newP = ushort.MaxValue;
@@ -1276,6 +1289,7 @@ namespace Poly2Tri
         /// <param name="p">a point shared by both triangles</param>
         /// <param name="op">another point shared by both triangles</param>
         /// <returns>returns the triangle still intersecting the edge</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         ushort NextFlipTriangle(Orientation o, ushort triangleIndex, ushort otherTriangleIndex, ushort pIndex, ushort opIndex)
         {
             ushort edgeIndex;
@@ -1793,6 +1807,7 @@ namespace Poly2Tri
 
 
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         bool HasEdgeByPoints(ushort p1, ushort p2)
         {
             if (p2 == ushort.MaxValue ||

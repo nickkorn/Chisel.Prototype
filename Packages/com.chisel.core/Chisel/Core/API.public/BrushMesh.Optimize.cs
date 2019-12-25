@@ -3,6 +3,7 @@ using System.Collections;
 using Chisel.Core;
 using System.Collections.Generic;
 using System;
+using System.Runtime.CompilerServices;
 
 namespace Chisel.Core
 {
@@ -206,6 +207,7 @@ namespace Chisel.Core
 
         private static class VertPair
         {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static ulong Create(int a, int b)
             {
                 var a32 = (ulong)a;
@@ -218,6 +220,7 @@ namespace Chisel.Core
 
         private static class TriangleIndex
         {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static ulong Create(int a, int b, int c)
             {
                 // FIXME: assumes vertex indices are 16-bit

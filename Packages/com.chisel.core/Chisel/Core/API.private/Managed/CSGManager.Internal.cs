@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using UnityEngine;
 
@@ -22,14 +23,22 @@ namespace Chisel.Core
             public CSGOperationType operationType;
             public CSGNodeType		nodeType;
 
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void SetOperation	(CSGOperationType operation)	{ this.operationType = operation; }
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void SetStatus		(NodeStatusFlags status)		{ this.status = status; }
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void SetNodeType		(CSGNodeType nodeType)			{ this.nodeType = nodeType; }
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public bool IsAnyNodeFlagSet(NodeStatusFlags flag)			{ return (status & flag) != NodeStatusFlags.None; }
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public bool IsNodeFlagSet	(NodeStatusFlags flag)			{ return (status & flag) == flag; }
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void UnSetNodeFlag	(NodeStatusFlags flag)			{ status &= ~flag; }
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void SetNodeFlag		(NodeStatusFlags flag)			{ status |= flag; }
 
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             internal static void Reset(ref NodeFlags data)
             {
                 data.status         = NodeStatusFlags.None;
@@ -43,6 +52,7 @@ namespace Chisel.Core
             public Matrix4x4 nodeToTree;
             public Matrix4x4 treeToNode;
 
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static void Reset(ref NodeTransform data)
             {
                 data.nodeToTree = Matrix4x4.identity;
@@ -57,6 +67,7 @@ namespace Chisel.Core
             public bool transformDirty;
             public bool inverted;
 
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static void Reset(ref NodeLocalTransform data)
             {
                 data.localTransformation    = Matrix4x4.identity;
@@ -65,6 +76,7 @@ namespace Chisel.Core
                 data.inverted               = false;
             }
 
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             internal static void SetLocalTransformation(ref NodeLocalTransform data, Matrix4x4 localTransformation)
             {
                 data.localTransformation    = localTransformation;
@@ -79,6 +91,7 @@ namespace Chisel.Core
             public readonly List<GeneratedMeshDescription>	meshDescriptions	= new List<GeneratedMeshDescription>();
             public readonly List<SubMeshCounts>				subMeshCounts		= new List<SubMeshCounts>();
 
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void Reset()
             {
                 subMeshCounts.Clear();
@@ -93,6 +106,7 @@ namespace Chisel.Core
             public TreeInfo		treeInfo;
             public BrushInfo	brushInfo;
 
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             internal bool RemoveChild(int childNodeID)
             {
                 if (children == null)
@@ -100,6 +114,7 @@ namespace Chisel.Core
                 return children.Remove(childNodeID);
             }
 
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             internal bool AddChild(int childNodeID)
             {
                 if (children == null)
@@ -111,6 +126,7 @@ namespace Chisel.Core
                 return true;
             }
 
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             internal bool RemoveBrush(int brushNodeID)
             {
                 if (treeInfo == null)
@@ -118,6 +134,7 @@ namespace Chisel.Core
                 return treeInfo.treeBrushes.Remove(brushNodeID);
             }
 
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             internal bool AddBrush(int brushNodeID)
             {
                 if (treeInfo == null)
@@ -128,6 +145,7 @@ namespace Chisel.Core
                 return true;
             }
 
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             internal static void Reset(ref NodeHierarchy data)
             {
                 data.children       = null;
@@ -137,12 +155,14 @@ namespace Chisel.Core
                 data.brushInfo      = null;
             }
 
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             internal void SetAncestors(int parentNodeID, int treeNodeID)
             {
                 this.parentNodeID = parentNodeID;
                 this.treeNodeID = treeNodeID;
             }
 
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             internal void SetTreeNodeID(int treeNodeID)
             {
                 this.treeNodeID = treeNodeID;
@@ -162,10 +182,15 @@ namespace Chisel.Core
         internal static readonly List<int>	brushes			= new List<int>();// TODO: could be CSGTreeBrushes
 
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static int GetMaxNodeIndex()   { return nodeHierarchies.Count; }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static int GetNodeCount()		{ return Mathf.Max(0, nodeHierarchies.Count - freeNodeIDs.Count); }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static int GetBrushCount()		{ return brushes.Count; }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static int GetBranchCount()	{ return branches.Count; }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static int GetTreeCount()		{ return trees.Count; }
 
         internal static void ClearAllNodes()
@@ -417,24 +442,33 @@ namespace Chisel.Core
             }
             return true;
         }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static bool			AssertNodeType					(Int32 nodeID, CSGNodeType type) { return nodeFlags[nodeID-1].nodeType == type; }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static bool			AssertNodeTypeHasChildren		(Int32 nodeID) { return nodeFlags[nodeID-1].nodeType == CSGNodeType.Branch || nodeFlags[nodeID - 1].nodeType == CSGNodeType.Tree; }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static bool			AssertNodeTypeHasParent			(Int32 nodeID) { return nodeFlags[nodeID-1].nodeType == CSGNodeType.Branch || nodeFlags[nodeID - 1].nodeType == CSGNodeType.Brush; }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static bool			AssertNodeTypeHasOperation		(Int32 nodeID) { return nodeFlags[nodeID-1].nodeType == CSGNodeType.Branch || nodeFlags[nodeID - 1].nodeType == CSGNodeType.Brush; }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static bool			AssertNodeTypeHasTransformation	(Int32 nodeID) { return nodeFlags[nodeID-1].nodeType != CSGNodeType.None; }
 
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static CSGNodeType GetTypeOfNode(Int32 nodeID)
         {
             if (!IsValidNodeID(nodeID))
                 return CSGNodeType.None;
             return nodeFlags[nodeID - 1].nodeType;
         }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static Int32		GetUserIDOfNode	(Int32 nodeID)	{ if (!IsValidNodeID(nodeID)) return kDefaultUserID; return nodeUserIDs[nodeID - 1]; }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static bool		GetBrushBounds	(Int32 brushNodeID, ref Bounds bounds) { if (!AssertNodeIDValid(brushNodeID) || !AssertNodeType(brushNodeID, CSGNodeType.Brush)) return false; bounds = nodeBounds[brushNodeID - 1]; return true; }
 
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static bool		IsNodeDirty(Int32 nodeID)
         {
             if (!IsValidNodeID(nodeID)) return false;
@@ -513,6 +547,7 @@ namespace Chisel.Core
             return true;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static bool ClearDirty(Int32 nodeID)
         {
             if (!AssertNodeIDValid(nodeID)) return false;
@@ -526,6 +561,7 @@ namespace Chisel.Core
             return false;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static void DirtySelf(Int32 nodeID)
         {
             SetDirty(nodeID);
@@ -544,6 +580,7 @@ namespace Chisel.Core
         }
 
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static bool		GetNodeLocalTransformation(Int32 nodeID, out Matrix4x4 localTransformation)
         {
             if (!AssertNodeIDValid(nodeID) || !AssertNodeTypeHasTransformation(nodeID))
@@ -555,6 +592,7 @@ namespace Chisel.Core
             return true;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static bool		SetNodeLocalTransformation(Int32 nodeID, ref Matrix4x4 localTransformation)
         {
             if (!AssertNodeIDValid(nodeID) || !AssertNodeTypeHasTransformation(nodeID))
@@ -568,10 +606,13 @@ namespace Chisel.Core
             SetDirty(nodeID);
             return true;
         }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static bool		GetTreeToNodeSpaceMatrix(Int32 nodeID, out Matrix4x4 treeToNodeMatrix)			{ if (!AssertNodeIDValid(nodeID) || !AssertNodeTypeHasTransformation(nodeID)) { treeToNodeMatrix = Matrix4x4.identity; return false; } treeToNodeMatrix = nodeTransforms[nodeID - 1].treeToNode; return true; }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static bool		GetNodeToTreeSpaceMatrix(Int32 nodeID, out Matrix4x4 nodeToTreeMatrix)			{ if (!AssertNodeIDValid(nodeID) || !AssertNodeTypeHasTransformation(nodeID)) { nodeToTreeMatrix = Matrix4x4.identity; return false; } nodeToTreeMatrix = nodeTransforms[nodeID - 1].nodeToTree; return true; }
 
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static CSGOperationType GetNodeOperationType(Int32 nodeID)								{ if (!AssertNodeIDValid(nodeID) || !AssertNodeTypeHasOperation(nodeID)) return CSGOperationType.Invalid; return nodeFlags[nodeID - 1].operationType; }
         internal static bool		SetNodeOperationType(Int32 nodeID, CSGOperationType operation)
         {
@@ -589,14 +630,19 @@ namespace Chisel.Core
         }
 
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static BrushInfo	GetBrushInfo(Int32 brushNodeID)										{ if (!AssertNodeIDValid(brushNodeID) || !AssertNodeType(brushNodeID, CSGNodeType.Brush)) return null; return nodeHierarchies[brushNodeID - 1].brushInfo; }
-        
 
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static Int32		GetBrushMeshID(Int32 brushNodeID)									{ if (!AssertNodeIDValid(brushNodeID) || !AssertNodeType(brushNodeID, CSGNodeType.Brush)) return BrushMeshInstance.InvalidInstanceID; return nodeHierarchies[brushNodeID-1].brushInfo.brushMeshInstanceID; }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static bool		SetBrushMeshID(Int32 brushNodeID, Int32 brushMeshID)				{ if (!AssertNodeIDValid(brushNodeID) || !AssertNodeType(brushNodeID, CSGNodeType.Brush)) return false; nodeHierarchies[brushNodeID - 1].brushInfo.brushMeshInstanceID = brushMeshID; DirtySelf(brushNodeID); return true; }
 
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static Int32		GetNumberOfBrushesInTree(Int32 treeNodeID)							{ if (!AssertNodeIDValid(treeNodeID) || !AssertNodeType(treeNodeID, CSGNodeType.Tree)) return 0; if (nodeHierarchies[treeNodeID - 1].treeInfo == null) return 0; return nodeHierarchies[treeNodeID - 1].treeInfo.treeBrushes.Count; }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static bool	    DoesTreeContainBrush(Int32 treeNodeID, Int32 brushNodeID)
         {
             if (!AssertNodeIDValid(treeNodeID) || 
@@ -609,6 +655,7 @@ namespace Chisel.Core
             return nodeHierarchies[treeNodeID - 1].treeInfo.treeBrushes.Contains(brushNodeID);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static Int32		FindTreeByUserID(Int32 userID)
         {
             if (userID == kDefaultUserID)
@@ -623,6 +670,7 @@ namespace Chisel.Core
         }
 
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static Int32 GetParentOfNode(Int32 nodeID)
         {
             if (!IsValidNodeID(nodeID) || 
@@ -630,6 +678,7 @@ namespace Chisel.Core
                 return CSGTreeNode.InvalidNodeID;
             return nodeHierarchies[nodeID - 1].parentNodeID;
         }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static Int32 GetTreeOfNode(Int32 nodeID)
         {
             if (!IsValidNodeID(nodeID) || 
@@ -637,6 +686,7 @@ namespace Chisel.Core
                 return CSGTreeNode.InvalidNodeID;
             return nodeHierarchies[nodeID - 1].treeNodeID;
         }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static Int32	GetChildNodeCount(Int32 nodeID)
         {
             if (!IsValidNodeID(nodeID) || 
@@ -644,6 +694,7 @@ namespace Chisel.Core
                 return 0;
             return (nodeHierarchies[nodeID - 1].children == null) ? 0 : nodeHierarchies[nodeID - 1].children.Count;
         }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static Int32 GetChildNodeAtIndex(Int32 nodeID, Int32 index)
         {
             if (!AssertNodeIDValid(nodeID) || !AssertNodeTypeHasChildren(nodeID) || nodeHierarchies[nodeID - 1].children == null || index < 0 || index >= nodeHierarchies[nodeID - 1].children.Count)
@@ -1270,11 +1321,15 @@ namespace Chisel.Core
         }
 
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static int GetBrushMeshCount() { return BrushMeshManager.GetBrushMeshCount(); }
-        
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static BrushMeshInstance[] GetAllBrushMeshInstances() { return BrushMeshManager.GetAllBrushMeshInstances(); }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static CSGTreeBrushFlags GetBrushFlags(Int32 brushNodeID) { return CSGTreeBrushFlags.Default; } // TODO: implement
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static bool SetBrushFlags(Int32 brushNodeID, CSGTreeBrushFlags flags) { return false; } // TODO: implement
 #endif
     }

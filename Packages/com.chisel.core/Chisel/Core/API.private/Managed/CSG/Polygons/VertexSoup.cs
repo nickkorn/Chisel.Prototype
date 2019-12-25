@@ -1,7 +1,8 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Unity.Burst;
 using Unity.Collections;
@@ -33,12 +34,14 @@ namespace Chisel.Core
         const float kCellSize       = CSGManagerPerformCSG.kDistanceEpsilon * 2;
 
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         static uint GetHash(int x, int y, int z) 
         {
             return (uint)((y ^ ((x ^ z) * kHashMagicValue)) * kHashMagicValue); 
         }
 
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Clear(int minCapacity)
         {
             if (vertices.Capacity < minCapacity)
@@ -53,12 +56,14 @@ namespace Chisel.Core
                 vertexArray.Dispose();
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal void CleanUp()
         {
             if (vertexArray.IsCreated)
                 vertexArray.Dispose();
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         ushort AddUnique(float3 vertex, int mx, int my, int mz)
         {/*
             if (math.abs(vertex.x - (3.0f)) < 0.0001f &&
@@ -83,6 +88,7 @@ namespace Chisel.Core
             return vertexIndex;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ushort Add(float3 vertex)
         {
             var mx = (int)(vertex.x / kCellSize);

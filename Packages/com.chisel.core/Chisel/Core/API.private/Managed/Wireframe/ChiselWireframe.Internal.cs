@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using UnityEngine;
 using System.Linq;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 
 namespace Chisel.Core
 {
@@ -12,6 +13,7 @@ namespace Chisel.Core
         // TODO: generate outlines somewhere in managed code
 
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static UInt64 GetBrushOutlineGeneration(Int32 brushNodeID)
         {
             var brushInfo = CSGManager.GetBrushInfo(brushNodeID);
@@ -65,6 +67,7 @@ namespace Chisel.Core
             return brushOutline;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static void UpdateOutline(Int32 brushNodeID)
         {
             var brushInfo = CSGManager.GetBrushInfo(brushNodeID);
@@ -149,6 +152,7 @@ namespace Chisel.Core
             return true;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static ChiselWireframe CreateSurfaceWireframe(Int32 brushNodeID, Int32 surfaceID)
         {
             var wireframe = new ChiselWireframe() { originBrushID = brushNodeID, originSurfaceID = surfaceID };
@@ -167,7 +171,8 @@ namespace Chisel.Core
             wireframe.outlineGeneration = GetBrushOutlineGeneration(brushNodeID);
             return wireframe;
         }
-        
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static bool UpdateSurfaceWireframe(ChiselWireframe wireframe)
         {
             bool success = GetSurfaceOutlineValues(wireframe.originBrushID, 
@@ -185,8 +190,9 @@ namespace Chisel.Core
 
             wireframe.outlineGeneration = GetBrushOutlineGeneration(wireframe.originBrushID);
             return true;
-        }        
+        }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static ChiselWireframe CreateBrushWireframe(Int32 brushNodeID)
         {
             var wireframe = new ChiselWireframe { originBrushID = brushNodeID };
@@ -205,6 +211,7 @@ namespace Chisel.Core
             return wireframe;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static bool UpdateBrushWireframe(ChiselWireframe wireframe)
         {
             bool success = GetBrushOutlineValues(wireframe.originBrushID,

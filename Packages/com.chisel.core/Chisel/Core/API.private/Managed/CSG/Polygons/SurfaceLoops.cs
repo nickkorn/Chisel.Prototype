@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Unity.Burst;
 using Unity.Collections;
@@ -17,13 +18,16 @@ namespace Chisel.Core
     {
         public List<Loop>[] surfaces;
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public SurfaceLoops() {}
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public SurfaceLoops(int surfaceCount)
         {
             EnsureSize(surfaceCount);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void EnsureSize(int length)
         {
             if (surfaces == null ||
@@ -33,6 +37,7 @@ namespace Chisel.Core
                 surfaces[i] = new List<Loop>();
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Clear()
         {
             if (surfaces == null)

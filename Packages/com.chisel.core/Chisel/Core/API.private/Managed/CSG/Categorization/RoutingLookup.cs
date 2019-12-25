@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using UnityEngine;
 
 namespace Chisel.Core
@@ -16,6 +17,7 @@ namespace Chisel.Core
         static readonly RoutingLookup[]         kEmptyRoutingLookups    = new RoutingLookup[0];
         static readonly Loop[][]                kEmptyIntersectionLoops = new Loop[0][];
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Clear()
         {
             inputs              = kEmptyInputs;
@@ -27,6 +29,7 @@ namespace Chisel.Core
     
     struct RoutingLookup
     {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public RoutingLookup(int startIndex, int endIndex)
         {
             this.startIndex = startIndex;
@@ -38,6 +41,7 @@ namespace Chisel.Core
 
         public const int kRoutingOffset = 1 + (int)CategoryIndex.LastCategory;
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryGetRoute(RoutingTable table, CategoryGroupIndex inputIndex, out CategoryRoutingRow routingRow)
         {
             var tableIndex = (inputIndex == CategoryGroupIndex.First) ? (int)CategoryGroupIndex.First : ((int)inputIndex - kRoutingOffset);

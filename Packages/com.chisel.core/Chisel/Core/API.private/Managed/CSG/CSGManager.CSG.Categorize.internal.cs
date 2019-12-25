@@ -10,6 +10,7 @@ using Unity.Jobs;
 using Unity.Mathematics;
 using ReadOnlyAttribute = Unity.Collections.ReadOnlyAttribute;
 using System.Globalization;
+using System.Runtime.CompilerServices;
 
 namespace Chisel.Core
 {
@@ -718,6 +719,7 @@ namespace Chisel.Core
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool Intersects(Loop polygon1, Loop polygon2)
         {
             if (!polygon2.Valid ||
@@ -749,6 +751,7 @@ namespace Chisel.Core
             return false;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         static bool IsInside(VertexSoup soup, Loop polygon1, Loop polygon2)
         {
             if (!polygon2.Valid ||
@@ -764,6 +767,7 @@ namespace Chisel.Core
             return false;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal unsafe static bool IsPointInPolygon(float3 right, float3 forward, List<ushort> indices, VertexSoup soup, float3 point)
         {
             var px = math.dot(right, point);
@@ -1019,6 +1023,7 @@ namespace Chisel.Core
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static int Step(int index, int offset, int count)
         {
             return (index + count + offset) % count;
@@ -1073,6 +1078,7 @@ namespace Chisel.Core
         //*/
 
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static void RemoveEmptyLoops(List<Loop> loopsOnBrushSurface)
         {
             for (int l = loopsOnBrushSurface.Count - 1; l >= 0; l--)
@@ -1168,6 +1174,7 @@ namespace Chisel.Core
 
 
         // Clean up, after performing CSG
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static void CleanUp(VertexSoup soup, List<Loop>[] surfaceLoops)
         {
             for (int surfaceIndex = 0; surfaceIndex < surfaceLoops.Length; surfaceIndex++)

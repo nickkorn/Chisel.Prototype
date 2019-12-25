@@ -1,10 +1,12 @@
 ﻿using System;
+using System.Runtime.CompilerServices;
 
 namespace Chisel.Core
 {
     static partial class CSGManager
     {
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static bool DeepDestroyNode(CSGTreeNode node)
         {
             if (!node.Valid)
@@ -18,6 +20,7 @@ namespace Chisel.Core
             return CSGTreeNode.DestroyNode(node.nodeID);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static bool DeepDestroyNodes(CSGTreeNode[] nodeIDs)
         {
             if (nodeIDs == null)

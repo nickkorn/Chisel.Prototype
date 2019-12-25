@@ -1,5 +1,6 @@
 ﻿using System;
 using System.ComponentModel;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using UnityEngine;
 
@@ -22,21 +23,26 @@ namespace Chisel.Core
 
 
         // TODO: add description
+        [MethodImpl(MethodImplOptions.AggressiveInlining)] 
         public Matrix4x4 ToMatrix() { var W = planeNormal; return new Matrix4x4(U, V, W, new Vector4(0, 0, 0, 1)).transpose; }
 
-        public Vector3 planeNormal { get { return Vector3.Cross(((Vector3)U).normalized, ((Vector3)V).normalized).normalized; } }
+        public Vector3 planeNormal { [MethodImpl(MethodImplOptions.AggressiveInlining)] get { return Vector3.Cross(((Vector3)U).normalized, ((Vector3)V).normalized).normalized; } }
 
         // TODO: add description
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public UVMatrix Set(Matrix4x4 input) { U = input.GetRow(0); V = input.GetRow(1); return this; }
 
         // TODO: add description
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static implicit operator Matrix4x4(UVMatrix input) { return input.ToMatrix(); }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static implicit operator UVMatrix(Matrix4x4 input) { return new UVMatrix(input); }
 
         // TODO: add description
         public static readonly UVMatrix identity = new UVMatrix(new Vector4(1,0,0,0.0f), new Vector4(0,1,0,0.0f));
         public static readonly UVMatrix centered = new UVMatrix(new Vector4(1,0,0,0.5f), new Vector4(0,1,0,0.5f));
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static UVMatrix TRS(Vector2 translation, Vector3 normal, float rotation, Vector2 scale)
         {
             var orientation     = Quaternion.Inverse(Quaternion.LookRotation(normal));
@@ -86,6 +92,7 @@ namespace Chisel.Core
             if (Vector3.Dot(U, newUvMatrix.U) < 0) scale.x = -scale.x;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override string ToString()
         {
             return $@"{{U: {U}, V: {V}}}";  

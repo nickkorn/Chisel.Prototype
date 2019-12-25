@@ -1,5 +1,6 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using UnityEngine;
 
 namespace Chisel.Core
@@ -11,8 +12,10 @@ namespace Chisel.Core
         static List<int>		userIDs			= new List<int>();
         static List<int>		unusedIDs		= new List<int>();
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static bool		IsBrushMeshIDValid		(Int32 brushMeshInstanceID)	{ return brushMeshInstanceID > 0 && brushMeshInstanceID <= brushMeshes.Count; }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static bool			AssertBrushMeshIDValid	(Int32 brushMeshInstanceID)
         {
             if (!IsBrushMeshIDValid(brushMeshInstanceID))
@@ -26,9 +29,11 @@ namespace Chisel.Core
             }
             return true;
         }
-        
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static int			GetBrushMeshCount		()					{ return brushMeshes.Count - unusedIDs.Count; }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Int32			GetBrushMeshUserID		(Int32 brushMeshInstanceID)
         {
             if (!AssertBrushMeshIDValid(brushMeshInstanceID))
@@ -36,6 +41,7 @@ namespace Chisel.Core
             return userIDs[brushMeshInstanceID - 1];
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static BrushMesh		GetBrushMesh			(Int32 brushMeshInstanceID)
         {
             if (!AssertBrushMeshIDValid(brushMeshInstanceID))

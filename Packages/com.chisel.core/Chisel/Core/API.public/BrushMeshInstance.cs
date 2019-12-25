@@ -1,5 +1,6 @@
 ﻿using System;
 using System.ComponentModel;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace Chisel.Core
@@ -15,25 +16,28 @@ namespace Chisel.Core
         internal Int32			brushMeshID;
 
         /// <value>Is the current <see cref="Chisel.Core.BrushMeshInstance"/> in a correct state</value>
-        public bool				Valid				{ get { return brushMeshID != BrushMeshInstance.InvalidInstanceID && IsBrushMeshIDValid(brushMeshID); } }
+        public bool				Valid				{ [MethodImpl(MethodImplOptions.AggressiveInlining)] get { return brushMeshID != BrushMeshInstance.InvalidInstanceID && IsBrushMeshIDValid(brushMeshID); } }
         
         /// <value>Returns the unique id of this <see cref="Chisel.Core.BrushMesh"/></value>
-        public Int32			BrushMeshID			{ get { return brushMeshID; } }
+        public Int32			BrushMeshID			{ [MethodImpl(MethodImplOptions.AggressiveInlining)] get { return brushMeshID; } }
 
         /// <value>Gets the <see cref="Chisel.Core.BrushMeshInstance.UserID"/> set to the <see cref="Chisel.Core.BrushMeshInstance"/> at creation time.</value>
-        public Int32			UserID				{ get { return GetBrushMeshUserID(brushMeshID); } }
-                
+        public Int32			UserID				{ [MethodImpl(MethodImplOptions.AggressiveInlining)] get { return GetBrushMeshUserID(brushMeshID); } }
+
         /// <summary>Create a <see cref="Chisel.Core.BrushMeshInstance"/> from a given <see cref="Chisel.Core.BrushMesh"/></summary>
         /// <param name="brushMesh">The <see cref="Chisel.Core.BrushMesh"/> to create an instance with</param>
         /// <returns>A newly created <see cref="Chisel.Core.BrushMeshInstance"/> on success, or an invalid <see cref="Chisel.Core.BrushMeshInstance"/> on failure.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)] 
         public static BrushMeshInstance Create(BrushMesh brushMesh, Int32 userID = 0) { return new BrushMeshInstance { brushMeshID = CreateBrushMesh(userID, brushMesh) }; }
-                
+
         /// <summary>Destroy the <see cref="Chisel.Core.BrushMeshInstance"/> and release the memory used by this instance.</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void	Destroy		()					{ var prevBrushMeshID = brushMeshID; brushMeshID = BrushMeshInstance.InvalidInstanceID; DestroyBrushMesh(prevBrushMeshID); }
-        
+
         /// <summary>Update this <see cref="Chisel.Core.BrushMeshInstance"/> with the given <see cref="Chisel.Core.BrushMesh"/>.</summary>
         /// <param name="brushMesh">The <see cref="Chisel.Core.BrushMesh"/> to update the <see cref="Chisel.Core.BrushMeshInstance"/> with</param>
         /// <returns><b>true</b> on success, <b>false</b> on failure. In case of failure the brush will keep using the previously set <see cref="Chisel.Core.BrushMesh"/>.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Set			(BrushMesh brushMesh)	{ return UpdateBrushMesh(brushMeshID, brushMesh); }
 
         /// <value>An invalid instance</value>
@@ -42,13 +46,17 @@ namespace Chisel.Core
         
         #region Comparison
         [EditorBrowsable(EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool operator == (BrushMeshInstance left, BrushMeshInstance right) { return left.brushMeshID == right.brushMeshID; }
         [EditorBrowsable(EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool operator != (BrushMeshInstance left, BrushMeshInstance right) { return left.brushMeshID != right.brushMeshID; }
 
         [EditorBrowsable(EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override bool Equals(object obj) { if (!(obj is BrushMeshInstance)) return false; var type = (BrushMeshInstance)obj; return brushMeshID == type.brushMeshID; }
         [EditorBrowsable(EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override int GetHashCode() { return brushMeshID.GetHashCode(); }
         #endregion
     }

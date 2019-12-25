@@ -1,4 +1,5 @@
-﻿using Unity.Mathematics;
+﻿using System.Runtime.CompilerServices;
+using Unity.Mathematics;
 using UnityEngine;
 
 namespace Chisel.Core
@@ -6,6 +7,8 @@ namespace Chisel.Core
     public static class PlaneExtensions
     {
         public static readonly Vector3 NanVector = new Vector3(float.NaN, float.NaN, float.NaN);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector3 Intersection(Plane inPlane1,
                                            Plane inPlane2,
                                            Plane inPlane3)
@@ -76,6 +79,8 @@ namespace Chisel.Core
             return new Vector3(xf, yf, zf);
         }
 
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void PlanePlaneIntersection(out double3 linePoint, out double3 lineVec,
                                                   double4 plane1, double4 plane2)
         {
@@ -93,6 +98,8 @@ namespace Chisel.Core
         }
 
         // TODO: use these two methods to first calculate all valid pairs
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void IntersectionFirst(double4 inPlane2, double4 inPlane3, out double4 outN0, out double4 outN1)
         {
 #if false
@@ -141,6 +148,8 @@ namespace Chisel.Core
 #endif
         }
 
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static float3 Intersection(double4 inPlane1, double4 inPlane2, double4 inPlane3)
         {
             var N0 = inPlane2.wzyx * inPlane3.yxwz - inPlane2.yxwz * inPlane3.wzyx;
@@ -154,10 +163,12 @@ namespace Chisel.Core
             return (float3)(E.zwx / E.y);
         }
 
-        
-        
+
+
 
         // Transforms a plane by this matrix.
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Plane TransformPlane(this Matrix4x4 matrix, Plane plane)
         {
             var ittrans = matrix.inverse;
@@ -172,6 +183,8 @@ namespace Chisel.Core
             return new Plane(new Vector3(a, b, c), d);
         }
 
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Plane TransformPlane(this Matrix4x4 matrix, Vector4 planeVector)
         {
             var ittrans = matrix.inverse;

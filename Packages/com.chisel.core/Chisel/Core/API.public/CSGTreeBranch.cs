@@ -1,5 +1,6 @@
 ﻿using System;
 using System.ComponentModel;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using UnityEngine;
 using Matrix4x4 = UnityEngine.Matrix4x4;
@@ -24,6 +25,7 @@ namespace Chisel.Core
         /// <param name="userID">A unique id to help identify this particular branch. For instance, this could be an InstanceID to a [UnityEngine.Object](https://docs.unity3d.com/ScriptReference/Object.html)</param>
         /// <param name="children">The child nodes that are children of this branch. A branch may not have duplicate children, contain itself or contain a <see cref="Chisel.Core.CSGTree"/>.</param>
         /// <returns>A new <see cref="Chisel.Core.CSGTreeBranch"/>. May be an invalid node if it failed to create it.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static CSGTreeBranch Create(Int32 userID = 0, CSGOperationType operation = CSGOperationType.Additive, params CSGTreeNode[] children)
         {
             int branchNodeID;
@@ -45,6 +47,7 @@ namespace Chisel.Core
         /// <param name="userID">A unique id to help identify this particular branch. For instance, this could be an InstanceID to a [UnityEngine.Object](https://docs.unity3d.com/ScriptReference/Object.html)</param>
         /// <param name="children">The child nodes that are children of this branch. A branch may not have duplicate children, contain itself or contain a <see cref="Chisel.Core.CSGTree"/>.</param>
         /// <returns>A new <see cref="Chisel.Core.CSGTreeBranch"/>. May be an invalid node if it failed to create it.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static CSGTreeBranch Create(Int32 userID, params CSGTreeNode[] children) 
         {
             int branchNodeID;
@@ -60,10 +63,11 @@ namespace Chisel.Core
             }
             return new CSGTreeBranch() { branchNodeID = branchNodeID };
         }
-        
+
         /// <summary>Generates a branch and returns a <see cref="Chisel.Core.CSGTreeBranch"/> struct that contains a reference to it.</summary>
         /// <param name="children">The child nodes that are children of this branch. A branch may not have duplicate children, contain itself or contain a <see cref="Chisel.Core.CSGTree"/>.</param>
         /// <returns>A new <see cref="Chisel.Core.CSGTreeBranch"/>. May be an invalid node if it failed to create it.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static CSGTreeBranch Create(params CSGTreeNode[] children) { return Create(0, children); }
         #endregion
 
@@ -71,149 +75,173 @@ namespace Chisel.Core
         #region Node
         /// <value>Returns if the current <see cref="Chisel.Core.CSGTreeBranch"/> is valid or not.</value>
         /// <remarks><note>If <paramref name="Valid"/> is <b>false</b> that could mean that this node has been destroyed.</note></remarks>
-        public bool				Valid			{ get { return branchNodeID != CSGTreeNode.InvalidNodeID && CSGTreeNode.IsNodeIDValid(branchNodeID); } }
+        public bool				Valid			{ [MethodImpl(MethodImplOptions.AggressiveInlining)] get { return branchNodeID != CSGTreeNode.InvalidNodeID && CSGTreeNode.IsNodeIDValid(branchNodeID); } }
 
         /// <value>Gets the <see cref="Chisel.Core.CSGTreeBranch.NodeID"/> of the <see cref="Chisel.Core.CSGTreeBranch"/>, which is a unique ID of this node.</value>
         /// <remarks><note>NodeIDs are eventually recycled, so be careful holding on to Nodes that have been destroyed.</note></remarks>
-        public Int32			NodeID			{ get { return branchNodeID; } }
+        public Int32			NodeID			{ [MethodImpl(MethodImplOptions.AggressiveInlining)] get { return branchNodeID; } }
         
         /// <value>Gets the <see cref="Chisel.Core.CSGTreeBranch.UserID"/> set to the <see cref="Chisel.Core.CSGTreeBranch"/> at creation time.</value>
-        public Int32			UserID			{ get { return CSGTreeNode.GetUserIDOfNode(branchNodeID); } }
+        public Int32			UserID			{ [MethodImpl(MethodImplOptions.AggressiveInlining)] get { return CSGTreeNode.GetUserIDOfNode(branchNodeID); } }
         
         /// <value>Returns the dirty flag of the <see cref="Chisel.Core.CSGTreeBranch"/>. When the it's dirty, then it means (some of) its generated meshes have been modified.</value>
-        public bool				Dirty			{ get { return CSGTreeNode.IsNodeDirty(branchNodeID); } }
+        public bool				Dirty			{ [MethodImpl(MethodImplOptions.AggressiveInlining)] get { return CSGTreeNode.IsNodeDirty(branchNodeID); } }
 
         /// <summary>Force set the dirty flag of the <see cref="Chisel.Core.CSGTreeNode"/>.</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void SetDirty	()				{ CSGTreeNode.SetDirty(branchNodeID); }
 
         /// <summary>Destroy this <see cref="Chisel.Core.CSGTreeNode"/>. Sets the state to invalid.</summary>
         /// <returns><b>true</b> on success, <b>false</b> on failure</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Destroy		()				{ var prevBranchNodeID = branchNodeID; branchNodeID = CSGTreeNode.InvalidNodeID; return CSGTreeNode.DestroyNode(prevBranchNodeID); }
-        
+
         /// <summary>Sets the state of this struct to invalid.</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void SetInvalid	()				{ branchNodeID = CSGTreeNode.InvalidNodeID; }
         #endregion
 
         #region ChildNode
         /// <value>Returns the parent <see cref="Chisel.Core.CSGTreeBranch"/> this <see cref="Chisel.Core.CSGTreeBranch"/> is a child of. Returns an invalid node if it's not a child of any <see cref="Chisel.Core.CSGTreeBranch"/>.</value>
-        public CSGTreeBranch	Parent			{ get { return new CSGTreeBranch { branchNodeID = CSGTreeNode.GetParentOfNode(branchNodeID) }; } }
+        public CSGTreeBranch	Parent			{ [MethodImpl(MethodImplOptions.AggressiveInlining)] get { return new CSGTreeBranch { branchNodeID = CSGTreeNode.GetParentOfNode(branchNodeID) }; } }
 
         /// <value>Returns tree this <see cref="Chisel.Core.CSGTreeBranch"/> belongs to.</value>
-        public CSGTree			Tree			{ get { return new CSGTree       { treeNodeID   = CSGTreeNode.GetTreeOfNode(branchNodeID)  }; } }
+        public CSGTree			Tree			{ [MethodImpl(MethodImplOptions.AggressiveInlining)] get { return new CSGTree       { treeNodeID   = CSGTreeNode.GetTreeOfNode(branchNodeID)  }; } }
 
         /// <value>The CSG operation that this <see cref="Chisel.Core.CSGTreeBranch"/> will use.</value>
-        public CSGOperationType Operation		{ get { return (CSGOperationType)CSGTreeNode.GetNodeOperationType(branchNodeID); } set { CSGTreeNode.SetNodeOperationType(branchNodeID, value); } }
+        public CSGOperationType Operation		{ [MethodImpl(MethodImplOptions.AggressiveInlining)] get { return (CSGOperationType)CSGTreeNode.GetNodeOperationType(branchNodeID); } [MethodImpl(MethodImplOptions.AggressiveInlining)] set { CSGTreeNode.SetNodeOperationType(branchNodeID, value); } }
         #endregion
 
         #region ChildNodeContainer
         /// <value>Gets the number of elements contained in the <see cref="Chisel.Core.CSGTreeBranch"/>.</value>
-        public Int32			Count			{ get { return CSGTreeNode.GetChildNodeCount(branchNodeID); } }
+        public Int32			Count			{ [MethodImpl(MethodImplOptions.AggressiveInlining)] get { return CSGTreeNode.GetChildNodeCount(branchNodeID); } }
 
         /// <summary>Gets child at the specified index.</summary>
         /// <param name="index">The zero-based index of the child to get.</param>
         /// <returns>The element at the specified index.</returns>
-        public CSGTreeNode		this[int index]	{ get { return new CSGTreeNode { nodeID = CSGTreeNode.GetChildNodeAtIndex(branchNodeID, index) }; } }
-        
+        public CSGTreeNode		this[int index]	{ [MethodImpl(MethodImplOptions.AggressiveInlining)] get { return new CSGTreeNode { nodeID = CSGTreeNode.GetChildNodeAtIndex(branchNodeID, index) }; } }
+
 
         /// <summary>Adds a <see cref="Chisel.Core.CSGTreeNode"/> to the end of the <see cref="Chisel.Core.CSGTreeBranch"/>.</summary>
         /// <param name="item">The <see cref="Chisel.Core.CSGTreeNode"/> to be added to the end of the <see cref="Chisel.Core.CSGTreeBranch"/>.</param>
         /// <returns><b>true</b> on success, <b>false</b> on failure</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Add			(CSGTreeNode item)				{ return CSGTreeNode.AddChildNode(branchNodeID, item.nodeID); }
-        
+
         /// <summary>Adds the <see cref="Chisel.Core.CSGTreeNode"/>s of the specified array to the end of the  <see cref="Chisel.Core.CSGTreeBranch"/>.</summary>
         /// <param name="array">The array whose <see cref="Chisel.Core.CSGTreeNode"/>s should be added to the end of the <see cref="Chisel.Core.CSGTreeBranch"/>. The array itself cannot be null.</param>
         /// <returns><b>true</b> on success, <b>false</b> on failure</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool AddRange	(CSGTreeNode[] array)			{ if (array == null) throw new ArgumentNullException("array"); return CSGTreeNode.InsertChildNodeRange(branchNodeID, Count, array); }
 
         /// <summary>Inserts an element into the <see cref="Chisel.Core.CSGTreeNode"/> at the specified index.</summary>
         /// <param name="index">The zero-based index at which <paramref name="item"/> should be inserted.</param>
         /// <param name="item">The <see cref="Chisel.Core.CSGTreeNode"/> to insert.</param>
         /// <returns><b>true</b> on success, <b>false</b> on failure</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Insert		(int index, CSGTreeNode item)	{ return CSGTreeNode.InsertChildNode(branchNodeID, index, item.nodeID); }
 
         /// <summary>Inserts the <see cref="Chisel.Core.CSGTreeNode"/>s of an array into the <see cref="Chisel.Core.CSGTreeBranch"/> at the specified index.</summary>
         /// <param name="index">The zero-based index at which the new <see cref="Chisel.Core.CSGTreeNode"/>s should be inserted.</param>
         /// <param name="array">The array whose <see cref="Chisel.Core.CSGTreeNode"/>s should be inserted into the <see cref="Chisel.Core.CSGTreeBranch"/>. The array itself cannot be null.</param>
         /// <returns><b>true</b> on success, <b>false</b> on failure</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool InsertRange	(int index, CSGTreeNode[] array){ if (array == null) throw new ArgumentNullException("array"); return CSGTreeNode.InsertChildNodeRange(branchNodeID, index, array); }
-        
+
 
         /// <summary>Sets all the children of this <see cref="Chisel.Core.CSGTreeBranch"/> to the give array of <see cref="Chisel.Core.CSGTreeNode"/>s at the specified index.</summary>
         /// <param name="array">The array whose <see cref="Chisel.Core.CSGTreeNode"/>s should be inserted into the <see cref="Chisel.Core.CSGTreeBranch"/>. The array itself cannot be null.</param>
         /// <returns><b>true</b> on success, <b>false</b> on failure</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool SetChildren	(CSGTreeNode[] array)			{ if (array == null) throw new ArgumentNullException("array"); return CSGTreeNode.SetChildNodes(branchNodeID, array); }
 
         /// <summary>Removes a specific <see cref="Chisel.Core.CSGTreeNode"/> from the <see cref="Chisel.Core.CSGTreeBranch"/>.</summary>
         /// <param name="item">The <see cref="Chisel.Core.CSGTreeNode"/> to remove from the <see cref="Chisel.Core.CSGTreeBranch"/>.</param>
         /// <returns><b>true</b> on success, <b>false</b> on failure</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Remove		(CSGTreeNode item)				{ return CSGTreeNode.RemoveChildNode(branchNodeID, item.nodeID); }
 
         /// <summary>Removes the child at the specified index of the <see cref="Chisel.Core.CSGTreeBranch"/>.</summary>
         /// <param name="index">The zero-based index of the child to remove.</param>
         /// <returns><b>true</b> on success, <b>false</b> on failure</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool RemoveAt	(int index)						{ return CSGTreeNode.RemoveChildNodeAt(branchNodeID, index); }
-        
+
         /// <summary>Removes a range of children from the <see cref="Chisel.Core.CSGTreeBranch"/>.</summary>
         /// <param name="index">The zero-based starting index of the range of children to remove.</param>
         /// <param name="count">The number of children to remove.</param>
         /// <returns><b>true</b> on success, <b>false</b> on failure</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool RemoveRange	(int index, int count)			{ return CSGTreeNode.RemoveChildNodeRange(branchNodeID, index, count); }
 
         /// <summary>Removes all children from the <see cref="Chisel.Core.CSGTreeBranch"/>.</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Clear		()								{ CSGTreeNode.ClearChildNodes(branchNodeID); }
 
         /// <summary>Determines the index of a specific child in the <see cref="Chisel.Core.CSGTreeBranch"/>.</summary>
         /// <param name="item">The <see cref="Chisel.Core.CSGTreeNode"/> to locate in the <see cref="Chisel.Core.CSGTreeBranch"/>.</param>
         /// <returns>The index of <paramref name="item"/> if found in the <see cref="Chisel.Core.CSGTreeBranch"/>; otherwise, –1.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int  IndexOf		(CSGTreeNode item)				{ return CSGTreeNode.IndexOfChildNode(branchNodeID, item.nodeID); }
-        
+
         /// <summary>Determines whether the <see cref="Chisel.Core.CSGTreeBranch"/> contains a specific value.</summary>
         /// <param name="item">The Object to locate in the <see cref="Chisel.Core.CSGTreeBranch"/>.</param>
         /// <returns><b>true</b> if item is found in the <see cref="Chisel.Core.CSGTreeBranch"/>; otherwise, <b>false</b>.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Contains	(CSGTreeNode item)				{ return CSGTreeNode.IndexOfChildNode(branchNodeID, item.nodeID) != -1; }
-        
+
         /// <summary>Copies the immediate children of the <see cref="Chisel.Core.CSGTreeBranch"/> to an Array, starting at a particular Array index.</summary>
         /// <param name="array">The one-dimensional Array that is the destination of the elements copied from <see cref="Chisel.Core.CSGTreeBranch"/>. The Array must have zero-based indexing.</param>
         /// <param name="arrayIndex">The zero-based index in array at which copying begins.</param>
         /// <returns>The number of children copied into <paramref name="array"/>.</returns>
-        public int	CopyChildrenTo(CSGTreeNode[] array, int arrayIndex)	{ return CSGTreeNode.CopyTo(branchNodeID, array, arrayIndex); } 
-        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public int	CopyChildrenTo(CSGTreeNode[] array, int arrayIndex)	{ return CSGTreeNode.CopyTo(branchNodeID, array, arrayIndex); }
+
         /// <summary>Copies the <see cref="Chisel.Core.CSGTreeNode"/>s of the <see cref="Chisel.Core.CSGTreeBranch"/> to a new array.</summary>
         /// <returns>An array containing the <see cref="Chisel.Core.CSGTreeNode"/>s of the <see cref="Chisel.Core.CSGTreeBranch"/>.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public CSGTreeNode[] ChildrenToArray()					{ return CSGTreeNode.GetChildNodes(branchNodeID); }
         #endregion
         
         #region Transformation
         // TODO: add description
-		public Matrix4x4			LocalTransformation		{ get { return CSGTreeNode.GetNodeLocalTransformation(branchNodeID); } set { CSGTreeNode.SetNodeLocalTransformation(branchNodeID, ref value); } }		
+		public Matrix4x4			LocalTransformation		{ [MethodImpl(MethodImplOptions.AggressiveInlining)] get { return CSGTreeNode.GetNodeLocalTransformation(branchNodeID); } [MethodImpl(MethodImplOptions.AggressiveInlining)] set { CSGTreeNode.SetNodeLocalTransformation(branchNodeID, ref value); } }		
         // TODO: add description
-		public Matrix4x4			TreeToNodeSpaceMatrix	{ get { if (!CSGManager.GetTreeToNodeSpaceMatrix(branchNodeID, out Matrix4x4 result)) return Matrix4x4.identity; return result; } }
+		public Matrix4x4			TreeToNodeSpaceMatrix	{ [MethodImpl(MethodImplOptions.AggressiveInlining)] get { if (!CSGManager.GetTreeToNodeSpaceMatrix(branchNodeID, out Matrix4x4 result)) return Matrix4x4.identity; return result; } }
         // TODO: add description
-		public Matrix4x4			NodeToTreeSpaceMatrix   { get { if (!CSGManager.GetNodeToTreeSpaceMatrix(branchNodeID, out Matrix4x4 result)) return Matrix4x4.identity; return result; } }
+		public Matrix4x4			NodeToTreeSpaceMatrix   { [MethodImpl(MethodImplOptions.AggressiveInlining)] get { if (!CSGManager.GetNodeToTreeSpaceMatrix(branchNodeID, out Matrix4x4 result)) return Matrix4x4.identity; return result; } }
         #endregion
                 
         #region Comparison
         [EditorBrowsable(EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool operator == (CSGTreeBranch left, CSGTreeBranch right) { return left.branchNodeID == right.branchNodeID; }
         [EditorBrowsable(EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool operator != (CSGTreeBranch left, CSGTreeBranch right) { return left.branchNodeID != right.branchNodeID; }
 		[EditorBrowsable(EditorBrowsableState.Never)]
-		public static bool operator ==(CSGTreeBranch left, CSGTreeNode right) { return left.branchNodeID == right.nodeID; }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool operator ==(CSGTreeBranch left, CSGTreeNode right) { return left.branchNodeID == right.nodeID; }
 		[EditorBrowsable(EditorBrowsableState.Never)]
-		public static bool operator !=(CSGTreeBranch left, CSGTreeNode right) { return left.branchNodeID != right.nodeID; }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool operator !=(CSGTreeBranch left, CSGTreeNode right) { return left.branchNodeID != right.nodeID; }
 		[EditorBrowsable(EditorBrowsableState.Never)]
-		public static bool operator ==(CSGTreeNode left, CSGTreeBranch right) { return left.nodeID == right.branchNodeID; }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool operator ==(CSGTreeNode left, CSGTreeBranch right) { return left.nodeID == right.branchNodeID; }
 		[EditorBrowsable(EditorBrowsableState.Never)]
-		public static bool operator !=(CSGTreeNode left, CSGTreeBranch right) { return left.nodeID != right.branchNodeID; }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool operator !=(CSGTreeNode left, CSGTreeBranch right) { return left.nodeID != right.branchNodeID; }
 
         [EditorBrowsable(EditorBrowsableState.Never)]
-		public override bool Equals(object obj)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public override bool Equals(object obj)
 		{
 			if (obj is CSGTreeBranch) return branchNodeID == ((CSGTreeBranch)obj).branchNodeID;
 			if (obj is CSGTreeNode) return branchNodeID == ((CSGTreeNode)obj).nodeID;
 			return false;
 		}
         [EditorBrowsable(EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override int GetHashCode() { return branchNodeID.GetHashCode(); }
         #endregion
         

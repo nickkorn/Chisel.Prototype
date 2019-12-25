@@ -7,11 +7,13 @@ using Vector3 = UnityEngine.Vector3;
 using Quaternion = UnityEngine.Quaternion;
 using Mathf = UnityEngine.Mathf;
 using UnityEngine;
+using System.Runtime.CompilerServices;
 
 namespace Chisel.Core
 {
     public static class BoundsExtensions
     {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool IsValid(UnityEngine.Vector3 min, UnityEngine.Vector3 max)
         {
             const float kMinSize = 0.0001f;
@@ -26,6 +28,7 @@ namespace Chisel.Core
             return true;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool Intersects(this Bounds left, Bounds right, double epsilon)
         {
             return  ((right.max.x - left.min.x) >= -epsilon) && ((left.max.x - right.min.x) >= -epsilon) &&

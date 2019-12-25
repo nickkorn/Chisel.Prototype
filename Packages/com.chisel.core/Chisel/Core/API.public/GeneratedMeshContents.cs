@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Runtime.CompilerServices;
 
 namespace Chisel.Core
 {
@@ -54,6 +55,7 @@ namespace Chisel.Core
         /// </remarks>
         /// <exception cref="System.ArgumentNullException">Thrown when <paramref name="mesh"/> is null.</exception>
         /// <exception cref="System.ArgumentException">Thrown when <paramref name="mesh"/> is invalid. This can happen when the mesh has already been destroyed.</exception>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void CopyTo(UnityEngine.Mesh mesh)
         { 
             if (object.ReferenceEquals(mesh, null))

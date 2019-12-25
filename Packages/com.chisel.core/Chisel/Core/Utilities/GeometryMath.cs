@@ -1,13 +1,15 @@
 using UnityEditor;
 using UnityEngine;
 using Unity.Mathematics;
+using System.Runtime.CompilerServices;
 
 // TODO: remove redundancy, clean up
 namespace Chisel.Core
 {
     public static class GeometryMath
-    {		
+    {
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector3 ProjectPointLine(in Vector3 point, in Vector3 lineStart, in Vector3 lineEnd)
         {
             Vector3 relativePoint = point - lineStart;
@@ -23,6 +25,7 @@ namespace Chisel.Core
             return lineStart + normalizedLineDirection * dot;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector3 ProjectPointRay(in Vector3 point, in Vector3 start, in Vector3 direction)
         {
             Vector3 relativePoint = point - start;
@@ -35,6 +38,7 @@ namespace Chisel.Core
             return start + normalizedDirection * dot;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static float SignedAngle(Vector3 from, Vector3 to, Vector3 axis)
         {
             float unsignedAngle = Vector3.Angle(from, to);
@@ -42,6 +46,7 @@ namespace Chisel.Core
             return unsignedAngle * sign;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static float SignedAngle(Vector2 from, Vector2 to)
         {
             float unsigned_angle = Vector3.Angle(from, to);
@@ -52,6 +57,8 @@ namespace Chisel.Core
 
 
         // Finds the minimum 3D distance from a point to a line segment
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static float SqrDistanceFromPointToLineSegment(float3 point, float3 lineVertexA, float3 lineVertexB)
         {
             var b = (point.x - lineVertexA.x) * (lineVertexB.x - lineVertexA.x) +
@@ -103,6 +110,8 @@ namespace Chisel.Core
         // Finds the line segment Pa:Pb that is the shortest perpendicular between two lines P1: P2 and P3: P4 in 3D.
         // Returns false if two lines (P1:P2 and P3:P4) are parallel
         // Also returns false if bSegment is true and either intersection does not occur within segment
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool LineLineIntersection(Vector3 p1, Vector3 p2, Vector3 p3, Vector3 p4,
                                                 out Vector3 intersectionPoint1, double epsilon, bool debug = false)
         {

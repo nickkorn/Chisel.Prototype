@@ -1,6 +1,8 @@
-﻿using System;
+using System;
 using System.ComponentModel;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using Unity.Mathematics;
 using UnityEngine;
 
 namespace Chisel.Core
@@ -81,7 +83,9 @@ namespace Chisel.Core
 
         public int version = 0;
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public BrushMesh() { }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public BrushMesh(BrushMesh other)
         {
             version = other.version;
@@ -132,6 +136,7 @@ namespace Chisel.Core
             public ChiselSurface surface;
 
             [EditorBrowsable(EditorBrowsableState.Never)]
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public override string ToString() { return string.Format("{{ firstEdge = {0}, edgeCount = {1}, surfaceID = {2} }}", firstEdge, edgeCount, surfaceID); }
         }
 
@@ -147,6 +152,7 @@ namespace Chisel.Core
             public Int32 twinIndex;
 
             [EditorBrowsable(EditorBrowsableState.Never)]
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public override string ToString() { return string.Format("{{ twinIndex = {0}, vertexIndex = {1} }}", twinIndex, vertexIndex); }
         }
 

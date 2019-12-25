@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -21,6 +22,7 @@ namespace Chisel.Core
     {
         const int bits = 2;
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public BrushIntersectionLookup(int _length)
         {
             var size = ((_length * bits) + 31) / 32;
@@ -34,17 +36,17 @@ namespace Chisel.Core
 
         public int Length
         {
-            get
-            {
-                return (twoBits.Length * 32) / bits;
-            }
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get { return (twoBits.Length * 32) / bits; }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Clear()
         {
             Array.Clear(twoBits, 0, twoBits.Length);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public IntersectionType Get(int index)
         {
             if (index < 0 || index >= Length)
@@ -58,6 +60,7 @@ namespace Chisel.Core
             return (IntersectionType) ((twoBits[int32Index] & twoBit) >> bitIndex);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Is(int index, IntersectionType value) 
         {
             if (index < 0 || index >= Length)
@@ -74,6 +77,7 @@ namespace Chisel.Core
             return (originalInt32 & twoBit) == twoBitValue;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Set(int index, IntersectionType value)
         {
             if (index < 0 || index >= Length)

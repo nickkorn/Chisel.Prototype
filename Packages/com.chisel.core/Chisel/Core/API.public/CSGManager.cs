@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Runtime.CompilerServices;
 
 namespace Chisel.Core
 {
@@ -6,64 +7,105 @@ namespace Chisel.Core
     public static partial class CSGManager
     {
         /// <summary>Destroys all <see cref="Chisel.Core.CSGTreeNode"/>s and all <see cref="Chisel.Core.BrushMesh"/>es.</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void	Clear	()	{ ClearAllNodes(); }
 
         /// <summary>Updates all pending changes to all <see cref="Chisel.Core.CSGTree"/>s.</summary>
         /// <returns>True if any <see cref="Chisel.Core.CSGTree"/>s have been updated, false if no changes have been found.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool	Flush	()	{ return UpdateAllTreeMeshes(); }
 
         /// <summary>Clears all caches and rebuilds all <see cref="Chisel.Core.CSGTree"/>s.</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void	Rebuild	()	{ RebuildAll(); }
 
         /// <summary>Destroy all <see cref="Chisel.Core.CSGTreeNode"/>s contained in <paramref name="nodes"/>.</summary>
         /// <param name="nodes">The <see cref="Chisel.Core.CSGTreeNode"/>s to destroy</param>
         /// <returns>True on success, false if there was a problem with destroying the <see cref="Chisel.Core.CSGTreeNode"/>s. See the log for more information.</returns>
         /// <exception cref="System.ArgumentNullException">Thrown when the <paramref name="nodes"/> is null.</exception>  
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool	Destroy	(CSGTreeNode[] nodes) { if (nodes == null) throw new ArgumentNullException("nodes"); return DestroyNodes(nodes); }
 
         // TODO: add description
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool	Destroy(int userID) { return DestroyAllNodesWithUserID(userID); }
-        
+
         /// <summary>Destroy all <see cref="Chisel.Core.CSGTreeNode"/>s contained in <paramref name="nodes"/> and its children.</summary>
         /// <param name="nodes">The top level <see cref="Chisel.Core.CSGTreeNode"/>s of all <see cref="Chisel.Core.CSGTreeNode"/>s to destroy</param>
         /// <returns>True on success, false if there was a problem with destroying the <see cref="Chisel.Core.CSGTreeNode"/>s. See the log for more information.</returns>
         /// <exception cref="System.ArgumentNullException">Thrown when the <paramref name="nodes"/> is null.</exception>  
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool	DeepDestroy(CSGTreeNode[] nodes) { if (nodes == null) throw new ArgumentNullException("nodes"); return DeepDestroyNodes(nodes); }
 
         /// <summary>Destroy a <see cref="Chisel.Core.CSGTreeNode"/>s and its children.</summary>
         /// <param name="node">The top level <see cref="Chisel.Core.CSGTreeNode"/> to destroy</param>
         /// <returns>True on success, false if there was a problem with destroying the <see cref="Chisel.Core.CSGTreeNode"/>. See the log for more information.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool	DeepDestroy(CSGTreeNode node) { return DeepDestroyNode(node); }
 
         /// <value>The number of <see cref="Chisel.Core.CSGTreeNode"/>s.</value>
-        public static int	TreeNodeCount			{ get { return GetNodeCount(); } }
+        public static int	TreeNodeCount			
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get { return GetNodeCount(); } 
+        }
 
         /// <value>The number of <see cref="Chisel.Core.CSGTreeBrush"/>es.</value>
-        public static int	TreeBrushCount			{ get { return GetBrushCount(); } }
+        public static int	TreeBrushCount			
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get { return GetBrushCount(); } 
+        }
         
         /// <value>The number of <see cref="Chisel.Core.CSGTreeBranch"/>es.</value>
-        public static int	TreeBranchCount			{ get { return GetBranchCount(); } }
+        public static int	TreeBranchCount			
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get { return GetBranchCount(); } 
+        }
 
         /// <value>The number of <see cref="Chisel.Core.CSGTree"/>s.</value>
-        public static int	TreeCount				{ get { return GetTreeCount(); } }
+        public static int	TreeCount				
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get { return GetTreeCount(); } 
+        }
 
         /// <value>The number of <see cref="Chisel.Core.BrushMesh"/>es.</value>
-        public static int	BrushMeshCount			{ get { return GetBrushMeshCount(); } }
+        public static int BrushMeshCount
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get { return GetBrushMeshCount(); }
+        }
 
         /// <value>All the <see cref="Chisel.Core.CSGTreeNode"/>s.</value>
-        public static CSGTreeNode[] AllTreeNodes	{ get { return GetAllTreeNodes(); } }
+        public static CSGTreeNode[] AllTreeNodes
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get { return GetAllTreeNodes(); }
+        }
 
         /// <value>All the <see cref="Chisel.Core.CSGTree"/>s.</value>
-        public static CSGTree[]		AllTrees		{ get { return GetAllTrees(); } }
+        public static CSGTree[] AllTrees
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get { return GetAllTrees(); }
+        }
         
         /// <value>All the <see cref="Chisel.Core.BrushMeshInstance"/>s.</value>
-        public static BrushMeshInstance[] AllBrushMeshInstances	{ get { return GetAllBrushMeshInstances(); } }
+        public static BrushMeshInstance[] AllBrushMeshInstances
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get { return GetAllBrushMeshInstances(); }
+        }
 
 
         // TODO: add description
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static CSGTreeNode	Duplicate(CSGTreeNode node) { return DuplicateInternal(node); }
 
         // TODO: add description
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static CSGTreeNode[]	Duplicate(CSGTreeNode[] nodes) { return DuplicateInternal(nodes); }
 
 

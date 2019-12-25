@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Unity.Burst;
 using Unity.Collections;
@@ -23,6 +24,7 @@ namespace Chisel.Core
         public Dictionary<int, SurfaceLoops>    intersectionSurfaceLoops    = new Dictionary<int, SurfaceLoops>();
         public Dictionary<int, Loop[]>          intersectionLoops           = new Dictionary<int, Loop[]>();
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Clear()
         {
             intersectionSurfaceLoops.Clear();
