@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.ComponentModel;
@@ -12,8 +12,16 @@ namespace Chisel.Core
     {
         internal static IntersectionType ConvexPolytopeTouching(CSGTreeBrush brush0, CSGTreeBrush brush1, double epsilon)
         {
+            if (!brush0.BrushMesh.Valid ||
+                !brush1.BrushMesh.Valid)
+                return IntersectionType.NoIntersection;
+
             var brushMesh0          = BrushMeshManager.GetBrushMesh(brush0.BrushMesh.brushMeshID);
             var brushMesh1          = BrushMeshManager.GetBrushMesh(brush1.BrushMesh.brushMeshID);
+
+            if (brushMesh0 == null ||
+                brushMesh1 == null)
+                return IntersectionType.NoIntersection;
 
             var brushSurfaces0      = brushMesh0.surfaces;
             var brushSurfaces1      = brushMesh1.surfaces;

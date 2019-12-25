@@ -20,7 +20,13 @@ namespace Chisel.Editors
         [Shortcut(kToolShotcutName, ChiselKeyboardDefaults.SpiralStairsBuilderModeKey, ChiselKeyboardDefaults.SpiralStairsBuilderModeModifiers, displayName = kToolShotcutName)]
         public static void StartGeneratorMode() { ChiselEditModeManager.EditModeType = typeof(ChiselSpiralStairsGeneratorMode); }
         #endregion
-        
+
+        public override void Reset()
+        {
+            BoxExtrusionHandle.Reset();
+            spiralStairs = null;
+        }
+
         // TODO: Handle forcing operation types
         CSGOperationType? forceOperation = null;
 

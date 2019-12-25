@@ -680,6 +680,8 @@ namespace Chisel.Editors
 
             var modelMatrix = ChiselNodeHierarchyManager.FindModelTransformMatrixOfTransform(generator.hierarchyItem.Transform);
             var brush       = generator.TopNode;
+            if (!brush.Valid)
+                return;
             
             // NOTE: could loop over multiple instances from here, once we support that
             {

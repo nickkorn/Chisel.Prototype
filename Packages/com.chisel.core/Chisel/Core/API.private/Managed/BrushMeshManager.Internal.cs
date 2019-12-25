@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using UnityEngine;
@@ -46,7 +46,10 @@ namespace Chisel.Core
         {
             if (!AssertBrushMeshIDValid(brushMeshInstanceID))
                 return null;
-            return brushMeshes[brushMeshInstanceID - 1];
+            var brushMesh = brushMeshes[brushMeshInstanceID - 1];
+            if (brushMesh == null)
+                return null;
+            return brushMesh;
         }
 
         public static Int32 CreateBrushMesh(Int32				 userID,

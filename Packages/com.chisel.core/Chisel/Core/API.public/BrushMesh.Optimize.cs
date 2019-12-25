@@ -12,6 +12,20 @@ namespace Chisel.Core
         const float kDistanceEpsilon = 0.00001f;
         const float kEqualityEpsilon = 0.0001f;
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool IsEmpty()
+        {
+            if (this.surfaces == null || this.surfaces.Length == 0)
+                return true;
+            if (this.polygons == null || this.polygons.Length == 0)
+                return true;
+            if (this.vertices == null || this.vertices.Length == 0)
+                return true;
+            if (this.halfEdges == null || this.halfEdges.Length == 0)
+                return true;
+            return false;
+        }
+
         public bool IsConcave()
         {
             bool hasConcaveEdges    = false;

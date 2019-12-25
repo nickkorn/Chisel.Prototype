@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using Unity.Mathematics;
@@ -56,6 +56,13 @@ namespace Chisel.Core
         }
 
         public static ulong ComputeHashKey(Vector3[] bb)
+        {
+            // FIXME: we need a proper hashing solution, but for now we just 
+            //          randomize it to ensure that meshes are updated
+            return (ulong)(UnityEngine.Random.value * ulong.MaxValue);
+        }
+
+        public static ulong ComputeHashKey(float3[] bb)
         {
             // FIXME: we need a proper hashing solution, but for now we just 
             //          randomize it to ensure that meshes are updated
