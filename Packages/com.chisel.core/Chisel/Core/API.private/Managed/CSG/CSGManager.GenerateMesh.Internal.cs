@@ -11,7 +11,7 @@ namespace Chisel.Core
     internal struct ChiselSurfaceRenderBuffer
     {
         public Int32[]		indices;
-        public Vector3[]	vertices;
+        public float3[]	    vertices;
         public Vector3[]	normals;
         public Vector2[]	uv0;
 
@@ -700,7 +700,7 @@ namespace Chisel.Core
                 }
 
                 // TODO: only use the vertices that we found in the indices (we're using too many vertices!)
-                Vector3[]   surfaceVertices = brushVertices.vertices.ToArray();
+                float3[] surfaceVertices = brushVertices.vertices.ToArray();
 
                 var vertexHash	    = (ulong)Hashing.ComputeHashKey(surfaceVertices);
                 var indicesHash	    = (ulong)Hashing.ComputeHashKey(surfaceIndices);

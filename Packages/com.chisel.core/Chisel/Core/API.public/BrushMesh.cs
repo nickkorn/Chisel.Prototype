@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -162,8 +162,12 @@ namespace Chisel.Core
         [Serializable, StructLayout(LayoutKind.Sequential, Pack = 4)]
         public struct Surface
         {
-            public Surface(Vector4 localPlane) { this.localPlane = localPlane; }
-            public Vector4 localPlane; // This is a Plane, but 'Plane' is not [Serializable]
+            public Surface(float4 localPlane) { this.localPlane = localPlane; }
+            public float4 localPlane; // This is a Plane, but 'Plane' is not [Serializable]
+
+            public float3 Normal { [MethodImpl(MethodImplOptions.AggressiveInlining)] get { return localPlane.xyz; } }
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public static implicit operator Plane(Surface surface) { return new Plane(surface.localPlane.xyz, surface.localPlane.w); } 
         }
 
 #if USE_MANAGED_CSG_IMPLEMENTATION

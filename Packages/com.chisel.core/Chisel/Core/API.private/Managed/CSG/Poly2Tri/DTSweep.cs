@@ -1,4 +1,4 @@
-/* Poly2Tri
+﻿/* Poly2Tri
  * Copyright (c) 2009-2010, Poly2Tri Contributors
  * http://code.google.com/p/poly2tri/
  *
@@ -334,7 +334,7 @@ namespace Poly2Tri
         // SweepContext
         //
 
-        List<Vector3>                       vertices;
+        List<float3>                        vertices;
         float2[]                            points;
         ushort[]                            edges;
         List<DirectedEdge>                  allEdges            = new List<DirectedEdge>();
@@ -369,7 +369,8 @@ namespace Poly2Tri
         /// <summary>
         /// Triangulate simple polygon with holes
         /// </summary>
-        public int[] Triangulate(List<Vector3> vertices, List<Chisel.Core.Edge> inputEdges, quaternion rotation)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public int[] Triangulate(List<float3> vertices, List<Chisel.Core.Edge> inputEdges, quaternion rotation)
         {
             this.vertices = vertices;
             this.rotation = rotation;

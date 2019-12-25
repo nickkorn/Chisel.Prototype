@@ -1258,7 +1258,7 @@ namespace Chisel.Core
 
             for (int s = 0; s < surfaces.Length; s++)
             {
-                var localPlane = new Plane((Vector3)surfaces[s].localPlane, surfaces[s].localPlane.w);
+                var localPlane = (Plane)surfaces[s];
                 if (localPlane.GetDistanceToPoint(localPoint) > -kDistanceEpsilon)
                     return false;
             }
@@ -1273,7 +1273,7 @@ namespace Chisel.Core
 
             for (int s = 0; s < surfaces.Length; s++)
             {
-                var localPlane = new Plane((Vector3)surfaces[s].localPlane, surfaces[s].localPlane.w);
+                var localPlane = (Plane)surfaces[s];
                 if (localPlane.GetDistanceToPoint(localPoint) > kDistanceEpsilon)
                     return false;
             }

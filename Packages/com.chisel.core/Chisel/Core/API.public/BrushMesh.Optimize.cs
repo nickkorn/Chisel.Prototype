@@ -19,8 +19,7 @@ namespace Chisel.Core
             // Detect if outline is concave
             for (int p = 0; p < polygons.Length; p++)
             {
-                var localPlaneVector = surfaces[p].localPlane;
-                var localPlane = new Plane((Vector3)localPlaneVector, localPlaneVector.w);
+                var localPlane = (Plane)surfaces[p];
                 ref readonly var polygon = ref polygons[p];
                 var firstEdge = polygon.firstEdge;
                 var edgeCount = polygon.edgeCount;
@@ -93,8 +92,7 @@ namespace Chisel.Core
             // Detect if outline is inside-out
             for (int p = 0; p < polygons.Length; p++)
             {
-                var localPlaneVector = surfaces[p].localPlane;
-                var localPlane = new Plane((Vector3)localPlaneVector, localPlaneVector.w);
+                var localPlane = (Plane)surfaces[p];
                 ref readonly var polygon = ref polygons[p];
                 var firstEdge = polygon.firstEdge;
                 var edgeCount = polygon.edgeCount;
@@ -677,8 +675,7 @@ namespace Chisel.Core
 
                 var firstEdge   = polygons[p].firstEdge;
                 var lastEdge    = firstEdge + edgeCount;
-                var planeVector = surfaces[p].localPlane;
-                var plane       = new Plane((Vector3)planeVector, planeVector.w);
+                var plane       = (Plane)surfaces[p];
 
                 bool isPlanar = true;
                 for (int e = firstEdge; e < lastEdge; e++)

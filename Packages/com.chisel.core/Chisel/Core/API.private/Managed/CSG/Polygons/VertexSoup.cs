@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
@@ -22,7 +22,7 @@ namespace Chisel.Core
             public int nextChainIndex;
         }
 
-        public List<Vector3> vertices = new List<Vector3>();
+        public List<float3> vertices = new List<float3>();
         public NativeArray<float3> vertexArray;
         List<ChainedIndex> chainedIndices = new List<ChainedIndex>();
         int[] hashTable = new int[(int)kHashTableSize];
@@ -65,20 +65,12 @@ namespace Chisel.Core
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         ushort AddUnique(float3 vertex, int mx, int my, int mz)
-        {/*
-            if (math.abs(vertex.x - (3.0f)) < 0.0001f &&
-                math.abs(vertex.y - (1.0f)) < 0.0001f &&
-                math.abs(vertex.z - (-5.5f)) < 0.0001f)
-            {
-                Debug.Log("ADD " + vertex);
-            }*/
-
+        {
             var vertexIndex = (ushort)vertices.Count;
             vertices.Add(vertex);
             {
                 var hashCode = GetHash(mx, my, mz) % kHashTableSize;
                 var prevChainIndex = hashTable[hashCode];
-                //if (!lookup.TryGetValue(hashCode, out int prevChainIndex)) prevChainIndex = -1;
                 var newChainIndex = chainedIndices.Count;
                 var newChainedIndex = new ChainedIndex() { vertexIndex = vertexIndex, nextChainIndex = prevChainIndex };
                 chainedIndices.Add(newChainedIndex);
@@ -101,69 +93,42 @@ namespace Chisel.Core
                 {
                     {
                         var chainIndex = hashTable[GetHash(x, y, mz - 1) % kHashTableSize];
-                        //if (lookup.TryGetValue(GetHash(x, y, mz - 1), out int chainIndex))
                         {
                             while (chainIndex != -1)
                             {
                                 var vertexIndex = chainedIndices[chainIndex].vertexIndex;
                                 chainIndex = chainedIndices[chainIndex].nextChainIndex;
-                                var sqrDistance = math.lengthsq((float3)vertices[vertexIndex] - vertex);
+                                var sqrDistance = math.lengthsq(vertices[vertexIndex] - vertex);
                                 if (sqrDistance < CSGManagerPerformCSG.kSqrMergeEpsilon)
-                                {/*
-                                    if (math.abs(vertices[vertexIndex].x - ( 3.0f)) < 0.00001f &&
-                                        math.abs(vertices[vertexIndex].y - ( 1.0f)) < 0.00001f &&
-                                        math.abs(vertices[vertexIndex].z - (-5.5f)) < 0.00001f)
-                                    {
-                                        Debug.Log("FOUND " + vertices[vertexIndex] + " " + vertex);
-                                    }*/
                                     return vertexIndex; 
-                                }
                             }
                         }
                     }
 
                     {
                         var chainIndex = hashTable[GetHash(x, y, mz) % kHashTableSize];
-                        //if (lookup.TryGetValue(GetHash(x, y, mz), out int chainIndex))
                         {
                             while (chainIndex != -1)
                             {
                                 var vertexIndex = chainedIndices[chainIndex].vertexIndex;
                                 chainIndex = chainedIndices[chainIndex].nextChainIndex;
-                                var sqrDistance = math.lengthsq((float3)vertices[vertexIndex] - vertex);
+                                var sqrDistance = math.lengthsq(vertices[vertexIndex] - vertex);
                                 if (sqrDistance < CSGManagerPerformCSG.kSqrMergeEpsilon)
-                                {/*
-                                    if (math.abs(vertices[vertexIndex].x - (3.0f)) < 0.00001f &&
-                                        math.abs(vertices[vertexIndex].y - (1.0f)) < 0.00001f &&
-                                        math.abs(vertices[vertexIndex].z - (-5.5f)) < 0.00001f)
-                                    {
-                                        Debug.Log("FOUND " + vertices[vertexIndex] + " " + vertex);
-                                    }*/
                                     return vertexIndex;
-                                }
                             }
                         }
                     }
 
                     {
                         var chainIndex = hashTable[GetHash(x, y, mz + 1) % kHashTableSize];
-                        //if (lookup.TryGetValue(GetHash(x, y, mz + 1), out int chainIndex))
                         {
                             while (chainIndex != -1)
                             {
                                 var vertexIndex = chainedIndices[chainIndex].vertexIndex;
                                 chainIndex = chainedIndices[chainIndex].nextChainIndex;
-                                var sqrDistance = math.lengthsq((float3)vertices[vertexIndex] - vertex);
+                                var sqrDistance = math.lengthsq(vertices[vertexIndex] - vertex);
                                 if (sqrDistance < CSGManagerPerformCSG.kSqrMergeEpsilon)
-                                {/*
-                                    if (math.abs(vertices[vertexIndex].x - (3.0f)) < 0.00001f &&
-                                        math.abs(vertices[vertexIndex].y - (1.0f)) < 0.00001f &&
-                                        math.abs(vertices[vertexIndex].z - (-5.5f)) < 0.00001f)
-                                    {
-                                        Debug.Log("FOUND " + vertices[vertexIndex] + " " + vertex);
-                                    }*/
                                     return vertexIndex;
-                                }
                             }
                         }
                     }

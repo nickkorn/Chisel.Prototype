@@ -33,7 +33,7 @@ namespace Chisel.Core
             for (int i = 0; i < indices.Count; i++)
             {
                 var vertexIndex1 = indices[i];
-                var vertex1      = (float3)vertices[vertexIndex1];
+                var vertex1      = vertices[vertexIndex1];
                 for (int j = 1; j < indices.Count - 1; j++)
                 {
                     int a = (i + j) % indices.Count;
@@ -48,8 +48,8 @@ namespace Chisel.Core
                         vertexIndexA == vertexIndexB)
                         continue;
 
-                    var vertexA = (float3)vertices[vertexIndexA];
-                    var vertexB = (float3)vertices[vertexIndexB];
+                    var vertexA = vertices[vertexIndexA];
+                    var vertexB = vertices[vertexIndexB];
 
                     var distance = GeometryMath.SqrDistanceFromPointToLineSegment(vertex1, vertexA, vertexB);
                     if (distance <= CSGManagerPerformCSG.kSqrMergeEpsilon)
@@ -100,8 +100,7 @@ namespace Chisel.Core
                 if (polygon.edgeCount < 3)
                     continue;
 
-                var localPlaneVector    = surfaces[surfaceIndex].localPlane;
-                var localPlane          = new Plane((Vector3)localPlaneVector, localPlaneVector.w);
+                var localPlane          = (Plane)surfaces[surfaceIndex];
                 var worldPlane          = outputLoops.brush.NodeToTreeSpaceMatrix.TransformPlane(localPlane);
 
                 MathExtensions.CalculateTangents(worldPlane.normal, out Vector3 right, out Vector3 forward);

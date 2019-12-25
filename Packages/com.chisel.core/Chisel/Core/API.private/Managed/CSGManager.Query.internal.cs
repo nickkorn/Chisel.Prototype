@@ -68,8 +68,7 @@ namespace Chisel.Core
 
 	        for (var s = 0; s < brushMesh.surfaces.Length; s++)
 	        {
-                var planeVector	= brushMesh.surfaces[s].localPlane;
-                var plane       = new Plane((Vector3)planeVector, planeVector.w);
+                var plane       = (Plane)brushMesh.surfaces[s];
                 var s_dist      = plane.GetDistanceToPoint(brush_ray_start);
                 var e_dist	    = plane.GetDistanceToPoint(brush_ray_end);
                 var length	    = s_dist - e_dist;
@@ -94,8 +93,7 @@ namespace Chisel.Core
 			        if (s == s2)
 				        continue;
 
-                    var planeVector2 = brushMesh.surfaces[s2].localPlane;
-                    var plane2       = new Plane((Vector3)planeVector2, planeVector2.w);
+                    var plane2       = (Plane)brushMesh.surfaces[s2];
                     var pl_dist      = plane2.GetDistanceToPoint(intersection);
 			        if (pl_dist > MathExtensions.kDistanceEpsilon) { skipSurface = true; break; }
 		        }

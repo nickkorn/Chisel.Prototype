@@ -162,7 +162,7 @@ namespace Chisel.Core
         public static bool GenerateSphereVertices(ChiselSphereDefinition definition, ref Vector3[] vertices)
         {
             definition.Validate();
-            var transform = Matrix4x4.TRS(Vector3.zero, Quaternion.AngleAxis(definition.rotation, Vector3.up), Vector3.one);
+            //var transform = Matrix4x4.TRS(Vector3.zero, Quaternion.AngleAxis(definition.rotation, Vector3.up), Vector3.one);
             BrushMeshFactory.CreateSphereVertices(definition.diameterXYZ, definition.offsetY, definition.generateFromCenter, definition.horizontalSegments, definition.verticalSegments, ref vertices);
             return true;
         }

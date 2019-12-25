@@ -3,9 +3,9 @@
     "references": [
         "com.scene.handle.extensions.runtime",
         "Unity.Mathematics",
-        "Unity.Burst"
+        "Unity.Burst",
+        "Unity.Collections"
     ],
-    "optionalUnityReferences": [],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": true,

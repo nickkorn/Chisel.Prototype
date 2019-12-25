@@ -1,6 +1,7 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using Unity.Mathematics;
 using UnityEngine;
 
 namespace Chisel.Core
