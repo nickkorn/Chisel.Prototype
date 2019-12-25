@@ -190,7 +190,7 @@ namespace Chisel.Core
 
                         var worldSpacePlanes1Length = mesh1.surfaces.Length;
                         var worldSpacePlanes1 = stackalloc float4[worldSpacePlanes1Length];
-                        CSGManagerPerformCSG.GetBrushPlanes(worldSpacePlanes1, mesh1.surfaces, nodeToTreeSpace1);
+                        CSGManagerPerformCSG.TransformByMatrix(worldSpacePlanes1, mesh1.surfaces, nodeToTreeSpace1);
 
                         newPolygon = new Loop()
                         {
@@ -219,7 +219,7 @@ namespace Chisel.Core
 
                         var worldSpacePlanes2Length = mesh2.surfaces.Length;
                         var worldSpacePlanes2 = stackalloc float4[mesh2.surfaces.Length];
-                        CSGManagerPerformCSG.GetBrushPlanes(worldSpacePlanes2, mesh2.surfaces, nodeToTreeSpace2);
+                        CSGManagerPerformCSG.TransformByMatrix(worldSpacePlanes2, mesh2.surfaces, nodeToTreeSpace2);
 
                         if (newPolygon.indices.Count == 0) // no vertex of polygon2 is inside polygon1
                         {

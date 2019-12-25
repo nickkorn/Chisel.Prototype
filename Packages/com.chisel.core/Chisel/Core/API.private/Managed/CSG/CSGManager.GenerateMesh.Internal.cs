@@ -1,7 +1,8 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using Unity.Collections.LowLevel.Unsafe;
 using Unity.Mathematics;
 using UnityEngine;
 
@@ -229,7 +230,7 @@ namespace Chisel.Core
         }
 
 
-        static bool GenerateVertexBuffers(SubMeshCounts subMeshCount, GeneratedMeshContents generatedMesh)
+        unsafe static bool GenerateVertexBuffers(SubMeshCounts subMeshCount, GeneratedMeshContents generatedMesh)
         {
             var submeshVertexCount	= subMeshCount.vertexCount;
             var submeshIndexCount	= subMeshCount.indexCount;
@@ -253,29 +254,37 @@ namespace Chisel.Core
 
             // double snap_size = 1.0 / ants.SnapDistance();
 
-            // copy all the vertices & indices to the sub-meshes for each material
-            for (int surfaceIndex = 0, indexOffset = 0, vertexOffset = 0, surfaceCount = (int)subMeshSurfaces.Count;
-                 surfaceIndex < surfaceCount;
-                 ++surfaceIndex)
-            {
-                var sourceBuffer = subMeshSurfaces[surfaceIndex];
-                if (sourceBuffer.indices == null ||
-                    sourceBuffer.vertices == null ||
-                    sourceBuffer.indices.Length == 0 ||
-                    sourceBuffer.vertices.Length == 0)
-                    continue;
-                for (int i = 0, sourceIndexCount = sourceBuffer.indices.Length; i < sourceIndexCount; i++)
+            fixed(Vector3* dstVertices = &generatedMesh.positions[0])
+            { 
+                // copy all the vertices & indices to the sub-meshes for each material
+                for (int surfaceIndex = 0, indexOffset = 0, vertexOffset = 0, surfaceCount = (int)subMeshSurfaces.Count;
+                     surfaceIndex < surfaceCount;
+                     ++surfaceIndex)
                 {
-                    generatedMesh.indices[indexOffset] = (int)(sourceBuffer.indices[i] + vertexOffset);
-                    indexOffset++;
+                    var sourceBuffer = subMeshSurfaces[surfaceIndex];
+                    if (sourceBuffer.indices == null ||
+                        sourceBuffer.vertices == null ||
+                        sourceBuffer.indices.Length == 0 ||
+                        sourceBuffer.vertices.Length == 0)
+                        continue;
+                    for (int i = 0, sourceIndexCount = sourceBuffer.indices.Length; i < sourceIndexCount; i++)
+                    {
+                        generatedMesh.indices[indexOffset] = (int)(sourceBuffer.indices[i] + vertexOffset);
+                        indexOffset++;
+                    }
+
+                    var sourceVertexCount = sourceBuffer.vertices.Length;
+
+                    fixed (float3* srcVertices = &sourceBuffer.vertices[0])
+                    {
+                        UnsafeUtility.MemCpy(dstVertices + vertexOffset, srcVertices, sourceVertexCount * UnsafeUtility.SizeOf<float3>());
+                        //Array.Copy(sourceBuffer.vertices, 0, generatedMesh.positions, vertexOffset, sourceVertexCount);
+                    }
+
+                    if (needUV0s    || needTangents) Array.Copy(sourceBuffer.uv0,     0, uv0s,    vertexOffset, sourceVertexCount);
+                    if (needNormals || needTangents) Array.Copy(sourceBuffer.normals, 0, normals, vertexOffset, sourceVertexCount);
+                    vertexOffset += sourceVertexCount;
                 }
-
-                var sourceVertexCount = sourceBuffer.vertices.Length;
-                Array.Copy(sourceBuffer.vertices, 0, generatedMesh.positions, vertexOffset, sourceVertexCount);
-
-                if (needUV0s    || needTangents) Array.Copy(sourceBuffer.uv0,     0, uv0s,    vertexOffset, sourceVertexCount);
-                if (needNormals || needTangents) Array.Copy(sourceBuffer.normals, 0, normals, vertexOffset, sourceVertexCount);
-                vertexOffset += sourceVertexCount;
             }
 
             if (needTangents)
@@ -569,8 +578,9 @@ namespace Chisel.Core
 
         #region Triangulate
         static readonly Poly2Tri.DTSweep context = new Poly2Tri.DTSweep();
-        
-        internal static unsafe bool TriangulateWithHoles(List<Vector3> vertices, List<Edge> edges, quaternion rotation, out Int32[] surfaceIndices)
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static unsafe bool TriangulateWithHoles(List<float3> vertices, List<Edge> edges, quaternion rotation, out Int32[] surfaceIndices)
         {
             surfaceIndices = null;
             try
@@ -641,7 +651,7 @@ namespace Chisel.Core
                 var loop            = loops[l];
                 if (loop.edges.Count < 3)
                 {
-                    Debug.Log("intersections.Count == " + loop.edges.Count);
+                    //Debug.Log("intersections.Count == " + loop.edges.Count);
                     continue;
                 }
 

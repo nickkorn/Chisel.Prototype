@@ -83,7 +83,8 @@ namespace Chisel.Core
         }
 
         // TODO: Optimize
-        static void GetBrushPlanes(float4[] outputPlanes, BrushMesh.Surface[] surfaces, float4x4 nodeToTreeSpace)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static void TransformByMatrix(float4[] outputPlanes, BrushMesh.Surface[] surfaces, float4x4 nodeToTreeSpace)
         {
             var planeTransform = math.transpose(math.inverse(nodeToTreeSpace));
             for (int p = 0; p < surfaces.Length; p++)
@@ -93,7 +94,8 @@ namespace Chisel.Core
             }
         }
 
-        static unsafe void GetBrushPlanes(float4* outputPlanes, BrushMesh.Surface[] surfaces, float4x4 nodeToTreeSpace)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static unsafe void TransformByMatrix(float4* outputPlanes, BrushMesh.Surface[] surfaces, float4x4 nodeToTreeSpace)
         {
             var planeTransform = math.transpose(math.inverse(nodeToTreeSpace));
             for (int p = 0; p < surfaces.Length; p++)
@@ -104,7 +106,8 @@ namespace Chisel.Core
         }
 
         // TODO: Optimize
-        static void GetBrushPlanes(NativeArray<float4> outputPlanes, BrushMesh.Surface[] surfaces, Matrix4x4 nodeToTreeSpaceInversed)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static void TransformByInversedMatrix(NativeArray<float4> outputPlanes, BrushMesh.Surface[] surfaces, Matrix4x4 nodeToTreeSpaceInversed)
         {
             for (int p = 0; p < surfaces.Length; p++)
             {
@@ -126,7 +129,7 @@ namespace Chisel.Core
 
         #region SortIndices
 
-        static float3 FindPolygonCentroid(List<ushort> indices, List<Vector3> vertices)
+        static float3 FindPolygonCentroid(List<ushort> indices, List<float3> vertices)
         {
             var centroid = float3.zero;
             for (int i = 0; i < indices.Count; i++)
@@ -134,7 +137,7 @@ namespace Chisel.Core
             return centroid / indices.Count;
         }
 
-        static void SortIndices(List<ushort> indices, List<Vector3> vertices, float3 tangentX, float3 tangentY, float cx, float cy, int l, int r)
+        static void SortIndices(List<ushort> indices, List<float3> vertices, float3 tangentX, float3 tangentY, float cx, float cy, int l, int r)
         {
             var left    = l;
             var right   = r;
@@ -189,7 +192,7 @@ namespace Chisel.Core
 
         // TODO: sort by using plane information instead of unreliable floating point math ..
         // TODO: make this work on non-convex polygons
-        static void SortIndices(List<ushort> indices, List<Vector3> vertices, float3 normal)
+        static void SortIndices(List<ushort> indices, List<float3> vertices, float3 normal)
         {
             // There's no point in trying to sort a point or a line 
             if (indices.Count < 3)
@@ -821,7 +824,7 @@ namespace Chisel.Core
 
             using (var worldSpacePlanesS = new NativeArray<float4>(mesh1.surfaces.Length, Allocator.Persistent, NativeArrayOptions.UninitializedMemory))
             {
-                CSGManagerPerformCSG.GetBrushPlanes(worldSpacePlanesS, mesh1.surfaces, outputLoops.brush.TreeToNodeSpaceMatrix);
+                CSGManagerPerformCSG.TransformByInversedMatrix(worldSpacePlanesS, mesh1.surfaces, outputLoops.brush.TreeToNodeSpaceMatrix);
 
                 s_BrushPlanes.Clear();
                 s_AllIntersectionLoops.Clear();
@@ -846,7 +849,7 @@ namespace Chisel.Core
                         continue;
 
                     var worldSpacePlanes = new NativeArray<float4>(mesh2.surfaces.Length, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
-                    CSGManagerPerformCSG.GetBrushPlanes(worldSpacePlanes, mesh2.surfaces, intersectingBrush.TreeToNodeSpaceMatrix);
+                    CSGManagerPerformCSG.TransformByInversedMatrix(worldSpacePlanes, mesh2.surfaces, intersectingBrush.TreeToNodeSpaceMatrix);
 
                     s_BrushPlanes.Add(intersectingBrush.brushNodeID, worldSpacePlanes);
 
