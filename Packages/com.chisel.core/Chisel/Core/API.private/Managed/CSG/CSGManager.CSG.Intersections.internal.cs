@@ -84,17 +84,6 @@ namespace Chisel.Core
 
         // TODO: Optimize
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        static void TransformByMatrix(float4[] outputPlanes, BrushMesh.Surface[] surfaces, float4x4 nodeToTreeSpace)
-        {
-            var planeTransform = math.transpose(math.inverse(nodeToTreeSpace));
-            for (int p = 0; p < surfaces.Length; p++)
-            {
-                var planeVector = math.mul(planeTransform, surfaces[p].localPlane);
-                outputPlanes[p] = planeVector / math.length(planeVector.xyz);
-            }
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         static unsafe void TransformByMatrix(float4* outputPlanes, BrushMesh.Surface[] surfaces, float4x4 nodeToTreeSpace)
         {
             var planeTransform = math.transpose(math.inverse(nodeToTreeSpace));
@@ -429,39 +418,6 @@ namespace Chisel.Core
                         planeLoop1.AddIndex(brushVertices2, vertexIndex2);
                         //planeLoop1.indices.Add(vertexIndex2);
                     }
-                    /*
-                    //if (vertexIndex1 == 14)
-                    {
-                        if (Array.IndexOf(Loop.loopTestIndices, loop.loopIndex) != -1)
-                        {
-                            var rotation = Quaternion.FromToRotation(loop.info.worldPlane.normal, Vector3.forward);
-                            var builder = new System.Text.StringBuilder();
-                            builder.AppendLine($"Bla: FOUND {vertexIndex1} {brushVertices1.vertices[vertexIndex1]} | {loop.loopIndex}");
-                            Dump(builder, loop, brushVertices1, rotation);
-                            Debug.Log(builder.ToString());
-                        }
-                    }
-
-                    //if (vertexIndex2 == 14)
-                    {
-                        if (Array.IndexOf(Loop.loopTestIndices, planeLoop0.loopIndex) != -1)
-                        {
-                            var rotation0 = Quaternion.FromToRotation(planeLoop0.info.worldPlane.normal, Vector3.forward);
-                            var builder = new System.Text.StringBuilder();
-                            builder.AppendLine($"Bla: FOUND {vertexIndex2} {brushVertices2.vertices[vertexIndex2]} | {planeLoop0.loopIndex} {planeLoop1.loopIndex}");
-                            Dump(builder, planeLoop0, brushVertices2, rotation0);
-                            Debug.Log(builder.ToString());
-                        }
-                        if (Array.IndexOf(Loop.loopTestIndices, planeLoop1.loopIndex) != -1 &&
-                            planeLoop1.loopIndex != planeLoop0.loopIndex)
-                        {
-                            var rotation1 = Quaternion.FromToRotation(planeLoop1.info.worldPlane.normal, Vector3.forward);
-                            var builder = new System.Text.StringBuilder();
-                            builder.AppendLine($"Bla: FOUND {vertexIndex2} {brushVertices2.vertices[vertexIndex2]} | {planeLoop1.loopIndex} {planeLoop0.loopIndex} ");
-                            Dump(builder, planeLoop1, brushVertices2, rotation1);
-                            Debug.Log(builder.ToString());
-                        }
-                    }*/
                 }
             }
         }
@@ -512,19 +468,6 @@ namespace Chisel.Core
 
 
                     planeLoop.AddIndex(brushVertices1, (ushort)worldVertexIndex);
-                    //planeLoop.indices.Add(vertexIndex1);
-                    /*
-                    //if (worldVertexIndex == 14)
-                    {
-                        if (Array.IndexOf(Loop.loopTestIndices, planeLoop.loopIndex) != -1)
-                        {
-                            var rotation = Quaternion.FromToRotation(planeLoop.info.worldPlane.normal, Vector3.forward);
-                            var builder = new System.Text.StringBuilder();
-                            builder.AppendLine($"Bla2: FOUND {worldVertexIndex} {brushVertices1.vertices[worldVertexIndex]} | {planeLoop.loopIndex}");
-                            Dump(builder, planeLoop, brushVertices1, rotation);
-                            Debug.Log(builder.ToString());
-                        }
-                    }*/
                 }
             }
 #endif
@@ -746,52 +689,8 @@ namespace Chisel.Core
                  mesh2,
 
                  nodeToTreeSpaceMatrix2, treeToNodeSpaceMatrix2, node2ToNode1);
-            /*
-            Bla4(loops12, brushVertices1, treeToNodeSpaceMatrix1, 
-                 localSpacePlanes1, localSpacePlanes2);
-
-            Bla4(loops21, brushVertices2, treeToNodeSpaceMatrix1, 
-                 localSpacePlanes2, localSpacePlanes1);*/
 
         }
-        /*
-        static void Bla4(SurfaceLoops surfaceLoops, VertexSoup brushVertices1, float4x4 matrix,
-                         float4[] localSpacePlanes1, float4[] localSpacePlanes2)
-        {
-            var surfaces = surfaceLoops.surfaces;
-            for (int i = 0; i < surfaces.Length; i++)
-            {
-                Bla4(surfaces[i], brushVertices1, matrix, 
-                     localSpacePlanes1, localSpacePlanes2);
-            }
-        }
-
-        static void Bla4(List<Loop> loops, VertexSoup brushVertices1, float4x4 matrix, 
-                         float4[] localSpacePlanes1, float4[] localSpacePlanes2)
-        {
-            for (int i = 0; i < loops.Count; i++)
-            {
-                Bla4(loops[i], brushVertices1, matrix,  localSpacePlanes1, localSpacePlanes2);
-            }
-        }
-
-
-        static void Bla4(Loop loop, VertexSoup brushVertices1, float4x4 matrix,
-                         float4[] localSpacePlanes1, float4[] localSpacePlanes2)
-        {
-            var indices = loop.indices;
-            for (int i = indices.Count - 1; i >= 0; i--)
-            {
-                var vertexIndex = indices[i];
-                var worldVertex = new float4(brushVertices1.vertices[vertexIndex], 1);
-                var localVertex = math.mul(matrix, worldVertex);
-
-                if (CSGManagerPerformCSG.IsOutsidePlanes(localSpacePlanes2, localVertex) ||
-                    CSGManagerPerformCSG.IsOutsidePlanes(localSpacePlanes1, localVertex))
-                    indices.RemoveAt(i);
-            }
-        }
-        */
         #endregion
 
 
@@ -900,15 +799,6 @@ namespace Chisel.Core
                         {
                             var planes0 = intersectionSurface[l0].selfPlanes;
                             var indices = intersectionSurface[l0].indices;
-                            /*
-                            if (Array.IndexOf(Loop.loopTestIndices, intersectionSurface[l0].loop.loopIndex) != -1)
-                            {
-                                var rotation = Quaternion.FromToRotation(intersectionSurface[l0].loop.info.worldPlane.normal, Vector3.forward);
-                                var builder = new System.Text.StringBuilder();
-                                builder.AppendLine($"Intersection start {intersectionSurface[l0].loop.loopIndex}");
-                                Dump(builder, intersectionSurface[l0].loop, outputLoops.vertexSoup, rotation);
-                                Debug.Log(builder.ToString());
-                            }*/
 
                             s_IntersectionJob.vertexCount = indices.Count;
                             for (int v = 0; v < indices.Count; v++)
@@ -940,9 +830,7 @@ namespace Chisel.Core
                             }
 
                             if (s_IntersectionJob.vertexCount > indices.Count)
-                            {/*
-                                if (Array.IndexOf(Loop.loopTestIndices, intersectionSurface[l0].loop.loopIndex) != -1)
-                                    UnityEngine.Debug.Log($"indices.Clear {intersectionSurface[l0].loop.loopIndex}");*/
+                            {
                                 indices.Clear();
                                 if (indices.Capacity < s_IntersectionJob.vertexCount)
                                     indices.Capacity = s_IntersectionJob.vertexCount;
@@ -953,18 +841,6 @@ namespace Chisel.Core
 
                                     if (indices.Contains(vertexIndex))
                                         continue;
-                                    /*
-                                    //if (vertexIndex == 14)// || vertexIndex == 15)
-                                    {
-                                        if (Array.IndexOf(Loop.loopTestIndices, intersectionSurface[l0].loop.loopIndex) != -1)
-                                        {
-                                            var rotation = Quaternion.FromToRotation(intersectionSurface[l0].loop.info.worldPlane.normal, Vector3.forward);
-                                            var builder = new System.Text.StringBuilder();
-                                            builder.AppendLine($"FindLoopOverlapIntersections: FOUND {vertexIndex} {outputLoops.vertexSoup.vertices[vertexIndex]} | ? => {intersectionSurface[l0].loop.loopIndex}");
-                                            Dump(builder, intersectionSurface[l0].loop, outputLoops.vertexSoup, rotation);
-                                            Debug.Log(builder.ToString());
-                                        }
-                                    }*/
 
                                     indices.Add(vertexIndex);
                                 }
@@ -1001,9 +877,7 @@ namespace Chisel.Core
                             }
 
                             if (s_IntersectionJob.vertexCount > indices.Count)
-                            {/*
-                                if (Array.IndexOf(Loop.loopTestIndices, basePolygon.loopIndex) != -1)
-                                    UnityEngine.Debug.Log($"indices.Clear {basePolygon.loopIndex}");*/
+                            {
                                 indices.Clear();
                                 if (indices.Capacity < s_IntersectionJob.vertexCount)
                                     indices.Capacity = s_IntersectionJob.vertexCount;
@@ -1014,18 +888,6 @@ namespace Chisel.Core
                                     
                                     if (indices.Contains(vertexIndex))
                                         continue;
-                                    /*
-                                    //if (vertexIndex == 14)// || vertexIndex == 15)
-                                    {
-                                        if (Array.IndexOf(Loop.loopTestIndices, basePolygon.loopIndex) != -1)
-                                        {
-                                            var rotation = Quaternion.FromToRotation(basePolygon.info.worldPlane.normal, Vector3.forward);
-                                            var builder = new System.Text.StringBuilder();
-                                            builder.AppendLine($"FindLoopOverlapIntersections: FOUND {vertexIndex} {outputLoops.vertexSoup.vertices[vertexIndex]} | {basePolygon.loopIndex}");
-                                            Dump(builder, basePolygon, outputLoops.vertexSoup, rotation);
-                                            Debug.Log(builder.ToString());
-                                        }
-                                    }*/
 
                                     indices.Add(vertexIndex);
                                 }
