@@ -109,43 +109,45 @@ namespace Chisel.Core
 
         #region SortIndices
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         static float3 FindPolygonCentroid(List<ushort> indices, List<float3> vertices)
         {
             var centroid = float3.zero;
             for (int i = 0; i < indices.Count; i++)
-                centroid += (float3)vertices[indices[i]];
+                centroid += vertices[indices[i]];
             return centroid / indices.Count;
         }
 
-        static void SortIndices(List<ushort> indices, List<float3> vertices, float3 tangentX, float3 tangentY, float cx, float cy, int l, int r)
+        /*
+        static void SortIndices(List<ushort> indices, List<float3> vertices, float3 tangentX, float3 tangentY, float2 center, int l, int r)
         {
             var left    = l;
             var right   = r;
             var va      = (float3)vertices[indices[(left + right) / 2]]; 
             while (true)
             {
-                var a_angle = math.atan2(math.dot(tangentX, va) - cx, math.dot(tangentY, va) - cy);
+                var a_angle = math.atan2(math.dot(tangentX, va) - center.x, math.dot(tangentY, va) - center.y);
 
                 {
                     var vb      = (float3)vertices[indices[left]];
-                    var b_angle = math.atan2(math.dot(tangentX, vb) - cx, math.dot(tangentY, vb) - cy);
+                    var b_angle = math.atan2(math.dot(tangentX, vb) - center.x, math.dot(tangentY, vb) - center.y);
 
                     while (b_angle > a_angle)
                     {
                         left++; 
                         vb = (float3)vertices[indices[left]];
-                        b_angle = math.atan2(math.dot(tangentX, vb) - cx, math.dot(tangentY, vb) - cy);
+                        b_angle = math.atan2(math.dot(tangentX, vb) - center.x, math.dot(tangentY, vb) - center.y);
                     }
                 }
 
                 { 
                     var vb      = (float3)vertices[indices[right]];
-                    var b_angle = math.atan2(math.dot(tangentX, vb) - cx, math.dot(tangentY, vb) - cy);
+                    var b_angle = math.atan2(math.dot(tangentX, vb) - center.x, math.dot(tangentY, vb) - center.y);
                     while (a_angle > b_angle)
                     {
                         right--;
                         vb = (float3)vertices[indices[right]];
-                        b_angle = math.atan2(math.dot(tangentX, vb) - cx, math.dot(tangentY, vb) - cy);
+                        b_angle = math.atan2(math.dot(tangentX, vb) - center.x, math.dot(tangentY, vb) - center.y);
                     }
                 }
 
@@ -165,11 +167,12 @@ namespace Chisel.Core
                     break;
             }
             if (l < right)
-                SortIndices(indices, vertices, tangentX, tangentY, cx, cy, l, right);
+                SortIndices(indices, vertices, tangentX, tangentY, center, l, right);
             if (left < r)
-                SortIndices(indices, vertices, tangentX, tangentY, cx, cy, left, r);
+                SortIndices(indices, vertices, tangentX, tangentY, center, left, r);
         }
-
+        */
+        static List<int2> s_SortStack = new List<int2>();
         // TODO: sort by using plane information instead of unreliable floating point math ..
         // TODO: make this work on non-convex polygons
         static void SortIndices(List<ushort> indices, List<float3> vertices, float3 normal)
@@ -177,8 +180,6 @@ namespace Chisel.Core
             // There's no point in trying to sort a point or a line 
             if (indices.Count < 3)
                 return;
-
-            var centroid = FindPolygonCentroid(indices, vertices);
 
             float3 tangentX, tangentY;
             if (normal.x > normal.y)
@@ -204,18 +205,83 @@ namespace Chisel.Core
                     tangentY = math.cross(normal, tangentX);
                 }
             }
-            var cx = math.dot(tangentX, centroid); // distance in direction of tangentX
-            var cy = math.dot(tangentY, centroid); // distance in direction of tangentY
+
+            var centroid = FindPolygonCentroid(indices, vertices);
+            var center = new float2(math.dot(tangentX, centroid), // distance in direction of tangentX
+                                    math.dot(tangentY, centroid)); // distance in direction of tangentY
 #if true
-            SortIndices(indices, vertices, tangentX, tangentY, cx, cy, 0, indices.Count - 1);
+            s_SortStack.Clear();
+            s_SortStack.Add(new int2(0, indices.Count - 1));
+            while (s_SortStack.Count > 0)
+            {
+                var top = s_SortStack[s_SortStack.Count - 1];
+                s_SortStack.RemoveAt(s_SortStack.Count - 1);
+                var l = top.x;
+                var r = top.y;
+                var left = l;
+                var right = r;
+                var va = (float3)vertices[indices[(left + right) / 2]];
+                while (true)
+                {
+                    var a_angle = math.atan2(math.dot(tangentX, va) - center.x, math.dot(tangentY, va) - center.y);
+
+                    {
+                        var vb = (float3)vertices[indices[left]];
+                        var b_angle = math.atan2(math.dot(tangentX, vb) - center.x, math.dot(tangentY, vb) - center.y);
+                        while (b_angle > a_angle)
+                        {
+                            left++;
+                            vb = (float3)vertices[indices[left]];
+                            b_angle = math.atan2(math.dot(tangentX, vb) - center.x, math.dot(tangentY, vb) - center.y);
+                        }
+                    }
+
+                    {
+                        var vb = (float3)vertices[indices[right]];
+                        var b_angle = math.atan2(math.dot(tangentX, vb) - center.x, math.dot(tangentY, vb) - center.y);
+                        while (a_angle > b_angle)
+                        {
+                            right--;
+                            vb = (float3)vertices[indices[right]];
+                            b_angle = math.atan2(math.dot(tangentX, vb) - center.x, math.dot(tangentY, vb) - center.y);
+                        }
+                    }
+
+                    if (left <= right)
+                    {
+                        if (left != right)
+                        {
+                            var t = indices[left];
+                            indices[left] = indices[right];
+                            indices[right] = t;
+                        }
+
+                        left++;
+                        right--;
+                    }
+                    if (left > right)
+                        break;
+                }
+                if (l < right)
+                {
+                    s_SortStack.Add(new int2(l, right));
+                    //SortIndices(indices, vertices, tangentX, tangentY, center, l, right);
+                }
+                if (left < r)
+                {
+                    s_SortStack.Add(new int2(left, r));
+                    //SortIndices(indices, vertices, tangentX, tangentY, center, left, r);
+                }
+            }
+            //SortIndices(indices, vertices, tangentX, tangentY, center, 0, indices.Count - 1);
 #else
             // sort vertices according to their angle relative to the centroid on plane defined by tangentX/tangentY
             vertices.Sort(delegate (Vector3 a, Vector3 b) 
             {
-                var ax = math.dot(tangentX, a) - cx;  // distance in direction of tangentX
-                var ay = math.dot(tangentY, a) - cy;  // distance in direction of tangentY
-                var bx = math.dot(tangentX, b) - cx;  // distance in direction of tangentX
-                var by = math.dot(tangentY, b) - cy;  // distance in direction of tangentY
+                var ax = math.dot(tangentX, a) - center.x;  // distance in direction of tangentX
+                var ay = math.dot(tangentY, a) - center.y;  // distance in direction of tangentY
+                var bx = math.dot(tangentX, b) - center.x;  // distance in direction of tangentX
+                var by = math.dot(tangentY, b) - center.y;  // distance in direction of tangentY
 
                 var a1 = math.atan2(ax, ay); // angle between ax/ay and cx/cy
                 var a2 = math.atan2(bx, by); // angle between bx/by and cx/cy
@@ -798,11 +864,11 @@ namespace Chisel.Core
                         {
                             var intersectionSurface = s_IntersectionSurfaces[s];
                             for (int l0 = 0; l0 < intersectionSurface.Count; l0++)
-                        {
-                            var planes0 = intersectionSurface[l0].selfPlanes;
-                            var indices = intersectionSurface[l0].indices;
+                            {
+                                var planes0 = intersectionSurface[l0].selfPlanes;
+                                var indices = intersectionSurface[l0].indices;
 
-                            s_IntersectionJob.vertexCount = indices.Count;
+                                s_IntersectionJob.vertexCount = indices.Count;
                             for (int v = 0; v < indices.Count; v++)
                                 s_IntersectionJob.verticesDst[v] = srcVertices[indices[v]];
 
@@ -833,19 +899,19 @@ namespace Chisel.Core
 
                             if (s_IntersectionJob.vertexCount > indices.Count)
                             {
-                                indices.Clear();
-                                if (indices.Capacity < s_IntersectionJob.vertexCount)
-                                    indices.Capacity = s_IntersectionJob.vertexCount;
+                                    indices.Clear();
+                                    if (indices.Capacity < s_IntersectionJob.vertexCount)
+                                        indices.Capacity = s_IntersectionJob.vertexCount;
                                     for (int n = 0; n < s_IntersectionJob.vertexCount; n++)
                                     {
                                         var worldVertex = s_IntersectionJob.verticesDst[n];
                                         var vertexIndex = outputLoops.vertexSoup.Add(worldVertex);
 
-                                    if (indices.Contains(vertexIndex))
-                                        continue;
+                                        if (indices.Contains(vertexIndex))
+                                            continue;
 
-                                    indices.Add(vertexIndex);
-                                }
+                                        indices.Add(vertexIndex);
+                                    }
                             }
                         }
                     }
@@ -880,20 +946,20 @@ namespace Chisel.Core
 
                             if (s_IntersectionJob.vertexCount > indices.Count)
                             {
-                                indices.Clear();
-                                if (indices.Capacity < s_IntersectionJob.vertexCount)
-                                    indices.Capacity = s_IntersectionJob.vertexCount;
+                                    indices.Clear();
+                                    if (indices.Capacity < s_IntersectionJob.vertexCount)
+                                        indices.Capacity = s_IntersectionJob.vertexCount;
                                     for (int n = 0; n < s_IntersectionJob.vertexCount; n++)
                                     {
                                         var worldVertex = s_IntersectionJob.verticesDst[n];
                                         var vertexIndex = outputLoops.vertexSoup.Add(worldVertex);
                                     
-                                    if (indices.Contains(vertexIndex))
-                                        continue;
+                                        if (indices.Contains(vertexIndex))
+                                            continue;
 
-                                    indices.Add(vertexIndex);
+                                        indices.Add(vertexIndex);
+                                    }
                                 }
-                            }
                         }
                     }
                 }
