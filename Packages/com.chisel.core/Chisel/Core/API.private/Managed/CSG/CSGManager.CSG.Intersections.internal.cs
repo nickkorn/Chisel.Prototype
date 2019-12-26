@@ -479,6 +479,7 @@ namespace Chisel.Core
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         static void Bla2(SurfaceLoops   outputLoops,
                          List<int>      intersectingPlanes2, float4[] localSpacePlanes2,
                          CSGTreeBrush   brush2,
@@ -885,6 +886,8 @@ namespace Chisel.Core
                                 for (int v = 0; v < indices.Count; v++)
                                     s_IntersectionJob.verticesDst[v] = srcVertices[indices[v]];
 
+                                var first = true;
+                                JobHandle lastHandle = new JobHandle();
                                 //for (int l1 = l0 + 1; l1 < intersectionSurface.Count; l1++)
                                 for (int l1 = 0; l1 < intersectionSurface.Count; l1++)
                                 {
@@ -904,11 +907,18 @@ namespace Chisel.Core
                                         s_IntersectionJob.selfPlanesNative  = planes0;
 
                                         {
-                                            // TODO: eventually actually use jobs
                                             s_IntersectionJob.Execute();
+                                            //s_IntersectionJob.Schedule().Complete();
+                                            // TODO: eventually actually use jobs
+                                            //if (first)
+                                            //    lastHandle = s_IntersectionJob.Schedule();
+                                            //else
+                                            //    lastHandle = s_IntersectionJob.Schedule(lastHandle);
+                                            first = false;
                                         }
                                     }
                                 }
+                                //lastHandle.Complete();
 
                                 if (s_IntersectionJob.vertexCount > indices.Count)
                                 {
@@ -947,20 +957,28 @@ namespace Chisel.Core
                                 for (int v = 0; v < indices.Count; v++)
                                     s_IntersectionJob.verticesDst[v] = srcVertices[indices[v]];
 
+                                JobHandle lastHandle = new JobHandle();
+                                bool first = true;
                                 foreach (var pair in s_BrushPlanes)
                                 {
                                     var t = s_IntersectionJob.verticesSrc;
-                                        s_IntersectionJob.verticesSrc = s_IntersectionJob.verticesDst;
-                                        s_IntersectionJob.verticesDst = t;
+                                    s_IntersectionJob.verticesSrc = s_IntersectionJob.verticesDst;
+                                    s_IntersectionJob.verticesDst = t;
 
 
                                     s_IntersectionJob.otherPlanesNative = pair.Value;
                                     s_IntersectionJob.selfPlanesNative = worldSpacePlanesS;
 
-
-                                    // TODO: eventually actually use jobs
                                     s_IntersectionJob.Execute();
+                                    //s_IntersectionJob.Schedule().Complete();
+                                    // TODO: eventually actually use jobs
+                                    //if (first)
+                                    //    lastHandle = s_IntersectionJob.Schedule();
+                                    //else
+                                    //    lastHandle = s_IntersectionJob.Schedule(lastHandle);
+                                    first = false;
                                 }
+                                //lastHandle.Complete();
 
                                 if (s_IntersectionJob.vertexCount > indices.Count)
                                 {
@@ -971,7 +989,7 @@ namespace Chisel.Core
                                     {
                                         var worldVertex = s_IntersectionJob.verticesDst[n];
                                         var vertexIndex = outputLoops.vertexSoup.Add(worldVertex);
-
+                                    
                                         if (indices.Contains(vertexIndex))
                                             continue;
 
