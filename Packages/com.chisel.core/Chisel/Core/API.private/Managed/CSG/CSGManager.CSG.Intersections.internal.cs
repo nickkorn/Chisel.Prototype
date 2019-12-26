@@ -96,21 +96,12 @@ namespace Chisel.Core
 
         // TODO: Optimize
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        static void TransformByInversedMatrix(NativeArray<float4> outputPlanes, BrushMesh.Surface[] surfaces, Matrix4x4 nodeToTreeSpaceInversed)
+        static unsafe void TransformByInversedMatrix(float4* outputPlanes, float4* surfaces, int length, float4x4 nodeToTreeSpaceInversed)
         {
-            for (int p = 0; p < surfaces.Length; p++)
+            for (int p = 0; p < length; p++)
             {
-                var planeVector = surfaces[p].localPlane;
-                
-                // note: a transpose is part of this transformation
-                var a = nodeToTreeSpaceInversed.m00 * planeVector.x + nodeToTreeSpaceInversed.m10 * planeVector.y + nodeToTreeSpaceInversed.m20 * planeVector.z + nodeToTreeSpaceInversed.m30 * planeVector.w;
-                var b = nodeToTreeSpaceInversed.m01 * planeVector.x + nodeToTreeSpaceInversed.m11 * planeVector.y + nodeToTreeSpaceInversed.m21 * planeVector.z + nodeToTreeSpaceInversed.m31 * planeVector.w;
-                var c = nodeToTreeSpaceInversed.m02 * planeVector.x + nodeToTreeSpaceInversed.m12 * planeVector.y + nodeToTreeSpaceInversed.m22 * planeVector.z + nodeToTreeSpaceInversed.m32 * planeVector.w;
-                var d = nodeToTreeSpaceInversed.m03 * planeVector.x + nodeToTreeSpaceInversed.m13 * planeVector.y + nodeToTreeSpaceInversed.m23 * planeVector.z + nodeToTreeSpaceInversed.m33 * planeVector.w;
-
-                var normal  = new Vector3(a, b, c);
-                var magnitude = normal.magnitude;
-                outputPlanes[p] = new float4(normal / magnitude, d / magnitude);
+                var planeVector = math.mul(nodeToTreeSpaceInversed, surfaces[p]);
+                outputPlanes[p] = planeVector / math.length(planeVector.xyz);
             }
         }
 
@@ -710,7 +701,7 @@ namespace Chisel.Core
         static List<IntersectionLoop>[]                         s_IntersectionSurfaces  = new List<IntersectionLoop>[0];
         static FindLoopIntersectionVerticesJob                  s_IntersectionJob       = new FindLoopIntersectionVerticesJob();
 
-        static void FindLoopOverlapIntersections(BrushLoops outputLoops)
+        static unsafe void FindLoopOverlapIntersections(BrushLoops outputLoops)
         {
             if (outputLoops.intersectionSurfaceLoops.Count == 0)
                 return;
@@ -723,7 +714,13 @@ namespace Chisel.Core
 
             using (var worldSpacePlanesS = new NativeArray<float4>(mesh1.surfaces.Length, Allocator.Persistent, NativeArrayOptions.UninitializedMemory))
             {
-                CSGManagerPerformCSG.TransformByInversedMatrix(worldSpacePlanesS, mesh1.surfaces, outputLoops.brush.TreeToNodeSpaceMatrix);
+                var treeToNodeSpaceTransposed = math.transpose(outputLoops.brush.TreeToNodeSpaceMatrix);
+                fixed (BrushMesh.Surface* mesh1Surfaces = &mesh1.surfaces[0])
+                {
+                    float4* mesh1Planes = (float4*)mesh1Surfaces;
+                    var worldSpacePlanesPtr = (float4*)worldSpacePlanesS.GetUnsafePtr();
+                    CSGManagerPerformCSG.TransformByInversedMatrix(worldSpacePlanesPtr, mesh1Planes, mesh1.surfaces.Length, treeToNodeSpaceTransposed);
+                }
 
                 s_BrushPlanes.Clear();
                 s_AllIntersectionLoops.Clear();
@@ -748,8 +745,13 @@ namespace Chisel.Core
                         continue;
 
                     var worldSpacePlanes = new NativeArray<float4>(mesh2.surfaces.Length, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
-                    CSGManagerPerformCSG.TransformByInversedMatrix(worldSpacePlanes, mesh2.surfaces, intersectingBrush.TreeToNodeSpaceMatrix);
-
+                    var worldSpacePlanesPtr = (float4*)worldSpacePlanes.GetUnsafePtr();
+                    treeToNodeSpaceTransposed = math.transpose(intersectingBrush.TreeToNodeSpaceMatrix);
+                    fixed (BrushMesh.Surface* mesh2Surfaces = &mesh2.surfaces[0])
+                    {
+                        float4* mesh2Planes = (float4*)mesh2Surfaces;
+                        CSGManagerPerformCSG.TransformByInversedMatrix(worldSpacePlanesPtr, mesh2Planes, mesh2.surfaces.Length, treeToNodeSpaceTransposed);
+                    }
                     s_BrushPlanes.Add(intersectingBrush.brushNodeID, worldSpacePlanes);
 
                     var surfaces = pair.Value.surfaces;
