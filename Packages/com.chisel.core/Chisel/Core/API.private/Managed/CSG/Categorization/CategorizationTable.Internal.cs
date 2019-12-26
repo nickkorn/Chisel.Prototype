@@ -1,4 +1,4 @@
-﻿#define USE_OPTIMIZATIONS
+#define USE_OPTIMIZATIONS
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -698,6 +698,9 @@ namespace Chisel.Core
             //
             int offset;
             offset = 0;
+            
+            // NOTE: causes artifacts?
+            /*
             for (int i = 0; i < categoryStackNodeCount; i++)
             {
                 var destination = sRoutingTable[i].routingRow[0];
@@ -751,7 +754,7 @@ namespace Chisel.Core
                 item.SetInvalid();
                 sRoutingTable[i] = item;
             }
-
+            */
 
 
             //
