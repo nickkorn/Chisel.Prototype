@@ -1187,7 +1187,6 @@ namespace Chisel.Core
         }
         
         #endregion
-
     }
 #endif
 }
