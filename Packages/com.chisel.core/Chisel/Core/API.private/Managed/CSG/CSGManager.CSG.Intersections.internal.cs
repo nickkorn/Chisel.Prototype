@@ -41,8 +41,6 @@ namespace Chisel.Core
                 var normal              = transformedPlane.xyz; // only need the signs, so don't care about normalization
                 //transformedPlane /= math.length(normal);      // we don't have to normalize the plane
                 
-                // We already know that our brushes are intersecting, so this can't happen
-                /*
                 var corner = new float4((normal.x < 0) ? max.x : min.x,
                                         (normal.y < 0) ? max.y : min.y,
                                         (normal.z < 0) ? max.z : min.z,
@@ -53,10 +51,9 @@ namespace Chisel.Core
                     intersectingPlanes.Clear();
                     return;
                 }
-                */
 
                 // do a bounds check
-                var corner = new float4((normal.x >= 0) ? max.x : min.x,
+                corner = new float4((normal.x >= 0) ? max.x : min.x,
                                         (normal.y >= 0) ? max.y : min.y,
                                         (normal.z >= 0) ? max.z : min.z,
                                         1.0f);
@@ -66,16 +63,19 @@ namespace Chisel.Core
 
                 float minDistance = float.PositiveInfinity;
                 float maxDistance = float.NegativeInfinity;
+                int onCount = 0;
                 for (int v = 0; v < vertices.Length; v++)
                 {
                     float distance = math.dot(transformedPlane, new float4(vertices[v], 1));
                     minDistance = math.min(distance, minDistance);
                     maxDistance = math.max(distance, maxDistance);
+                    onCount += (distance >= -kDistanceEpsilon && distance <= kDistanceEpsilon) ? 1 : 0;
                 }
 
                 // if all vertices are 'inside' this plane, then we're not truly intersecting with it
-                if (minDistance >= -kDistanceEpsilon ||
+                if ((minDistance >= -kDistanceEpsilon ||
                     maxDistance < -kDistanceEpsilon)
+                    && onCount < 3) // If we have a polygon intersecting with a plane, we use it
                     continue;
 
                 intersectingPlanes.Add(i);
@@ -364,11 +364,11 @@ namespace Chisel.Core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        static void Bla3(HashSet<int>       usedVertices1,
-                         List<PlanePair>    usedPlanePairs1,
-                         in List<int>       intersectingPlanes1,
-                         in float4[]        localSpacePlanes1,
-                         in BrushMesh       mesh1)
+        static void AllIntersectionFirst(HashSet<int>       usedVertices1,
+                                         List<PlanePair>    usedPlanePairs1,
+                                         in List<int>       intersectingPlanes1,
+                                         in float4[]        localSpacePlanes1,
+                                         in BrushMesh       mesh1)
         {
             // TODO: this can be partially stored in brushmesh 
             // TODO: optimize
@@ -411,10 +411,10 @@ namespace Chisel.Core
 
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        static void Bla(float4x4 nodeToTreeSpaceMatrix1,
-                        List<int> intersectingPlanes1, float4[] localSpacePlanes1, VertexSoup brushVertices1, List<Loop> holeLoops1, CSGTreeBrush brush1,
-                        List<int> intersectingPlanes2, float4[] localSpacePlanes2, VertexSoup brushVertices2, List<Loop> holeLoops2, CSGTreeBrush brush2, 
-                        List<PlanePair> usedPlanePairs2)
+        static void AllIntersectionSecond(float4x4 nodeToTreeSpaceMatrix1,
+                                          List<int> intersectingPlanes1, float4[] localSpacePlanes1, VertexSoup brushVertices1, List<Loop> holeLoops1, CSGTreeBrush brush1,
+                                          List<int> intersectingPlanes2, float4[] localSpacePlanes2, VertexSoup brushVertices2, List<Loop> holeLoops2, CSGTreeBrush brush2, 
+                                          List<PlanePair> usedPlanePairs2)
         {
             // find all edges of brush2 that intersect brush1, and put their intersections into the appropriate loops
             for (int a = 0; a < intersectingPlanes1.Count; a++)
@@ -480,18 +480,18 @@ namespace Chisel.Core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        static void Bla2(SurfaceLoops   outputLoops,
-                         List<int>      intersectingPlanes2, float4[] localSpacePlanes2,
-                         CSGTreeBrush   brush2,
+        static void AllCreateLoopsFromIntersections(SurfaceLoops   outputLoops,
+                                                    List<int>      intersectingPlanes2, float4[] localSpacePlanes2,
+                                                    CSGTreeBrush   brush2,
 
-                         List<int>      intersectingPlanes1, float4[] localSpacePlanes1,                         
-                         List<Loop>     holeLoops1,     int[] alignedPlaneLookup1,
-                         HashSet<int>   usedVertices1,  VertexSoup brushVertices1, 
-                         BrushMesh      inputMesh1,
+                                                    List<int>      intersectingPlanes1, float4[] localSpacePlanes1,                         
+                                                    List<Loop>     holeLoops1,     int[] alignedPlaneLookup1,
+                                                    HashSet<int>   usedVertices1,  VertexSoup brushVertices1, 
+                                                    BrushMesh      inputMesh1,
 
-                         float4x4 nodeToTreeSpaceMatrix, 
-                         float4x4 treeToNodeSpaceMatrix, 
-                         float4x4 vertexToLocal1)
+                                                    float4x4 nodeToTreeSpaceMatrix, 
+                                                    float4x4 treeToNodeSpaceMatrix, 
+                                                    float4x4 vertexToLocal1)
         {
             outputLoops.EnsureSize(inputMesh1.surfaces.Length);
 #if true
@@ -568,7 +568,6 @@ namespace Chisel.Core
                 outputLoops.surfaces[basePlaneIndex].Add(hole);
             }
         }
-
         #endregion
         
         static readonly List<int>       s_IntersectingPlanes1   = new List<int>();
@@ -638,7 +637,7 @@ namespace Chisel.Core
             if (s_IntersectingPlanes1.Count == 0 ||
                 s_IntersectingPlanes2.Count == 0)
             {
-                Debug.Assert(s_IntersectingPlanes2.Count == 0 && s_IntersectingPlanes1.Count == 0);
+                Debug.Assert(s_IntersectingPlanes2.Count == 0 && s_IntersectingPlanes1.Count == 0, $"Expected intersection, but no intersection found between {brush1.NodeID} & {brush2.NodeID}");
                 return;
             }
 
@@ -659,8 +658,8 @@ namespace Chisel.Core
             s_HoleLoops1.Clear();
             s_HoleLoops2.Clear();
 
-            Bla3(s_UsedVertices2, s_UsedPlanePairs2, s_IntersectingPlanes2, localSpacePlanes2, mesh2);
-            Bla3(s_UsedVertices1, s_UsedPlanePairs1, s_IntersectingPlanes1, localSpacePlanes1, mesh1);
+            AllIntersectionFirst(s_UsedVertices2, s_UsedPlanePairs2, s_IntersectingPlanes2, localSpacePlanes2, mesh2);
+            AllIntersectionFirst(s_UsedVertices1, s_UsedPlanePairs1, s_IntersectingPlanes1, localSpacePlanes1, mesh1);
 
             // decide which planes of brush1 align with brush2
             // TODO: optimize
@@ -726,17 +725,17 @@ namespace Chisel.Core
             var brushVertices1 = CSGManager.GetBrushInfo(brush1.brushNodeID).brushOutputLoops.vertexSoup;
             var brushVertices2 = CSGManager.GetBrushInfo(brush2.brushNodeID).brushOutputLoops.vertexSoup;
 
-            Bla(nodeToTreeSpaceMatrix1,
+            AllIntersectionSecond(nodeToTreeSpaceMatrix1,
                 s_IntersectingPlanes1, localSpacePlanes1, brushVertices1, s_HoleLoops1, brush1,
                 s_IntersectingPlanes2, localSpacePlanes2, brushVertices2, s_HoleLoops2, brush2, 
                 s_UsedPlanePairs2);
 
-            Bla(nodeToTreeSpaceMatrix1,
+            AllIntersectionSecond(nodeToTreeSpaceMatrix1,
                 s_IntersectingPlanes2, localSpacePlanes2, brushVertices2, s_HoleLoops2, brush2,
                 s_IntersectingPlanes1, localSpacePlanes1, brushVertices1, s_HoleLoops1, brush1, 
                 s_UsedPlanePairs1);
 
-            Bla2(loops12, 
+            AllCreateLoopsFromIntersections(loops12, 
                  s_IntersectingPlanes2, localSpacePlanes2,
                  brush2,
 
@@ -747,7 +746,7 @@ namespace Chisel.Core
 
                  nodeToTreeSpaceMatrix1, treeToNodeSpaceMatrix1, float4x4.identity);
              
-            Bla2(loops21, 
+            AllCreateLoopsFromIntersections(loops21, 
                  s_IntersectingPlanes1, localSpacePlanes1,
                  brush1,
 
@@ -886,8 +885,8 @@ namespace Chisel.Core
                                 for (int v = 0; v < indices.Count; v++)
                                     s_IntersectionJob.verticesDst[v] = srcVertices[indices[v]];
 
-                                var first = true;
-                                JobHandle lastHandle = new JobHandle();
+                                //var first = true;
+                                //JobHandle lastHandle = new JobHandle();
                                 //for (int l1 = l0 + 1; l1 < intersectionSurface.Count; l1++)
                                 for (int l1 = 0; l1 < intersectionSurface.Count; l1++)
                                 {
@@ -914,7 +913,7 @@ namespace Chisel.Core
                                             //    lastHandle = s_IntersectionJob.Schedule();
                                             //else
                                             //    lastHandle = s_IntersectionJob.Schedule(lastHandle);
-                                            first = false;
+                                            //first = false;
                                         }
                                     }
                                 }
@@ -957,8 +956,8 @@ namespace Chisel.Core
                                 for (int v = 0; v < indices.Count; v++)
                                     s_IntersectionJob.verticesDst[v] = srcVertices[indices[v]];
 
-                                JobHandle lastHandle = new JobHandle();
-                                bool first = true;
+                                //JobHandle lastHandle = new JobHandle();
+                                //bool first = true;
                                 foreach (var pair in s_BrushPlanes)
                                 {
                                     var t = s_IntersectionJob.verticesSrc;
@@ -976,7 +975,7 @@ namespace Chisel.Core
                                     //    lastHandle = s_IntersectionJob.Schedule();
                                     //else
                                     //    lastHandle = s_IntersectionJob.Schedule(lastHandle);
-                                    first = false;
+                                    //first = false;
                                 }
                                 //lastHandle.Complete();
 

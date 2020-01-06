@@ -634,6 +634,7 @@ namespace Chisel.Core
                 for (int l = 0; l < surfaceLoopList.Count; l++)
                 {
                     var interiorCategory = (CategoryIndex)surfaceLoopList[l].interiorCategory;
+                    Debug.Assert(interiorCategory <= CategoryIndex.LastCategory, $"Invalid final category {interiorCategory}");
                     if (interiorCategory != CategoryIndex.Aligned && 
                         interiorCategory != CategoryIndex.ReverseAligned)
                         continue;
@@ -654,10 +655,13 @@ namespace Chisel.Core
                     //Debug.Log("intersections.Count == " + loop.edges.Count);
                     continue;
                 }
+                //if (brushNodeID != 3)// || l != 2)
+                  //  continue;
+                //Debug.Log($"{brushNodeID} {l}");
 
                 var interiorCategory = (CategoryIndex)loop.interiorCategory;
-                Debug.Assert(interiorCategory == CategoryIndex.Aligned ||
-                             interiorCategory == CategoryIndex.ReverseAligned);
+                //Debug.Assert(interiorCategory == CategoryIndex.Aligned ||
+                //             interiorCategory == CategoryIndex.ReverseAligned);
 
 
                 var info            = loop.info;

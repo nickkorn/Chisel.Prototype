@@ -583,6 +583,9 @@ namespace Chisel.Editors
             var removeTargets = new HashSet<T>();
             foreach (var target in targets)
             {
+                if (!target)
+                    continue;
+
                 if (!knownTargets.Add(target))
                     continue;
                 

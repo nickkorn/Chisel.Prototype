@@ -18,7 +18,9 @@ namespace Chisel.Core
     {
         // TODO: unify all epsilons
         public const float  kDistanceEpsilon	    = 0.0006f;
-        public const float  kSqrMergeEpsilon	    = kDistanceEpsilon * kDistanceEpsilon;
+        public const float  kSqrDistanceEpsilon	    = kDistanceEpsilon * kDistanceEpsilon;
+        public const float  kMergeEpsilon	        = 0.000006f;
+        public const float  kSqrMergeEpsilon	    = kMergeEpsilon * kMergeEpsilon;
         const float         kNormalEpsilon			= 0.9999f;
         const float         kPlaneDistanceEpsilon	= kDistanceEpsilon;
 
@@ -52,7 +54,7 @@ namespace Chisel.Core
                     var vertexB = vertices[vertexIndexB];
 
                     var distance = GeometryMath.SqrDistanceFromPointToLineSegment(vertex1, vertexA, vertexB);
-                    if (distance <= CSGManagerPerformCSG.kSqrMergeEpsilon)
+                    if (distance <= CSGManagerPerformCSG.kSqrDistanceEpsilon)
                         return true;
                 }
             }
@@ -117,8 +119,12 @@ namespace Chisel.Core
                     min.x = Mathf.Min(min.x, vertex.x); max.x = Mathf.Max(max.x, vertex.x);
                     min.y = Mathf.Min(min.y, vertex.y); max.y = Mathf.Max(max.y, vertex.y);
                     min.z = Mathf.Min(min.z, vertex.z); max.z = Mathf.Max(max.z, vertex.z);
-                    
-                    s_Indices.Add(outputLoops.vertexSoup.Add(vertex));
+
+                    var newIndex = outputLoops.vertexSoup.Add(vertex);
+                    Debug.Assert(s_Indices.Count == 0 ||
+                                    (s_Indices[0] != newIndex &&
+                                    s_Indices[s_Indices.Count - 1] != newIndex));
+                    s_Indices.Add(newIndex);
                 }
 
                 if (CSGManagerPerformCSG.IsDegenerate(outputLoops.vertexSoup, s_Indices))

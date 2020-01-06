@@ -205,7 +205,8 @@ namespace Chisel.Core
                             var worldVertex = new float4(soup.vertices[vertexIndex], 1);
                             if (IsOutsidePlanes(worldSpacePlanes1, worldSpacePlanes1Length, worldVertex))
                                 continue;
-                            newPolygon.indices.Add(vertexIndex);
+                            if (!newPolygon.indices.Contains(vertexIndex))
+                                newPolygon.indices.Add(vertexIndex);
                         }
 
                         if (newPolygon.indices.Count == polygon2.indices.Count) // all vertices of polygon2 are inside polygon1
@@ -954,9 +955,12 @@ namespace Chisel.Core
                     if (newIndices.Count == 0 ||
                         (newIndices[0] != currVertexIndex1 &&
                          newIndices[newIndices.Count - 1] != currVertexIndex1))
-                        //(!soup.vertices[newIndices[0]].Equals(currVert1, kEpsilon) &&
-                        // !soup.vertices[newIndices[newIndices.Count - 1]].Equals(currVert1, kEpsilon)))
+                    //(!soup.vertices[newIndices[0]].Equals(currVert1, kEpsilon) &&
+                    // !soup.vertices[newIndices[newIndices.Count - 1]].Equals(currVert1, kEpsilon)))
                     {
+                        Debug.Assert(newPolygon.indices.Count == 0 ||
+                                     (newPolygon.indices[0] != currVertexIndex1 &&
+                                     newPolygon.indices[newPolygon.indices.Count - 1] != currVertexIndex1));
                         newPolygon.indices.Add(currVertexIndex1);
                     }
 
@@ -995,9 +999,12 @@ namespace Chisel.Core
                         if (newIndices.Count == 0 ||
                             (newIndices[0] != currVertexIndex2 &&
                              newIndices[newIndices.Count - 1] != currVertexIndex2))
-                            //(!soup.vertices[newIndices[0]].Equals(currVert2, kEpsilon) &&
-                            // !soup.vertices[newIndices[newIndices.Count - 1]].Equals(currVert2, kEpsilon)))
+                        //(!soup.vertices[newIndices[0]].Equals(currVert2, kEpsilon) &&
+                        // !soup.vertices[newIndices[newIndices.Count - 1]].Equals(currVert2, kEpsilon)))
                         {
+                            Debug.Assert(newPolygon.indices.Count == 0 ||
+                                         (newPolygon.indices[0] != currVertexIndex2 &&
+                                         newPolygon.indices[newPolygon.indices.Count - 1] != currVertexIndex2));
                             newPolygon.indices.Add(currVertexIndex2);
                         }
 
@@ -1114,7 +1121,7 @@ namespace Chisel.Core
             OperationResult result;
             result = CSGManagerPerformCSG.PerformBooleanOperation(brushVertices,
                                                                     intersectionLoop, surfaceLoop,
-                                                                    s_OverlappingArea,    // the output of cutting operations are both holes for the original polygon (categorized_loop)
+                                                                    s_OverlappingArea,  // the output of cutting operations are both holes for the original polygon (categorized_loop)
                                                                                         // and new polygons on the surface of the brush that need to be categorized
                                                                     CSGOperationType.Intersecting);
             Debug.Assert(s_OverlappingArea.Count <= 1);
@@ -1178,22 +1185,22 @@ namespace Chisel.Core
         internal static void CleanUp(VertexSoup soup, List<Loop>[] surfaceLoops)
         {
             for (int surfaceIndex = 0; surfaceIndex < surfaceLoops.Length; surfaceIndex++)
-                CleanUp(soup, surfaceLoops[surfaceIndex]);
+                CleanUp(soup, surfaceLoops[surfaceIndex], surfaceIndex);
         }
 
-        internal static void CleanUp(VertexSoup soup, List<Loop> loops)
+        internal static void CleanUp(VertexSoup soup, List<Loop> baseloops, int surfaceIndex)
         {
-            //*
-            var loopDependencies = new List<LoopDependency>(loops.Count);
+            /*
+            var loopDependencies = new List<LoopDependency>(baseloops.Count);
 
-            if (resultLoops1.Capacity < loops.Count * 2)
-                resultLoops1.Capacity = loops.Count * 2;
-            if (resultLoops2.Capacity < loops.Count * 2)
-                resultLoops2.Capacity = loops.Count * 2;
+            if (resultLoops1.Capacity < baseloops.Count * 2)
+                resultLoops1.Capacity = baseloops.Count * 2;
+            if (resultLoops2.Capacity < baseloops.Count * 2)
+                resultLoops2.Capacity = baseloops.Count * 2;
 
-            for (int l = loops.Count - 1; l >= 0; l--)
+            for (int l = baseloops.Count - 1; l >= 0; l--)
             {
-                var categorized_loop = loops[l];
+                var categorized_loop = baseloops[l];
                 var interiorCategory = categorized_loop.interiorCategory - 1;
 
                 // Don't bother processing holes when this polygon will not be visible
@@ -1202,13 +1209,30 @@ namespace Chisel.Core
                     !categorized_loop.Valid)
                 {
                     // Just remove it since it won't be visible anyway
-                    loops.RemoveAt(l);
+                    baseloops.RemoveAt(l);
                     continue;
                 }
 
                 var holes = categorized_loop.holes;
                 if (holes.Count == 0)
                     continue;
+                
+                if (categorized_loop.info.brush.brushNodeID == 3 &&
+                    categorized_loop.info.worldPlane.normal.y != 1 &&
+                    categorized_loop.info.worldPlane.normal.y != -1 &&
+                    categorized_loop.info.worldPlane.normal.x < 0)
+                {
+                    Debug.Log($"{categorized_loop.info.brush.brushNodeID} {categorized_loop.info.worldPlane} {categorized_loop.holes.Count} {interiorCategory}");
+                    for (int h = 0; h < categorized_loop.holes.Count; h++)
+                    {
+                        Debug.Log($"  {categorized_loop.holes[h].info.brush.brushNodeID} {categorized_loop.holes[h].edges.Count} <");
+                        for (int e = 0; e < categorized_loop.holes[h].edges.Count; e++)
+                            Debug.Log($"  ({categorized_loop.holes[h].edges[e].index1}, {categorized_loop.holes[h].edges[e].index2})");
+                    }
+                    Debug.Log($"  <<");
+                    for (int e = 0; e < categorized_loop.edges.Count; e++)
+                        Debug.Log($"  ({categorized_loop.edges[e].index1}, {categorized_loop.edges[e].index2})");
+                }
 
                 categorized_loop.convex = false;
 
@@ -1237,9 +1261,24 @@ namespace Chisel.Core
                                 if (!holes[a].Valid ||
                                     !holes[b].Valid)
                                     continue;
-
+                                 
                                 resultLoops1.Clear();
                                 var resultType = CSGManagerPerformCSG.PerformBooleanOperation(soup, holes[a], holes[b], resultLoops1, CSGOperationType.Additive);
+                                
+                                if (categorized_loop.info.brush.brushNodeID == 3 &&
+                                    categorized_loop.info.worldPlane.normal.y != 1 &&
+                                    categorized_loop.info.worldPlane.normal.y != -1 &&
+                                    categorized_loop.info.worldPlane.normal.x < 0)
+                                {
+                                    Debug.Log($"{resultType}");
+                                    Debug.Log($"   {a}");
+                                    for (int e = 0; e < holes[a].edges.Count; e++)
+                                        Debug.Log($"  ({holes[a].edges[e].index1}, {holes[a].edges[e].index2})");
+                                    Debug.Log($"   {b}");
+                                    for (int e = 0; e < holes[b].edges.Count; e++)
+                                        Debug.Log($"  ({holes[b].edges[e].index1}, {holes[b].edges[e].index2})");
+                                }
+                                
                                 switch (resultType)
                                 {
                                     case CSGManagerPerformCSG.OperationResult.Outside:
@@ -1288,7 +1327,7 @@ namespace Chisel.Core
 
                 if (!categorized_loop.Valid)
                 {
-                    loops.RemoveAt(l);
+                    baseloops.RemoveAt(l);
                     continue;
                 }
 
@@ -1312,7 +1351,7 @@ namespace Chisel.Core
                     {
                         new Loop(categorized_loop)
                     };
-                    loops.RemoveAt(l);
+                    baseloops.RemoveAt(l);
                     for (int h = holes.Count - 1; h >= 0; h--)
                     {
                         for (int t = testLoops.Count - 1; t >= 0; t--)
@@ -1368,14 +1407,14 @@ namespace Chisel.Core
                     for (int t = 0; t < testLoops.Count; t++)
                     {
                         if (testLoops[t].Valid)
-                            loops.Add(testLoops[t]);
+                            baseloops.Add(testLoops[t]);
                     }
                 }
             }
 
-            for (int l = 0; l < loops.Count; l++)
+            for (int l = 0; l < baseloops.Count; l++)
             {
-                var loop = loops[l];
+                var loop = baseloops[l];
                 if (!loop.Valid)
                 {
                     loop.edges.Clear();
@@ -1395,46 +1434,172 @@ namespace Chisel.Core
 
             // TODO: figure out why code can't handle situation where polygon is split into multiple parts
 
-            for (int l = 0; l < loops.Count; l++)
+            for (int l = baseloops.Count - 1; l >= 0; l--)
             {
-                var loop = loops[l];
-                if (!loop.Valid)
+                var baseloop = baseloops[l];
+                if (baseloop.edges.Count < 3)
                 {
-                    loop.edges.Clear();
+                    baseloop.edges.Clear();
                     continue;
                 }
 
-                if (loop.holes.Count == 0)
+                var holes = baseloop.holes;
+                if (holes.Count == 0)
                     continue;
 
-                for (int h = loop.holes.Count - 1; h >= 0; h--)
+                for (int h = holes.Count - 1; h >= 0; h--)
                 {
-                    var hole = loop.holes[h];
-                    if (!hole.Valid)
+                    var hole = holes[h];
+                    if (hole.edges.Count < 3)
+                    {
+                        holes.RemoveAt(h);
                         continue;
-
-                    CSGManagerPerformCSG.Subtract(soup, loop, hole);
+                    }
                 }
 
-                for (int h = loop.holes.Count - 1; h >= 0; h--)
-                    loop.AddEdges(loop.holes[h].edges);
+                baseloop.destroyed = new bool[baseloop.edges.Count];
+                for (int h1 = holes.Count - 1; h1 >= 0; h1--)
+                {
+                    var hole1 = holes[h1];
+                    hole1.destroyed = new bool[hole1.edges.Count];
+                    CSGManagerPerformCSG.Subtract(soup, baseloop, hole1);
+                }
+                
+                // TODO: optimize, keep track which holes (potentially) intersect
+                for (int h1 = holes.Count - 1; h1 >= 0; h1--)
+                {
+                    var hole1 = holes[h1];
+                    for (int h2 = holes.Count - 1; h2 > h1; h2--)
+                    {
+                        var hole2 = holes[h2];
+                        CSGManagerPerformCSG.Merge(soup, hole1, hole2);
+                    }
+                }
 
-                loop.holes.Clear();
+                for (int e = baseloop.destroyed.Length - 1; e >= 0; e--)
+                {
+                    if (!baseloop.destroyed[e])
+                        continue;
+                    baseloop.edges.RemoveAt(e);
+                }
+                baseloop.destroyed = null;
+
+                for (int h1 = holes.Count - 1; h1 >= 0; h1--)
+                {
+                    var hole1 = holes[h1];
+                    for (int e = hole1.destroyed.Length - 1; e >= 0; e--)
+                    {
+                        if (!hole1.destroyed[e])
+                            continue;
+                        hole1.edges.RemoveAt(e);
+                    }
+                    hole1.destroyed = null;
+                }
+
+                for (int h = holes.Count - 1; h >= 0; h--)
+                {
+                    var edges = holes[h].edges;
+
+                    // Note: can have duplicate edges when multiple holes share an edge
+                    //          (only edges between holes and base-loop are guaranteed to not be duplciate)
+                    baseloop.AddEdges(edges, removeDuplicates: true);
+                }
+
+                holes.Clear();
             }
             //*/
 
-            for (int l = 0; l < loops.Count; l++)
+            for (int l = baseloops.Count - 1; l >= 0; l--)
             {
-                var loop = loops[l];
-                if (!loop.Valid)
+                var baseloop = baseloops[l];
+                if (baseloop.edges.Count < 3)
+                {
+                    //Debug.Log($"{baseloop.info.brush.brushNodeID} {l}");
+                    baseloops.RemoveAt(l);
                     continue;
+                }
 
-                var interiorCategory = loop.interiorCategory - 1;
-                loop.interiorCategory = interiorCategory;
+                var interiorCategory = baseloop.interiorCategory - 1;
+                baseloop.interiorCategory = interiorCategory;
             }
         }
 
         static void Subtract(VertexSoup soup, Loop loop1, Loop loop2)
+        {
+            if (loop1.edges.Count == 0 ||
+                loop2.edges.Count == 0)
+                return;
+
+            var categories1 = new CategoryIndex[loop1.edges.Count];
+            var categories2 = new CategoryIndex[loop2.edges.Count];
+
+
+            // 1. there are edges with two identical vertex indices?
+            // 2. all edges should overlap, but some aren't overlapping?
+
+            // TODO: use something that assumes convexity instead,
+            //          current method sometimes fails
+            for (int e = 0; e < loop1.edges.Count; e++)
+            {
+                categories1[e] = loop2.CategorizeEdge(soup, loop1.edges[e]);
+            }
+
+            for (int e = 0; e < loop2.edges.Count; e++)
+            {
+                categories2[e] = loop1.CategorizeEdge(soup, loop2.edges[e]);
+            }
+            
+            // *------*......*
+            // |      |      .
+            // |      |      .
+            // |      |      .
+            // *------*......*
+
+            // *------*
+            // | *----*
+            // | |    .
+            // | *----*
+            // *------*
+
+
+            // TODO: reversed edges should cancel?
+            for (int e = loop1.edges.Count - 1; e >= 0; e--)
+            {
+                if (categories1[e] == CategoryIndex.Outside
+                    //|| categories1[e] == CategoryIndex.Aligned
+                    //|| categories1[e] == CategoryIndex.ReverseAligned
+                    )
+                    continue;
+                loop1.destroyed[e] = true;
+            }
+
+            for (int e = loop2.edges.Count - 1; e >= 0; e--)
+            {
+                if (categories2[e] == CategoryIndex.Inside
+                    //|| categories1[e] == CategoryIndex.Outside
+                    //|| categories1[e] == CategoryIndex.Aligned
+                    //|| categories1[e] == CategoryIndex.ReverseAligned
+                    )
+                    continue;
+                loop2.destroyed[e] = true;
+            }
+
+            /*
+            var builder = new System.Text.StringBuilder();
+            builder.AppendLine($"Subtract {loop1.info.brush.brushNodeID} {loop2.info.brush.brushNodeID}");
+            for (int e = 0; e < loop1.edges.Count; e++)
+            {
+                builder.AppendLine($"loop1[{e}] {loop1.info.brush.brushNodeID} {categories1[e]} {loop1.destroyed[e]} | {loop1.edges[e].index1}/{loop1.edges[e].index2}");
+            }
+
+            for (int e = 0; e < loop2.edges.Count; e++)
+            {
+                builder.AppendLine($"loop2[{e}] {loop2.info.brush.brushNodeID} {categories2[e]} {loop2.destroyed[e]} | {loop2.edges[e].index1}/{loop2.edges[e].index2}");
+            }
+            Debug.Log(builder.ToString());*/
+        }
+
+        static void Merge(VertexSoup soup, Loop loop1, Loop loop2)
         {
             if (loop1.edges.Count == 0 ||
                 loop2.edges.Count == 0)
@@ -1457,20 +1622,38 @@ namespace Chisel.Core
 
             for (int e = loop1.edges.Count - 1; e >= 0; e--)
             {
-                if (categories1[e] == CategoryIndex.Outside)
+                if (categories1[e] == CategoryIndex.Outside
+                    //|| categories1[e] == CategoryIndex.ReverseAligned
+                    || categories1[e] == CategoryIndex.Aligned
+                    )
                     continue;
-
-                loop1.edges.RemoveAt(e);
+                loop1.destroyed[e] = true;
             }
 
             for (int e = loop2.edges.Count - 1; e >= 0; e--)
             {
-                if (categories2[e] == CategoryIndex.Inside)
+                if (categories2[e] == CategoryIndex.Outside
+                    //|| categories1[e] == CategoryIndex.ReverseAligned
+                    //|| categories1[e] == CategoryIndex.Aligned
+                    )
                     continue;
-
-                loop2.edges.RemoveAt(e);
+                loop2.destroyed[e] = true;
             }
+            /*
+            var builder = new System.Text.StringBuilder();
+            builder.AppendLine($"Merge {loop1.info.brush.brushNodeID} {loop2.info.brush.brushNodeID}");
+            for (int e = 0; e < loop1.edges.Count; e++)
+            {
+                builder.AppendLine($"loop1[{e}] {loop1.info.brush.brushNodeID} {categories1[e]} {loop1.destroyed[e]} | {loop1.edges[e].index1}/{loop1.edges[e].index2}");
+            }
+
+            for (int e = 0; e < loop2.edges.Count; e++)
+            {
+                builder.AppendLine($"loop2[{e}] {loop2.info.brush.brushNodeID} {categories2[e]} {loop2.destroyed[e]} | {loop2.edges[e].index1}/{loop2.edges[e].index2}");
+            }
+            Debug.Log(builder.ToString());*/
         }
+
         #endregion
     }
 #endif

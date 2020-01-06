@@ -39,11 +39,12 @@ namespace Chisel.Core
         public static int loopDebugCounter = 0;
         public int loopIndex = loopDebugCounter++;
 
-        public readonly List<ushort>         indices = new List<ushort>();
-        public List<Edge>                    edges   = new List<Edge>();
+        public readonly List<ushort>        indices     = new List<ushort>();
+        public List<Edge>                   edges       = new List<Edge>();
+        public bool[]                       destroyed;
 
-        [NonSerialized] public List<Loop>    holes   = new List<Loop>();
-        [NonSerialized] public LoopInfo      info;
+        [NonSerialized] public List<Loop>   holes       = new List<Loop>();
+        [NonSerialized] public LoopInfo     info;
 
         [NonSerialized] public CategoryGroupIndex   interiorCategory    = CategoryGroupIndex.First; // determine if the loop is inside another brush or aligned with another brush
         [NonSerialized] public bool                 convex              = false;
@@ -82,6 +83,9 @@ namespace Chisel.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void AddIndex(VertexSoup soup, ushort newIndex)
         {
+            if (indices.Contains(newIndex))
+                return;
+
             indices.Add(newIndex);
         }
 
@@ -108,7 +112,7 @@ namespace Chisel.Core
 
 
         static HashSet<Edge> s_UniqueEdges = new HashSet<Edge>();
-
+        
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void AddEdges(List<ushort> indices)
         {
@@ -119,9 +123,11 @@ namespace Chisel.Core
                 edges.Capacity = edges.Count + indices.Count;
             for (int i = 0; i < indices.Count - 1; i++)
             {
+                Debug.Assert(indices[i] != indices[i + 1]);
                 s_UniqueEdges.Add(new Edge() { index1 = indices[i], index2 = indices[i + 1] });
             }
-            s_UniqueEdges.Add(new Edge() { index1 = indices[0], index2 = indices[indices.Count - 1] });
+            Debug.Assert(indices[indices.Count - 1] != indices[0]);
+            s_UniqueEdges.Add(new Edge() { index1 = indices[indices.Count - 1], index2 = indices[0] });
 
             for (int e = 0; e < edges.Count; e++)
             {
@@ -133,10 +139,11 @@ namespace Chisel.Core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void AddEdges(List<Edge> addEdges)
+        public void AddEdges(List<Edge> addEdges, bool removeDuplicates = false)
         {
             if (addEdges.Count == 0)
                 return;
+
             s_UniqueEdges.Clear();
             for (int e = 0; e < addEdges.Count; e++)
             {
@@ -146,12 +153,24 @@ namespace Chisel.Core
                 }
             }
 
+            if (removeDuplicates)
+            {
+                for (int e = edges.Count - 1; e >= 0; e--)
+                {
+                    if (s_UniqueEdges.Remove(edges[e]))
+                    {
+                        edges.RemoveAt(e);
+                    }
+                }
+            }
+
+            var removeEdges = new List<int>();
             foreach (var addEdge in s_UniqueEdges)
             {
                 var index = IndexOf(addEdge, out bool inverted);
                 if (index != -1)
                 {
-                    Debug.Log($"Double edge {inverted}  {addEdge.index1}/{addEdge.index2} {edges[index].index1}/{edges[index].index2}");
+                    Debug.Log($"Duplicate edge {inverted}  {addEdge.index1}/{addEdge.index2} {edges[index].index1}/{edges[index].index2}");
                     continue;
                 }
                 this.edges.Add(addEdge);
@@ -172,12 +191,15 @@ namespace Chisel.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int IndexOf(Edge edge, out bool inverted)
         {
-            inverted = false;
+            //var builder = new System.Text.StringBuilder();
             for (int e = 0; e < edges.Count; e++)
             {
-                if (edges[e].index1 == edge.index1 && edges[e].index2 == edge.index2) {                  return e; }
-                if (edges[e].index1 == edge.index2 && edges[e].index2 == edge.index1) { inverted = true; return e; }
+                //builder.AppendLine($"{e}/{edges.Count}: {edges[e]} {edge}");
+                if (edges[e].index1 == edge.index1 && edges[e].index2 == edge.index2) { inverted = false; return e; }
+                if (edges[e].index1 == edge.index2 && edges[e].index2 == edge.index1) { inverted = true;  return e; }
             }
+            //Debug.Log(builder.ToString());
+            inverted = false;
             return -1;
         }
 
@@ -186,7 +208,6 @@ namespace Chisel.Core
         {
             if (IndexOf(edge, out bool inverted) != -1)
                 return (inverted) ? CategoryIndex.ReverseAligned : CategoryIndex.Aligned;
-            
             var vertices = soup.vertices;
             var midPoint = (vertices[edge.index1] + vertices[edge.index2]) * 0.5f;
 
@@ -194,6 +215,124 @@ namespace Chisel.Core
                 return CategoryIndex.Inside;
             return CategoryIndex.Outside;
         }
+        /*
+        public void Split(VertexSoup soup)
+        {
+            Debug.Log($">>{edges.Count}");
+            for (int i = 0; i < edges.Count; i++)
+            {
+                var edge = edges[i];
+                Debug.Log($"--{i}: {edge} {soup.vertices[edge.index1]} {soup.vertices[edge.index2]}");
+            }
+
+            var newEdges = new List<Edge>();
+            Split(newEdges);
+
+            newEdges.AddRange(edges);
+            edges.Clear();
+            AddEdges(newEdges);
+
+            Debug.Log("<<--");
+        }
+
+        public void Split(List<Edge> newEdges)
+        {
+            if (edges.Count < 3)    
+                return;
+
+            var vertexEdges = new Dictionary<int, List<int>>();
+            for (int i = 0; i < edges.Count; i++)
+            {
+                var edge = edges[i];
+                if (!vertexEdges.TryGetValue(edge.index1, out List<int> destinations))
+                {
+                    destinations = new List<int>();
+                    vertexEdges[edge.index1] = destinations;
+                }
+                destinations.Add(i);
+                if (!vertexEdges.TryGetValue(edge.index2, out destinations))
+                {
+                    destinations = new List<int>();
+                    vertexEdges[edge.index2] = destinations;
+                }
+                destinations.Add(i);
+            }
+            var lastEdgeIndex = 0;
+            var lastEdge = edges[lastEdgeIndex];
+            var foundEdgeIndices = new HashSet<int>();
+            var foundEdges = new List<Edge>();
+            do
+            {
+                if (!foundEdgeIndices.Add(lastEdgeIndex))
+                {
+                    Debug.Log("again?");
+                    break;
+                }
+                foundEdges.Add(lastEdge);
+                //Debug.Log($"Add {lastEdge}");
+                if (vertexEdges.TryGetValue(lastEdge.index2, out List<int> destinations))
+                {
+                    int nextEdgeIndex = -1;
+                    destinations.Remove(lastEdgeIndex);
+                    for (int i = 0; i < destinations.Count; i++)
+                    {
+                        var nextEdge = edges[destinations[i]];
+                        //Debug.Log($"{i}/{destinations[i]}: {lastEdge} => {nextEdge} ");
+                        if (nextEdge.index1 == lastEdge.index2)
+                        {
+                            nextEdgeIndex = destinations[i];
+                            lastEdge = nextEdge;
+                            destinations.RemoveAt(i);
+                            //Debug.Log($"{i}/{nextEdgeIndex}: found {lastEdge}");
+                            break;
+                        }
+                    }
+                    if (nextEdgeIndex == -1)
+                    {
+                        for (int i = 0; i < destinations.Count; i++)
+                        {
+                            var nextEdge = edges[destinations[i]];
+                            //Debug.Log($"{i}/{destinations[i]}: {lastEdge} => {nextEdge} ");
+                            if (nextEdge.index2 == lastEdge.index2)
+                            {
+                                nextEdgeIndex = destinations[i];
+                                nextEdge.Flip();
+                                lastEdge = nextEdge;
+                                destinations.RemoveAt(i);
+                                //Debug.Log($"{i}/{nextEdgeIndex}: found {lastEdge} &");
+                                break;
+                            }
+                        }
+                    }
+                    lastEdgeIndex = nextEdgeIndex;
+                }
+                if (lastEdgeIndex == -1)
+                {
+                    Debug.Log("no connection?");
+                    break;
+                }
+            } while (lastEdgeIndex != -1);
+
+            if (foundEdgeIndices.Count == edges.Count)
+                return;
+
+            //Debug.Log($"<<{sortedEdges.Count}");
+            newEdges.AddRange(foundEdges);
+            
+            var sortedEdges = foundEdgeIndices.ToList();
+            sortedEdges.Sort();
+            for (int i = sortedEdges.Count - 1; i >= 0; i--)
+                edges.RemoveAt(sortedEdges[i]);
+
+            Debug.Log($"<<{newEdges.Count}");
+            for (int i = 0; i < newEdges.Count; i++)
+            {
+                var edge = newEdges[i];
+                Debug.Log($"++{i}: {edge}");
+            }
+
+            Split(newEdges);
+        }*/
     }
 #endif
 }

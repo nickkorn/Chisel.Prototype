@@ -26,50 +26,53 @@ namespace Chisel.Core
             var brushSurfaces0      = brushMesh0.surfaces;
             var brushSurfaces1      = brushMesh1.surfaces;
 
-            var transformedPlanes0   = TransformOtherIntoBrushSpace(brush0, brush1, brushSurfaces0);
-
-            int negativeSides = 0;
-            int positiveSides = 0;
-            int intersectingSides = 0;
+            var transformedPlanes0  = TransformOtherIntoBrushSpace(brush0, brush1, brushSurfaces0);
+            
+            int negativeSides1 = 0;
+            int positiveSides1 = 0;
+            int intersectingSides1 = 0;
             for (var i = 0; i < transformedPlanes0.Length; i++)
             {
-                var plane0  = transformedPlanes0[i];
-                int side    = WhichSide(brushMesh1.vertices, plane0, epsilon);
-                if (side < 0) negativeSides++;
-                if (side > 0) positiveSides++;
-                if (side == 0) intersectingSides++;
+                var plane0 = transformedPlanes0[i];
+                int side = WhichSide(brushMesh1.vertices, plane0, epsilon);
+                //Debug.Log($"{i} {plane0} {side}");
+                if (side < 0) negativeSides1++;
+                if (side > 0) positiveSides1++;
+                if (side == 0) intersectingSides1++;
             }
-            
-            //Debug.Log($"A {positiveSides} {negativeSides}/{transformedPlanes0.Length} {intersectingSides}");
-            
-            if (intersectingSides > 0) return IntersectionType.Intersection;
-            if (positiveSides > 0) return IntersectionType.NoIntersection;
+
+            //Debug.Log($"A {positiveSides1} {negativeSides1} {intersectingSides1} /{transformedPlanes0.Length}");
+
+            //if (intersectingSides1 != transformedPlanes0.Length) return IntersectionType.Intersection;
+            //if (intersectingSides > 0) return IntersectionType.Intersection;
+            if (positiveSides1 > 0) return IntersectionType.NoIntersection;
             //if (negativeSides > 0 && positiveSides > 0) return IntersectionType.Intersection;
-            if (negativeSides == transformedPlanes0.Length)
+            if (negativeSides1 == transformedPlanes0.Length)
                 return IntersectionType.BInsideA;
+            
             //*
             var transformedPlanes1 = TransformOtherIntoBrushSpace(brush1, brush0, brushSurfaces1);
 
-            negativeSides = 0;
-            positiveSides = 0;
-            intersectingSides = 0;
+            int negativeSides2 = 0;
+            int positiveSides2 = 0;
+            int intersectingSides2 = 0;
             for (var i = 0; i < transformedPlanes1.Length; i++)
             {
-                var plane1  = transformedPlanes1[i];
-                int side    = WhichSide(brushMesh0.vertices, plane1, epsilon);
-                if (side < 0) negativeSides++;
-                if (side > 0) positiveSides++;
-                if (side == 0) intersectingSides++;
+                var plane1 = transformedPlanes1[i];
+                int side = WhichSide(brushMesh0.vertices, plane1, epsilon);
+                if (side < 0) negativeSides2++;
+                if (side > 0) positiveSides2++;
+                if (side == 0) intersectingSides2++;
             }
 
-            //Debug.Log($"B {positiveSides} {negativeSides} {intersectingSides}");
+            //Debug.Log($"B {positiveSides2} {negativeSides2} {intersectingSides2} /{transformedPlanes1.Length}");
 
-            if (intersectingSides > 0) return IntersectionType.Intersection;
-            if (positiveSides > 0) return IntersectionType.NoIntersection;
+            if (intersectingSides2 > 0) return IntersectionType.Intersection;
+            if (positiveSides2 > 0) return IntersectionType.NoIntersection;
             //if (negativeSides > 0 && positiveSides > 0) return IntersectionType.Intersection;
-            if (negativeSides == transformedPlanes1.Length)
+            if (negativeSides2 == transformedPlanes1.Length)
                 return IntersectionType.AInsideB;
-
+            
             return IntersectionType.Intersection;//*/
         }
 
@@ -78,7 +81,7 @@ namespace Chisel.Core
         {
             {
                 float t = plane.GetDistanceToPoint(vertices[0]);
-                if (t >= epsilon) goto HavePositive;
+                if (t >=  epsilon) goto HavePositive;
                 if (t <= -epsilon) goto HaveNegative;
                 return 0;
             }
@@ -106,10 +109,10 @@ namespace Chisel.Core
         {
             // inverse of (otherTransform.localToWorldSpace * this->worldToLocalSpace)
 
-            var brush0TreeSpaceMatrix = brush0.NodeToTreeSpaceMatrix;
-            var brush1TreeSpaceMatrix = brush1.TreeToNodeSpaceMatrix;
-
-            var brush1ToBrush0LocalLocalSpace = brush1TreeSpaceMatrix * brush0TreeSpaceMatrix;
+            var brush0ToTreeSpaceMatrix = brush0.NodeToTreeSpaceMatrix;
+            var treeToBrush1SpaceMatrix = brush1.TreeToNodeSpaceMatrix;
+             
+            var brush1ToBrush0LocalLocalSpace = treeToBrush1SpaceMatrix * brush0ToTreeSpaceMatrix;
 
             var dstPlanes = new Plane[srcPlanes1.Length];
             for (int plane_index = 0; plane_index < srcPlanes1.Length; plane_index++)

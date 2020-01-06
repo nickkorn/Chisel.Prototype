@@ -195,5 +195,7 @@ namespace Chisel.Core
         
         [SerializeField] // Useful to be able to handle selection in history
         internal Int32 nodeID;
+
+        public override string ToString() { return $"{Type} ({nodeID})"; }
     }
 }

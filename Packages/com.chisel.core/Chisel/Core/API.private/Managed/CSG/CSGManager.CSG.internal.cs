@@ -144,27 +144,29 @@ namespace Chisel.Core
                     if (!bounds0.Intersects(bounds1, CSGManagerPerformCSG.kEpsilon))
                         continue;
 
-                    var IntersectionType = BrushIntersection.ConvexPolytopeTouching(brush0, brush1, CSGManagerPerformCSG.kEpsilon);
+                    var intersectionType = BrushIntersection.ConvexPolytopeTouching(brush0, brush1, CSGManagerPerformCSG.kEpsilon);
+
+                    //Debug.Log($"{brush0.NodeID}/{brush1.NodeID} {intersectionType}");
 
                     var output1 = CSGManager.GetBrushInfo(brush1NodeID);
-                    if (IntersectionType == IntersectionType.NoIntersection)
+                    if (intersectionType == IntersectionType.NoIntersection)
                     {
                         output0.brushTouch[brush1] = IntersectionType.NoIntersection;
                         output1.brushTouch[brush0] = IntersectionType.NoIntersection;
                         continue;
                     }
 
-                    if (IntersectionType == IntersectionType.Intersection)
+                    if (intersectionType == IntersectionType.Intersection)
                     {
                         output0.brushTouch[brush1] = IntersectionType.Intersection;
                         output1.brushTouch[brush0] = IntersectionType.Intersection;
                     } else
-                    if (IntersectionType == IntersectionType.AInsideB)
+                    if (intersectionType == IntersectionType.AInsideB)
                     {
                         output0.brushTouch[brush1] = IntersectionType.AInsideB;
                         output1.brushTouch[brush0] = IntersectionType.BInsideA;
                     } else
-                    if (IntersectionType == IntersectionType.BInsideA)
+                    if (intersectionType == IntersectionType.BInsideA)
                     {
                         output0.brushTouch[brush1] = IntersectionType.BInsideA;
                         output1.brushTouch[brush0] = IntersectionType.AInsideB;

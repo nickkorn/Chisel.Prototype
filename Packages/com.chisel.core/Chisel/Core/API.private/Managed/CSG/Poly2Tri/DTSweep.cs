@@ -47,11 +47,8 @@
 
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
-using Unity.Mathematics;
-using UnityEngine;
-using System.Linq;
 using System.Runtime.CompilerServices;
+using Unity.Mathematics;
 using Debug = UnityEngine.Debug;
 
 namespace Chisel.Core
@@ -60,6 +57,14 @@ namespace Chisel.Core
     {
         public ushort index1;
         public ushort index2;
+        public override string ToString() => $"({index1}, {index2})";
+        
+        internal void Flip()
+        {
+            //if (index1 < index2)
+            //    return;
+            var t = index1; index1 = index2; index2 = t;
+        }
     }
 }
 
@@ -365,7 +370,6 @@ namespace Poly2Tri
         DTSweepConstraint edgeEventConstrainedEdge;
         bool edgeEventRight;
 
-
         /// <summary>
         /// Triangulate simple polygon with holes
         /// </summary>
@@ -376,12 +380,55 @@ namespace Poly2Tri
             this.rotation = rotation;
 
             triangleIndices.Clear();
+            int prevEdgeCount = inputEdges.Count;
+            AddMoreTriangles:
             Clear(vertices.Count);
             PrepareTriangulation(inputEdges);
             CreateAdvancingFront(0);
             Sweep();
             FixupConstrainedEdges();
             FinalizationPolygon();
+
+            //TODO: Optimize
+            for (int i = 0; i < triangleIndices.Count; i += 3)
+            {
+                var index0 = triangleIndices[i + 0];
+                var index1 = triangleIndices[i + 1];
+                var index2 = triangleIndices[i + 2];
+                for (int e = inputEdges.Count - 1; e >= 0; e--)
+                {
+                    var edge = inputEdges[e];
+                    if (index0 == edge.index1)
+                    {
+                        if (index1 == edge.index2 ||
+                            index2 == edge.index2)
+                        {
+                            inputEdges.RemoveAt(e);
+                        }
+                    } else
+                    if (index1 == edge.index1)
+                    {
+                        if (index0 == edge.index2 ||
+                            index2 == edge.index2)
+                        {
+                            inputEdges.RemoveAt(e);
+                        }
+                    } else
+                    if (index2 == edge.index1)
+                    {
+                        if (index1 == edge.index2 ||
+                            index0 == edge.index2)
+                        {
+                            inputEdges.RemoveAt(e);
+                        }
+                    }
+                }
+            }
+            if (inputEdges.Count > 3 && prevEdgeCount != inputEdges.Count)
+            {
+                prevEdgeCount = inputEdges.Count;
+                goto AddMoreTriangles;
+            }
             return triangleIndices.ToArray();
         }
 
@@ -400,7 +447,6 @@ namespace Poly2Tri
                 allEdges.Capacity = pointCount + 2;
             triangles.Clear();
             triangleInterior.Clear();
-            triangleIndices.Clear();
             advancingFrontNodes.Clear();
             sortedPoints.Clear();
             if (sortedPoints.Capacity < pointCount + 2)
@@ -727,7 +773,10 @@ namespace Poly2Tri
                 var frontNodeIndex  = LocateNode(point.x);
 
                 if (frontNodeIndex == ushort.MaxValue)
+                {
+                    Debug.Log($"{i}/{sortedPoints.Count}");
                     continue;
+                }
 
                 var triangleIndex       = (ushort)triangles.Count;
                 var frontNodeNextIndex  = advancingFrontNodes[frontNodeIndex].nextNodeIndex;

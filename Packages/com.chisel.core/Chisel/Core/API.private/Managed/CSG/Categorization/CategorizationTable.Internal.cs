@@ -124,7 +124,12 @@ namespace Chisel.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override string ToString()
 		{
-			return string.Format("({0}, {1}, {2}, {3})", destination[(int)CategoryIndex.Inside], destination[(int)CategoryIndex.Aligned], destination[(int)CategoryIndex.ReverseAligned], destination[(int)CategoryIndex.Outside]);
+            var inside          = (int)destination[(int)CategoryIndex.Inside];
+            var aligned         = (int)destination[(int)CategoryIndex.Aligned];
+            var reverseAligned  = (int)destination[(int)CategoryIndex.ReverseAligned];
+            var outside         = (int)destination[(int)CategoryIndex.Outside];
+
+            return string.Format("({0}, {1}, {2}, {3})", inside, aligned, reverseAligned, outside);
 		}
 	}
 
@@ -318,7 +323,6 @@ namespace Chisel.Core
 			}
 
 			// store the current output polygon lists, so we can use it as output for the previous node
-			parentRoutingRow = output_routing_row;
 			return output_routing_row;
 		}
 
@@ -436,14 +440,17 @@ namespace Chisel.Core
 			var brushNodeIndex = brush.NodeID - 1; 
 
 			bitset.Clear();
+            //Debug.Log("<<");
 			bitset.Set(brushNodeIndex, IntersectionType.Intersection);
+            //Debug.Log($"{brush.NodeID}");
 
-			var parent = brush.Parent;
+            var parent = brush.Parent;
 			while (parent.Valid)
 			{
 				var parentIndex = parent.NodeID - 1;
 				bitset.Set(parentIndex, IntersectionType.Intersection);
-				parent = parent.Parent;
+                //Debug.Log($"parentIndex: {parent.NodeID}");
+                parent = parent.Parent;
 			}
 
 			var touchingBrushes	= CSGManager.GetTouchingBrushes(brush);
@@ -456,16 +463,19 @@ namespace Chisel.Core
 				var touchingType		= touch.Value;
 				var touchingBrushIndex	= touchingBrush.NodeID - 1;
 				bitset.Set(touchingBrushIndex, touchingType);
+                //Debug.Log($"touchingBrushIndex: {touchingBrush.NodeID}");
 
-				parent = touchingBrush.Parent;
+                parent = touchingBrush.Parent;
 				while (parent.Valid)
 				{
 					var parentIndex = parent.NodeID - 1;
 					bitset.Set(parentIndex, IntersectionType.Intersection);
-					parent = parent.Parent;
+                    //Debug.Log($"parentIndex: {parent.NodeID}");
+                    parent = parent.Parent;
 				}
-			}
-		}
+            }
+            //Debug.Log(">>");
+        }
 
 
         static List<CategoryStackNode>      sRoutingTable       = new List<CategoryStackNode>();
@@ -599,7 +609,8 @@ namespace Chisel.Core
 			var categoryStackNodeCount = (int)sRoutingTable.Count;
 
 #if USE_OPTIMIZATIONS
-            OptimizeCategorizationTable(categoryStackNodeCount);
+            // FIXME: fails sometimes
+            //OptimizeCategorizationTable(categoryStackNodeCount);
             categoryStackNodeCount = (int)sRoutingTable.Count;
 #endif
 
@@ -615,7 +626,12 @@ namespace Chisel.Core
 
 
             sRoutingTable.Reverse();
-            
+            /*
+            Debug.Log($"-- {processedNode}");
+            for (int i = 0; i < sRoutingTable.Count; i++)
+            {
+                Debug.Log($"{i}/{sRoutingTable.Count}: {sRoutingTable[i]}");
+            }*/
             ReorderIndices();
 
             categoryStackNodeCount = (int)sRoutingTable.Count;
@@ -907,6 +923,8 @@ namespace Chisel.Core
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal void SetInvalid() { routingRow = CategoryRoutingRow.invalid; }
+
+        public override string ToString() { return $"{node} {input} -> {routingRow}"; }
     }
 #endif
-        }
+}
