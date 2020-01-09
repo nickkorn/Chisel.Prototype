@@ -143,7 +143,7 @@ namespace Chisel.Editors
                     {
                         var tempPoint = s_Points[2];
                         var oldMatrix = UnityEditor.Handles.matrix;
-                        UnityEditor.Handles.matrix = UnityEditor.Handles.matrix * s_Transformation;
+                        UnityEditor.Handles.matrix *= s_Transformation;
                         var extrusionState = ExtrusionHandle.DoHandle(dragArea, ref tempPoint, axis, snappingSteps: snappingSteps);
                         UnityEditor.Handles.matrix = oldMatrix;
                         s_Points[2] = tempPoint;

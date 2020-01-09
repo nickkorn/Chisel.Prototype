@@ -85,26 +85,30 @@ namespace Chisel.Core
 
 
         #region Rebuild / Update
+        static void UpdateBrushTransformation(int brushNodeID)
+        {
+            var brushNodeIndex				 = brushNodeID - 1;
+            var parentNodeID				 = nodeHierarchies[brushNodeIndex].parentNodeID;
+            var parentNodeIndex				 = parentNodeID - 1;
+            var parentLocalTransformation	 = (parentNodeIndex < 0) ? Matrix4x4.identity : nodeLocalTransforms[parentNodeIndex].invLocalTransformation;
+            var parentLocalInvTransformation = (parentNodeIndex < 0) ? Matrix4x4.identity : nodeLocalTransforms[parentNodeIndex].localTransformation;
+
+            // TODO: should be transformations the way up to the tree, not just tree vs brush
+            var brushLocalTransformation    = nodeLocalTransforms[brushNodeIndex].localTransformation;
+            var brushLocalInvTransformation = nodeLocalTransforms[brushNodeIndex].invLocalTransformation;
+
+            var nodeTransform				 = nodeTransforms[brushNodeIndex];
+            nodeTransform.nodeToTree         = brushLocalTransformation * parentLocalInvTransformation;
+            nodeTransform.treeToNode         = parentLocalTransformation * brushLocalInvTransformation;
+            nodeTransforms[brushNodeIndex]	 = nodeTransform;
+        }
+
         static void UpdateBrushTransformations(List<int> treeBrushes)
         {
             // TODO: optimize, only do this when necessary
             for (int i = 0; i < treeBrushes.Count; i++)
             {
-                var brushNodeID					 = treeBrushes[i];
-                var brushNodeIndex				 = brushNodeID - 1;
-                var parentNodeID				 = nodeHierarchies[brushNodeIndex].parentNodeID;
-                var parentNodeIndex				 = parentNodeID - 1;
-                var parentLocalTransformation	 = (parentNodeIndex < 0) ? Matrix4x4.identity : nodeLocalTransforms[parentNodeIndex].localTransformation;
-                var parentLocalInvTransformation = (parentNodeIndex < 0) ? Matrix4x4.identity : nodeLocalTransforms[parentNodeIndex].invLocalTransformation;
-
-                // TODO: should be transformations the way up to the tree, not just tree vs brush
-                var brushLocalTransformation    = nodeLocalTransforms[brushNodeIndex].localTransformation;
-                var brushLocalInvTransformation = nodeLocalTransforms[brushNodeIndex].invLocalTransformation;
-
-                var nodeTransform				 = nodeTransforms[brushNodeIndex];
-                nodeTransform.nodeToTree		 = brushLocalTransformation * parentLocalInvTransformation;
-                nodeTransform.treeToNode		 = parentLocalTransformation * brushLocalInvTransformation;
-                nodeTransforms[brushNodeIndex]	 = nodeTransform;
+                UpdateBrushTransformation(treeBrushes[i]);
             }
         }
 
