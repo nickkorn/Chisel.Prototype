@@ -619,7 +619,7 @@ namespace Chisel.Components
             nodeToinstanceIDLookup.Remove(component);
             instanceIDToNodeLookup.Remove(instanceID);
 
-            var sceneHierarchy = component.hierarchyItem.sceneHierarchy;
+            var sceneHierarchy = component.hierarchyItem.SceneHierarchy;
             if (sceneHierarchy == null)
                 return;
         
@@ -942,7 +942,7 @@ namespace Chisel.Components
                             if (parentHierarchyItem.Parent == null &&
                                 ChiselGeneratedComponentManager.IsDefaultModel(parentHierarchyItem.Component))
                             {
-                                var hierarchy = hierarchyItem.sceneHierarchy;
+                                var hierarchy = hierarchyItem.SceneHierarchy;
                                 if (hierarchy != null)
                                     hierarchy.RootItems.Remove(hierarchyItem);
                             }
@@ -960,7 +960,7 @@ namespace Chisel.Components
                             }
                         } else
                         {
-                            var hierarchy = hierarchyItem.sceneHierarchy;
+                            var hierarchy = hierarchyItem.SceneHierarchy;
                             if (hierarchy != null)
                             {
                                 hierarchy.RootItems.Remove(hierarchyItem);
@@ -1121,7 +1121,7 @@ namespace Chisel.Components
                         if (parentHierarchyItem.Parent == null &&
                             ChiselGeneratedComponentManager.IsDefaultModel(parentHierarchyItem.Component))
                         {
-                            var hierarchy = hierarchyItem.sceneHierarchy;
+                            var hierarchy = hierarchyItem.SceneHierarchy;
                             if (hierarchy != null)
                                 hierarchy.RootItems.Remove(hierarchyItem);
                         }
@@ -1139,7 +1139,7 @@ namespace Chisel.Components
                         }
                     } else
                     {
-                        var hierarchy = hierarchyItem.sceneHierarchy;
+                        var hierarchy = hierarchyItem.SceneHierarchy;
                         if (hierarchy != null)
                         {
                             hierarchy.RootItems.Remove(hierarchyItem);
@@ -1172,7 +1172,7 @@ namespace Chisel.Components
                         sceneHierarchy = new ChiselSceneHierarchy() { Scene = scene };
                         sceneHierarchies[scene] = sceneHierarchy;
                     }
-                    hierarchyItem.sceneHierarchy = sceneHierarchy;
+                    hierarchyItem.SceneHierarchy = sceneHierarchy;
 
                     var defaultModel = false;
                     var parentComponent = UpdateSiblingIndices(sceneHierarchy, hierarchyItem);

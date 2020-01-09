@@ -363,12 +363,12 @@ found:
 
 
 
-        static List<CategoryStackNode> sRoutingTable = new List<CategoryStackNode>();
-        static List<RoutingLookup> sRoutingLookups = new List<RoutingLookup>();
-        static List<CategoryGroupIndex> sInputs = new List<CategoryGroupIndex>();
-        static List<CategoryRoutingRow> sRoutingRows = new List<CategoryRoutingRow>();
-        static List<Loop[]> sIntersectionLoops = new List<Loop[]>();
-        static HashSet<CategoryGroupIndex> sActiveInputs = new HashSet<CategoryGroupIndex>();
+        static List<CategoryStackNode>      sRoutingTable       = new List<CategoryStackNode>();
+        static List<RoutingLookup>          sRoutingLookups     = new List<RoutingLookup>();
+        static List<CategoryGroupIndex>     sInputs             = new List<CategoryGroupIndex>();
+        static List<CategoryRoutingRow>     sRoutingRows        = new List<CategoryRoutingRow>();
+        static List<Loop[]>                 sIntersectionLoops  = new List<Loop[]>();
+        static HashSet<CategoryGroupIndex>  sActiveInputs       = new HashSet<CategoryGroupIndex>();
 
         public static void GenerateCategorizationTable(CSGTreeNode rootNode,
                                                        CSGTreeBrush processedNode,
@@ -390,7 +390,10 @@ found:
             var rootNodeIndex = rootNode.NodeID - 1;
             intersectionTypeLookup.Set(rootNodeIndex, IntersectionType.Intersection);
 
+
+            // TODO: replace all code in this method, with the following method when it's done:
             var stack = GetStack(intersectionTypeLookup, processedNode, rootNode);
+            Dump(processedNode, stack);
 
 
             var categoryOperations = new List<CategoryStackNode>(CSGManager.GetMaxNodeIndex() * 6)
@@ -514,11 +517,12 @@ found:
 
 
             sRoutingTable.Reverse();
+            /*
             Debug.Log($"-- {processedNode}");
             for (int i = 0; i < sRoutingTable.Count; i++)
             {
                 Debug.Log($"{i}/{sRoutingTable.Count}: {sRoutingTable[i]}");
-            }
+            }*/
             ReorderIndices();
 
             categoryStackNodeCount = (int)sRoutingTable.Count;
@@ -902,6 +906,64 @@ found:
             return operationTables[(int)operation];
         }
 
+        static void Dump(CSGTreeNode processedNode, CategoryStackNode[] stack)
+        {
+            if (stack == null)
+            {
+                Debug.Log($"processedNode: {processedNode} null");
+                return;
+            }
+            if (stack.Length == 0)
+            {
+                Debug.Log($"processedNode: {processedNode} stack.Length == 0");
+                return;
+            }
+            var stringBuilder = new System.Text.StringBuilder();
+            for (int i = 0; i < stack.Length; i++)
+                stringBuilder.AppendLine($"[{i}]: {stack[i]}");
+            Debug.Log($"processedNode: {processedNode}\n{stringBuilder.ToString()}");
+        }
+
+        static void Dump(CategoryStackNode[] stack)
+        {
+            if (stack == null)
+            {
+                Debug.Log($"---- null");
+                return;
+            }
+            if (stack.Length == 0)
+            {
+                Debug.Log($"---- stack.Length == 0");
+                return;
+            }
+            var stringBuilder = new System.Text.StringBuilder();
+            for (int i = 0; i < stack.Length; i++)
+                stringBuilder.AppendLine($"[{i}]: {stack[i]}");
+            Debug.Log($"----\n{stringBuilder.ToString()}");
+        }
+
+        static void FixUpIndices(List<CategoryStackNode> stack, Dictionary<int, int> remap, int start, int last)
+        {
+            for (int i = start; i < last; i++)
+            {
+                var routingRow = stack[i].routingRow;
+
+                if (!remap.ContainsKey((int)routingRow[0]) ||
+                    !remap.ContainsKey((int)routingRow[1]) ||
+                    !remap.ContainsKey((int)routingRow[2]) ||
+                    !remap.ContainsKey((int)routingRow[3]))
+                {
+                    Debug.Log("!");
+                    return;
+                }
+                /*
+                routingRow[0] = (CategoryGroupIndex)remap[(int)routingRow[0]];
+                routingRow[1] = (CategoryGroupIndex)remap[(int)routingRow[1]];
+                routingRow[2] = (CategoryGroupIndex)remap[(int)routingRow[2]];
+                routingRow[3] = (CategoryGroupIndex)remap[(int)routingRow[3]];*/
+            }
+        }
+
         static CategoryStackNode[] Combine(BrushIntersectionLookup intersectionTypeLookup, CSGTreeBrush processedNode, CSGTreeNode left, CSGTreeNode right, CSGOperationType operation)
         {
             if (operation == CSGOperationType.Invalid)
@@ -932,6 +994,7 @@ found:
             // TODO: use different tables before and after we passed ourselves to avoid duplicates
             var table       = GetOperationTable(operation);
             int index       = 0;
+            int vIndex      = 0;
             
             var firstNode   = rightStack[0].node;
 
@@ -956,14 +1019,31 @@ found:
             var children    = new List<CategoryStackNode>();
             children.AddRange(leftStack);
 
+            int prevNodeIndex = children.Count - 1;
+            while (prevNodeIndex > 0)
+            {
+                if (children[prevNodeIndex - 1].node != children[prevNodeIndex].node)
+                    break;
+                prevNodeIndex--;
+            }
+            int startNodeIndex = children.Count;
+
+            var indexRemap  = new Dictionary<int, int>();
+
             int nodeIndex = 1;
             prevNode = firstNode;
             for (int r = 0; r < rightStack.Length; r++)
             {
                 if (prevNode != rightStack[r].node)
                 {
-                    index = 0; nodeIndex++;
+                    if (prevNodeIndex >= 0 && indexRemap.Count > 0)
+                        FixUpIndices(children, indexRemap, prevNodeIndex, startNodeIndex);
+
+                    prevNodeIndex = startNodeIndex;
+                    startNodeIndex = children.Count;
+                    index = 0; vIndex = 0; nodeIndex++;
                     prevNode = rightStack[r].node;
+                    indexRemap.Clear();
                 }
 
                 CategoryRoutingRow routingRow;
@@ -979,15 +1059,33 @@ found:
                         // we don't even know if there is a next node at this point.
                         routingRow = ApplyOperation(table, (CategoryIndex)t, rightStack[r].routingRow);
 
+                        int foundIndex = -1;/*
+                        for (int n = startNodeIndex; n < children.Count; n++)
+                        {
+                            Debug.Assert(rightStack[r].node == children[n].node);
+                            if (children[n].routingRow.Equals(routingRow))
+                            {
+                                foundIndex = (int)children[n].input;
+                                break;
+                            }
+                        }*/
+
                         // TODO: optimize the results, remove duplicates
                         //          -> fixup links to these nodes backwards
-                        children.Add( new CategoryStackNode()
-                            {
-                                node        = rightStack[r].node,
-                                input       = (CategoryGroupIndex)index,
-                                routingRow  = routingRow
-                            });
-                        index++;
+                        if (foundIndex == -1)
+                        { 
+                            children.Add( new CategoryStackNode()
+                                {
+                                    node        = rightStack[r].node,
+                                    input       = (CategoryGroupIndex)index,
+                                    routingRow  = routingRow
+                                });
+                            foundIndex = index;
+                            index++;
+                        }
+
+                        indexRemap[vIndex] = foundIndex;
+                        vIndex++;
                     }
                 } else
                 { 
@@ -1001,22 +1099,44 @@ found:
                                                             rightStack[r].routingRow[2] + routingOffset,
                                                             rightStack[r].routingRow[3] + routingOffset);
 
-                        children.Add( new CategoryStackNode()
+                        int foundIndex = -1;/*
+                        for (int n = startNodeIndex; n < children.Count; n++)
+                        {
+                            Debug.Assert(rightStack[r].node == children[n].node);
+                            if (children[n].routingRow.Equals(routingRow))
+                            {
+                                foundIndex = (int)children[n].input;
+                                break;
+                            }
+                        }*/
+
+                        // TODO: optimize the results, remove duplicates
+                        //          -> fixup links to these nodes backwards
+                        if (foundIndex == -1)
+                        {
+                            children.Add( new CategoryStackNode()
                             {
                                 node        = rightStack[r].node,
                                 input       = (CategoryGroupIndex)index,
                                 routingRow  = routingRow
                             });
-                        index++;
+                            foundIndex = index;
+                            index++;
+                        }
+
+                        indexRemap[vIndex] = foundIndex;
+                        vIndex++;
                     }
                 }
             }
-            
+            if (prevNodeIndex >= 0 && indexRemap.Count > 0)
+                FixUpIndices(children, indexRemap, prevNodeIndex, startNodeIndex);
+            Dump(children.ToArray());
+
             if (children.Count == 0)
                 return sEmptyStack;
             return children.ToArray();
         }
-
 
         static CategoryStackNode[] GetStack(BrushIntersectionLookup intersectionTypeLookup, CSGTreeBrush processedNode, CSGTreeNode node)
         {

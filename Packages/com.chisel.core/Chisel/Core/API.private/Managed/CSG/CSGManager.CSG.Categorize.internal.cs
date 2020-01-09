@@ -30,13 +30,13 @@ namespace Chisel.Core
         #region PerformBooleanOperation
 
         #region FindHoleDependencies
-
+        /*
         struct LoopDependency
         {
             public int      startIndex;
             public int[]    dependencies;
         }
-
+        */
         static void FillDependencyList(List<int> dependencies, int baseIndex, HashSet<int> skipSet, int[][] intersections)
         {
             if (dependencies.Count == intersections.Length)
@@ -62,7 +62,7 @@ namespace Chisel.Core
                     FillDependencyList(dependencies, dependencies[i], skipSet, intersections);
             }
         }
-
+        /*
         static void FindHoleDependencies(VertexSoup soup, List<Loop> holes, List<LoopDependency> loopDependencies)
         {
             loopDependencies.Clear();
@@ -126,7 +126,7 @@ namespace Chisel.Core
                 });
             }
         }
-
+        */
         #endregion
 
 
@@ -190,7 +190,10 @@ namespace Chisel.Core
 
                         var worldSpacePlanes1Length = mesh1.surfaces.Length;
                         var worldSpacePlanes1 = stackalloc float4[worldSpacePlanes1Length];
-                        CSGManagerPerformCSG.TransformByMatrix(worldSpacePlanes1, mesh1.surfaces, nodeToTreeSpace1);
+                        fixed (BrushMesh.Surface* mesh1Surfaces = &mesh1.surfaces[0])
+                        {
+                            CSGManagerPerformCSG.TransformByTransposedInversedMatrix(worldSpacePlanes1, (float4*)mesh1Surfaces, mesh1.surfaces.Length, math.transpose(nodeToTreeSpaceInversed1));
+                        }
 
                         newPolygon = new Loop()
                         {
@@ -205,7 +208,7 @@ namespace Chisel.Core
                             var worldVertex = new float4(soup.vertices[vertexIndex], 1);
                             if (IsOutsidePlanes(worldSpacePlanes1, worldSpacePlanes1Length, worldVertex))
                                 continue;
-                            if (!newPolygon.indices.Contains(vertexIndex))
+                            if (!newPolygon.indices.Contains(vertexIndex)) 
                                 newPolygon.indices.Add(vertexIndex);
                         }
 
@@ -220,7 +223,10 @@ namespace Chisel.Core
 
                         var worldSpacePlanes2Length = mesh2.surfaces.Length;
                         var worldSpacePlanes2 = stackalloc float4[mesh2.surfaces.Length];
-                        CSGManagerPerformCSG.TransformByMatrix(worldSpacePlanes2, mesh2.surfaces, nodeToTreeSpace2);
+                        fixed (BrushMesh.Surface* mesh2Surfaces = &mesh2.surfaces[0])
+                        {
+                            CSGManagerPerformCSG.TransformByTransposedInversedMatrix(worldSpacePlanes2, (float4*)mesh2Surfaces, mesh2.surfaces.Length, math.transpose(nodeToTreeSpaceInversed2));
+                        }
 
                         if (newPolygon.indices.Count == 0) // no vertex of polygon2 is inside polygon1
                         {
