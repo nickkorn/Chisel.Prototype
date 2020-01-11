@@ -1,4 +1,6 @@
-//#define USE_OPTIMIZATIONS
+#define USE_OPTIMIZATIONS
+#define USE_HALF_OPERATION_TABLE
+#define SHOW_DEBUG_MESSAGES
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -8,71 +10,17 @@ using System.Text;
 using System.Threading.Tasks;
 using UnityEngine;
 
-namespace Chisel.Core
+namespace Chisel.Core 
 {
 #if USE_MANAGED_CSG_IMPLEMENTATION
     // TODO: store the routingRows per node, since inputs are in order & increase by 1, we can remove it and look them up directly
-    internal unsafe struct CategoryStackNode
-    {
+    internal unsafe partial struct CategoryStackNode
+    { 
         public CSGTreeNode node;
         public CategoryGroupIndex input;
         public CategoryRoutingRow routingRow;
 
         public override string ToString() { return $"'{node}': {input} -> {routingRow}"; }
-
-        #region Operation tables
-        // Additive set operation on polygons: output = (left-node || right-node)
-        // Defines final output from combination of categorization of left and right node
-        internal static readonly CategoryIndex[,] additiveOperation = new[,]
-        {
-			//right node                                                                                                             |
-			//                              other                         other                                                      |
-			//inside                        aligned                       reverse-aligned               outside                      |     left-node       
-			//--------------------------------------------------------------------------------------------------------------------------------------------------
-			{ CategoryIndex.Inside,         CategoryIndex.Inside,         CategoryIndex.Inside,         CategoryIndex.Inside         }, // inside
-			{ CategoryIndex.Inside,         CategoryIndex.Aligned,        CategoryIndex.Inside,         CategoryIndex.Aligned        }, // other-aligned
-			{ CategoryIndex.Inside,         CategoryIndex.Inside,         CategoryIndex.ReverseAligned, CategoryIndex.ReverseAligned }, // other-reverse-aligned
-			{ CategoryIndex.Inside,         CategoryIndex.Aligned,        CategoryIndex.ReverseAligned, CategoryIndex.Outside        }  // outside
-		};
-
-        // Subtractive set operation on polygons: output = !(!left-node || right-node)
-        // Defines final output from combination of categorization of left and right node
-        internal static readonly CategoryIndex[,] subtractiveOperation = new[,]
-        {
-			//right node                                                                                                             |
-			//                              other                         other                                                      |
-			//inside                        aligned                       reverse-aligned               outside                      |     left-node       
-			//--------------------------------------------------------------------------------------------------------------------------------------------------
-			{ CategoryIndex.Outside,        CategoryIndex.ReverseAligned, CategoryIndex.Aligned,        CategoryIndex.Inside         }, // inside
-			{ CategoryIndex.Outside,        CategoryIndex.Outside,        CategoryIndex.Aligned,        CategoryIndex.Aligned        }, // other-aligned
-			{ CategoryIndex.Outside,        CategoryIndex.ReverseAligned, CategoryIndex.Outside,        CategoryIndex.ReverseAligned }, // other-reverse-aligned
-			{ CategoryIndex.Outside,        CategoryIndex.Outside,        CategoryIndex.Outside,        CategoryIndex.Outside        }  // outside
-		};
-
-        // Common set operation on polygons: output = !(!left-node || !right-node)
-        // Defines final output from combination of categorization of left and right node
-        internal static readonly CategoryIndex[,] commonOperation = new[,]
-        {
-			//right node                                                                                                             |
-			//                              other                         other                                                      |
-			//inside                        aligned                       reverse-aligned               outside                      |     left-node       
-			//--------------------------------------------------------------------------------------------------------------------------------------------------
-			{ CategoryIndex.Inside,         CategoryIndex.Aligned,        CategoryIndex.ReverseAligned, CategoryIndex.Outside        }, // inside
-			{ CategoryIndex.Aligned,        CategoryIndex.Aligned,        CategoryIndex.Outside,        CategoryIndex.Outside        }, // other-aligned
-			{ CategoryIndex.ReverseAligned, CategoryIndex.Outside,        CategoryIndex.ReverseAligned, CategoryIndex.Outside        }, // other-reverse-aligned
-			{ CategoryIndex.Outside,        CategoryIndex.Outside,        CategoryIndex.Outside,        CategoryIndex.Outside        }  // outside
-		};
-
-        static readonly CategoryIndex[][,] csg_operations = new[]
-        {
-            CategoryStackNode.additiveOperation,	// CSGOperationType.Additive == 0
-			CategoryStackNode.subtractiveOperation,	// CSGOperationType.Subtractive == 1
-			CategoryStackNode.commonOperation,		// CSGOperationType.Common == 2
-
-			CategoryStackNode.additiveOperation		// 3 (invalid value)
-		};
-        #endregion
-
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal void SetInvalid() { routingRow = CategoryRoutingRow.invalid; }
@@ -121,248 +69,6 @@ namespace Chisel.Core
         }
 
 
-
-
-        static CategoryRoutingRow CategorizeNode(List<CategoryStackNode> routingTable,
-                                                 BrushIntersectionLookup intersectionTypeLookup,
-                                                 CategoryRoutingRow parentRoutingRow,
-                                                 CSGTreeNode childNode,
-                                                 CSGTreeNode processedNode,
-                                                 CSGNodeType childType,
-                                                 CSGOperationType childOperationType,
-                                                 ref int polygonGroupCount,
-                                                 bool haveGonePastSelf)
-        {
-            if (parentRoutingRow.AreAllTheSame())
-                return parentRoutingRow;
-
-            var child_node_is_brush = (childType & CSGNodeType.Brush) == CSGNodeType.Brush;
-            var current_operation = csg_operations[(int)childOperationType];
-            if (childNode == processedNode && child_node_is_brush)
-            {
-                // All categories lead to 'aligned' since this is the processed brush
-                parentRoutingRow.RouteFrom(parentRoutingRow,
-                                               current_operation[(int)CategoryIndex.Inside, (int)CategoryIndex.Aligned],
-                                               current_operation[(int)CategoryIndex.Aligned, (int)CategoryIndex.Aligned],
-                                               current_operation[(int)CategoryIndex.ReverseAligned, (int)CategoryIndex.Aligned],
-                                               current_operation[(int)CategoryIndex.Outside, (int)CategoryIndex.Aligned]);
-                return parentRoutingRow;
-            }
-            var childNodeIndex = childNode.NodeID - 1;
-            var intersectionType = intersectionTypeLookup.Get(childNodeIndex);
-            UnityEngine.Debug.Assert(intersectionType != IntersectionType.InvalidValue, $"intersectionType == IntersectionType.InvalidValue");
-            if (intersectionType == IntersectionType.NoIntersection ||
-                intersectionType == IntersectionType.BInsideA)
-            {
-                // All categories lead to 'outside' since this brush doesn't touch the processed brush
-                parentRoutingRow.RouteFrom(parentRoutingRow,
-                                               current_operation[(int)CategoryIndex.Inside, (int)CategoryIndex.Outside],
-                                               current_operation[(int)CategoryIndex.Aligned, (int)CategoryIndex.Outside],
-                                               current_operation[(int)CategoryIndex.ReverseAligned, (int)CategoryIndex.Outside],
-                                               current_operation[(int)CategoryIndex.Outside, (int)CategoryIndex.Outside]);
-                return parentRoutingRow;
-            } else
-            if (intersectionType == IntersectionType.AInsideB)
-            {
-                // All categories lead to 'outside' since this brush doesn't touch the processed brush
-                parentRoutingRow.RouteFrom(parentRoutingRow,
-                                               current_operation[(int)CategoryIndex.Inside, (int)CategoryIndex.Inside],
-                                               current_operation[(int)CategoryIndex.Aligned, (int)CategoryIndex.Inside],
-                                               current_operation[(int)CategoryIndex.ReverseAligned, (int)CategoryIndex.Inside],
-                                               current_operation[(int)CategoryIndex.Outside, (int)CategoryIndex.Inside]);
-                return parentRoutingRow;
-            }
-
-            var output_routing_row = new CategoryRoutingRow();// output polygon paths
-
-            // determine the required outputs
-            for (int rightCategoryIndex = 0; rightCategoryIndex < CategoryRoutingRow.Length; rightCategoryIndex++)
-            {
-                var new_routing_row = new CategoryRoutingRow();
-                // determine the correct destination for all input polygons and add them to the stack for processing
-                if (child_node_is_brush)
-                {
-                    // Eat polygons that are aligned with another brush
-                    if (haveGonePastSelf)
-                    {
-                        new_routing_row.RouteFrom(parentRoutingRow,
-                                                  current_operation[rightCategoryIndex, (int)CategoryIndex.Inside],
-                                                  current_operation[rightCategoryIndex, (int)CategoryIndex.Outside],
-                                                  current_operation[rightCategoryIndex, (int)CategoryIndex.Inside],
-                                                  current_operation[rightCategoryIndex, (int)CategoryIndex.Outside]);
-                    } else
-                    {
-                        new_routing_row.RouteFrom(parentRoutingRow,
-                                                  current_operation[rightCategoryIndex, (int)CategoryIndex.Inside],
-                                                  current_operation[rightCategoryIndex, (int)CategoryIndex.Inside],
-                                                  current_operation[rightCategoryIndex, (int)CategoryIndex.Inside],
-                                                  current_operation[rightCategoryIndex, (int)CategoryIndex.Outside]);
-                    }
-                } else
-                {
-                    new_routing_row.RouteFrom(parentRoutingRow,
-                                              current_operation[rightCategoryIndex, (int)CategoryIndex.Inside],
-                                              current_operation[rightCategoryIndex, (int)CategoryIndex.Aligned],
-                                              current_operation[rightCategoryIndex, (int)CategoryIndex.ReverseAligned],
-                                              current_operation[rightCategoryIndex, (int)CategoryIndex.Outside]);
-                }
-
-                //
-                // All paths in route lead to same location, so don't bother storing it
-                //
-                if (new_routing_row.AreAllTheSame())
-                {
-                    output_routing_row[rightCategoryIndex] = new_routing_row[CategoryIndex.Outside]; // pick any one of the lists as destination
-                    continue;
-                }
-
-                //
-                // See if we have a duplicate route
-                //
-                var prevCategory = (int)routingTable.Count - 1;
-                while (prevCategory > 0 && routingTable[prevCategory].node == childNode)
-                {
-                    if (routingTable[prevCategory].routingRow.Equals(new_routing_row))
-                    // found a duplicate, use that one instead
-                    {
-                        output_routing_row[rightCategoryIndex] = routingTable[prevCategory].input;
-                        goto SkipRouteCreation;
-                    }
-                    prevCategory--;
-                }
-                {
-                    //
-                    // Add a new route
-                    //
-                    var input_polygon_group_index = (CategoryGroupIndex)polygonGroupCount; polygonGroupCount++;
-                    {
-                        routingTable.Add(new CategoryStackNode()
-                        {
-                            input = input_polygon_group_index,
-                            node = childNode,
-                            routingRow = new_routing_row
-                        });
-                    }
-
-                    output_routing_row[rightCategoryIndex] = input_polygon_group_index;
-                }
-SkipRouteCreation:
-                ;
-            }
-
-            // store the current output polygon lists, so we can use it as output for the previous node
-            return output_routing_row;
-        }
-
-        static CategoryRoutingRow CategorizeFirstNode(List<CategoryStackNode> routingTable,
-                                                      BrushIntersectionLookup intersectionTypeLookup,
-                                                      CategoryRoutingRow parentRoutingRow,
-                                                      CategoryGroupIndex inputPolygonGroupIndex,
-                                                      CSGTreeNode childNode,
-                                                      CSGTreeNode processedNode,
-                                                      CSGNodeType childNodeType,
-                                                      CSGOperationType childOperationType,
-                                                      bool haveGonePastSelf)
-        {
-            var child_node_is_brush = (childNodeType & CSGNodeType.Brush) == CSGNodeType.Brush;
-            var intersectionType = IntersectionType.InvalidValue;
-
-            // All categories lead to 'aligned' since this is the processed brush
-            if (childNode == processedNode && child_node_is_brush)
-            {
-                parentRoutingRow.RerouteAll(CategoryIndex.Aligned);
-                goto found;
-            }
-
-            // All categories lead to 'outside' since this brush doesn't touch the processed brush
-            else
-            {
-                var childNodeIndex = childNode.NodeID - 1;
-                intersectionType = intersectionTypeLookup.Get(childNodeIndex);
-                UnityEngine.Debug.Assert(intersectionType != IntersectionType.InvalidValue, $"intersectionType == IntersectionType.InvalidValue");
-                if (intersectionType == IntersectionType.NoIntersection) { parentRoutingRow.RerouteAll(CategoryIndex.Outside); goto found; } else if (intersectionType == IntersectionType.AInsideB) { parentRoutingRow.RerouteAll(CategoryIndex.Inside); goto found; }
-            }
-
-            if (child_node_is_brush)
-            {
-                // Remove polygons that are aligned and removed by another brush
-                if (haveGonePastSelf)
-                {
-                    parentRoutingRow.Reroute(CategoryIndex.Inside, CategoryIndex.Outside, CategoryIndex.Inside, CategoryIndex.Outside);
-                    goto found;
-                } else
-                {
-                    parentRoutingRow.Reroute(CategoryIndex.Inside, CategoryIndex.Inside, CategoryIndex.Inside, CategoryIndex.Outside);
-                    goto found;
-                }
-            }
-// else, no need to reroute, everything is already pointing to the correct destination
-
-found:
-            routingTable.Add(new CategoryStackNode()
-            {
-                input = inputPolygonGroupIndex,
-                node = childNode,
-                routingRow = parentRoutingRow
-            });
-
-            return parentRoutingRow;
-        }
-
-
-        class CSGStackData
-        {
-            public CSGStackData(int first_sibling_index, int last_sibling_index, int stack_node_counter, int current_stack_node_index, CSGTreeNode categorization_node)
-            {
-                firstSiblingIndex = first_sibling_index;
-                lastSiblingIndex = last_sibling_index;
-                currentSiblingIndex = last_sibling_index;
-                stackNodeCount = stack_node_counter;
-                parentStackNodeIndex = current_stack_node_index;
-                parentNode = categorization_node;
-            }
-            public int firstSiblingIndex;
-            public int lastSiblingIndex;
-            public int currentSiblingIndex;
-            public int stackNodeCount;
-            public int parentStackNodeIndex;
-            public CSGTreeNode parentNode;
-        };
-
-
-        static void AddToCSGStack(List<CSGStackData> stackIterator, List<CategoryStackNode> categoryOperations, CSGTreeNode currentNode, int currentStackNodeIndex)
-        {
-            CSGTreeNode categorization_node = currentNode;
-            Int32 child_node_count = (categorization_node.NodeID == CSGTreeNode.InvalidNodeID) ? 0 : categorization_node.Count;
-            Int32 last_sibling_index = child_node_count - 1;
-            Int32 first_sibling_index = 0;
-
-            // 
-            // Find first node that is actually additive (we can't subtract or find common area of ... nothing)
-            //
-            for (first_sibling_index = 0; first_sibling_index < child_node_count; first_sibling_index++)
-            {
-                var child_node = categorization_node[first_sibling_index];
-                var child_operation_type = child_node.Operation;
-                if (child_operation_type == CSGOperationType.Additive)
-                    break;
-            }
-
-            if (first_sibling_index >= child_node_count)
-                return;
-
-            var stack_node_counter = 0;
-            do
-            {
-                stack_node_counter++;
-            } while (currentStackNodeIndex - stack_node_counter > 0 &&
-                     categoryOperations[currentStackNodeIndex - stack_node_counter].node == currentNode);
-
-            stackIterator.Add(new CSGStackData(first_sibling_index, last_sibling_index, stack_node_counter, currentStackNodeIndex, categorization_node));
-        }
-
-
-
         static List<CategoryStackNode>      sRoutingTable       = new List<CategoryStackNode>();
         static List<RoutingLookup>          sRoutingLookups     = new List<RoutingLookup>();
         static List<CategoryGroupIndex>     sInputs             = new List<CategoryGroupIndex>();
@@ -370,9 +76,9 @@ found:
         static List<Loop[]>                 sIntersectionLoops  = new List<Loop[]>();
         static HashSet<CategoryGroupIndex>  sActiveInputs       = new HashSet<CategoryGroupIndex>();
 
-        public static void GenerateCategorizationTable(CSGTreeNode rootNode,
+        public static void GenerateCategorizationTable(CSGTreeNode  rootNode,
                                                        CSGTreeBrush processedNode,
-                                                       BrushLoops brushOutputLoops,
+                                                       BrushLoops   brushOutputLoops,
                                                        RoutingTable routingTable)
         {
             routingTable.Clear();
@@ -390,140 +96,39 @@ found:
             var rootNodeIndex = rootNode.NodeID - 1;
             intersectionTypeLookup.Set(rootNodeIndex, IntersectionType.Intersection);
 
+            int categoryStackNodeCount, polygonGroupCount;
 
-            // TODO: replace all code in this method, with the following method when it's done:
-            var stack = GetStack(intersectionTypeLookup, processedNode, rootNode);
-            Dump(processedNode, stack);
-
-
-            var categoryOperations = new List<CategoryStackNode>(CSGManager.GetMaxNodeIndex() * 6)
             {
-                new CategoryStackNode()
+                var stack = GetStack(intersectionTypeLookup, processedNode, rootNode);
+                
+                // TODO: remove the need for this
                 {
-                    input       = CategoryGroupIndex.First,
-                    node        = rootNode,
-                    routingRow  = new CategoryRoutingRow((CategoryGroupIndex)(1), (CategoryGroupIndex)(2), (CategoryGroupIndex)(3), (CategoryGroupIndex)(1))
-//					routingRow  = new CategoryRoutingRow((CategoryGroupIndex)(1), (CategoryGroupIndex)(2), (CategoryGroupIndex)(3), (CategoryGroupIndex)(4))
-				}
-            };
-
-            var stackIterator = new List<CSGStackData>();
-            AddToCSGStack(stackIterator, categoryOperations, rootNode,
-                            0 //= root StackNodeIndex 
-                            );
-
-            if (stackIterator.Count == 0)
-            {
-                var parent_routing_row = categoryOperations[0].routingRow;
-                parent_routing_row.RouteAllFrom(parent_routing_row, CategoryIndex.Outside);
-                return;
-            }
-
-            var polygonGroupCount = CategoryRoutingRow.Length;
-            bool haveGonePastSelf = false;
-            while (stackIterator.Count > 0)
-            {
-                var currentStack = stackIterator[stackIterator.Count - 1];
-                var sibling_index = currentStack.currentSiblingIndex;
-                var first_sibling_index = currentStack.firstSiblingIndex;
-                var categorization_node = currentStack.parentNode;
-                var stack_node_counter = currentStack.stackNodeCount;
-                var current_stack_node_index = currentStack.parentStackNodeIndex;
-
-                if (sibling_index < first_sibling_index)
-                {
-                    stackIterator.RemoveAt(stackIterator.Count - 1);
-                    continue;
-                }
-
-                if (!haveGonePastSelf && sibling_index == first_sibling_index && first_sibling_index > 0)
-                {
-                    // Ensure we haven't passed ourselves in one of the brushes we skipped ..
-                    for (int i = 0; !haveGonePastSelf && i < first_sibling_index; i++)
-                        haveGonePastSelf = (categorization_node[i] == processedNode);
-                }
-
-                var child_node = categorization_node[sibling_index];
-                var child_operation_type = child_node.Operation;
-                var child_node_type = child_node.Type;
-                var child_node_is_brush = (child_node_type & CSGNodeType.Brush) == CSGNodeType.Brush;
-
-                var prev_stack_node_count = categoryOperations.Count;
-                var categoryNodes = child_node_is_brush ? sRoutingTable : categoryOperations;
-
-                if (sibling_index != first_sibling_index)
-                {
-                    for (int stack_node_iterator = stack_node_counter - 1; stack_node_iterator >= 0; stack_node_iterator--)
+                    int lastNodeIndex = stack.Length - 1;
+                    while (lastNodeIndex > 0)
                     {
-                        var parent_stack_node_index = current_stack_node_index - stack_node_iterator;
-                        var category_stack_node = categoryOperations[parent_stack_node_index];
-                        var parent_routing_row = category_stack_node.routingRow;
-                        category_stack_node.routingRow = CategorizeNode(categoryNodes, intersectionTypeLookup, parent_routing_row, child_node, processedNode, child_node_type, child_operation_type, ref polygonGroupCount, haveGonePastSelf);
-                        categoryOperations[parent_stack_node_index] = category_stack_node;
+                        if (lastNodeIndex <= 0 ||
+                            stack[lastNodeIndex - 1].node != stack[lastNodeIndex].node)
+                            break;
+                        lastNodeIndex--;
                     }
-                } else
-                {
-                    //var 	prev_brush_count = (int)routingTable.Count;
-                    for (int stack_node_iterator = stack_node_counter - 1; stack_node_iterator >= 0; stack_node_iterator--)
+
+                    for (int n = lastNodeIndex; n < stack.Length; n++)
                     {
-                        var parent_stack_node_index = current_stack_node_index - stack_node_iterator;
-                        var category_stack_node = categoryOperations[parent_stack_node_index];
-                        var parent_routing_row = category_stack_node.routingRow;
-                        var input_polygon_group_index = category_stack_node.input;
-                        category_stack_node.routingRow = CategorizeFirstNode(categoryNodes, intersectionTypeLookup, parent_routing_row, input_polygon_group_index, child_node, processedNode, child_node_type, child_operation_type, haveGonePastSelf);
-                        categoryOperations[parent_stack_node_index] = category_stack_node;
+                        var stackNode = stack[n];
+                        var routingRow = stackNode.routingRow;
+                        for (int r = 0; r < CategoryRoutingRow.Length; r++)
+                            routingRow[r]++;
+                        stackNode.routingRow = routingRow;
+                        stack[n] = stackNode;
                     }
                 }
 
-                if (child_node == processedNode)
-                    haveGonePastSelf = true;
-
-                currentStack.currentSiblingIndex--;
-
-                if (child_node_is_brush)
-                    continue;
-
-                var curr_stack_node_count = categoryOperations.Count;
-
-                if (prev_stack_node_count == curr_stack_node_count)
-                    continue;
-
-                var categorizationNodeIndex = categorization_node.NodeID - 1;
-                var intersectionType = intersectionTypeLookup.Get(categorizationNodeIndex);
-                UnityEngine.Debug.Assert(intersectionType != IntersectionType.InvalidValue, $"intersectionType == IntersectionType.InvalidValue");
-                if (intersectionType == IntersectionType.NoIntersection)
-                    continue;
-
-                AddToCSGStack(stackIterator, categoryOperations, child_node, (int)curr_stack_node_count - 1);
-            }
-
-            var categoryStackNodeCount = (int)sRoutingTable.Count;
-
-#if USE_OPTIMIZATIONS
-            // FIXME: fails sometimes
-            OptimizeCategorizationTable(categoryStackNodeCount);
-            categoryStackNodeCount = (int)sRoutingTable.Count;
+#if SHOW_DEBUG_MESSAGES
+                if (processedNode.NodeID == kDebugNode || kDebugNode == -1)
+                    Dump(processedNode, stack);
 #endif
-
-            if (categoryStackNodeCount == 0)
-            {
-                polygonGroupCount = (CategoryRoutingRow.Length + 1);
-                return;
+                sRoutingTable.AddRange(stack);
             }
-
-
-            // TODO:	still possible to have first node be itself, all its destination are set to outside
-            //			node could be removed
-
-
-            sRoutingTable.Reverse();
-            /*
-            Debug.Log($"-- {processedNode}");
-            for (int i = 0; i < sRoutingTable.Count; i++)
-            {
-                Debug.Log($"{i}/{sRoutingTable.Count}: {sRoutingTable[i]}");
-            }*/
-            ReorderIndices();
 
             categoryStackNodeCount = (int)sRoutingTable.Count;
 
@@ -536,7 +141,6 @@ found:
             sInputs.Clear();
             sRoutingRows.Clear();
             sIntersectionLoops.Clear();
-            //          var nodes = new List<int>();
             for (int i = 0; i < sRoutingTable.Count;)
             {
                 var cutting_node = sRoutingTable[i].node;
@@ -547,7 +151,6 @@ found:
                 int start_index = i;
                 do
                 {
-                    //                  nodes.Add(cutting_node_id);
                     sInputs.Add(sRoutingTable[i].input);
                     sRoutingRows.Add(sRoutingTable[i].routingRow);
                     i++;
@@ -570,252 +173,61 @@ found:
             routingTable.intersectionLoops = sIntersectionLoops.ToArray();
         }
 
-        static void OptimizeCategorizationTable(int categoryStackNodeCount)
-        {
-            //
-            // Remove redundant nodes
-            //
-
-            //
-            // Remove nodes that have a polygon destination that is unreachable
-            //
-            sActiveInputs.Clear();
-            sActiveInputs.Add(CategoryGroupIndex.First);
-            for (int i = categoryStackNodeCount - 1; i >= 0; i--)
-            {
-                var row = sRoutingTable[i].routingRow;
-                for (int c = 0; c < CategoryRoutingRow.Length; c++)
-                    sActiveInputs.Add(row[c]);
-            }
-
-            for (int i = categoryStackNodeCount - 1; i >= 0; i--)
-            {
-                var input = sRoutingTable[i].input;
-                if (sActiveInputs.Contains(input))
-                    continue;
-
-                var item = sRoutingTable[i];
-                item.SetInvalid();
-                sRoutingTable[i] = item;
-            }
-
-
-            //
-            // Remove nodes where all its destinations go to the same location
-            //
-            int offset;
-            offset = 0;
-
-            // NOTE: causes artifacts?
-            /*
-            for (int i = 0; i < categoryStackNodeCount; i++)
-            {
-                var destination = sRoutingTable[i].routingRow[0];
-                if (destination == CategoryGroupIndex.Invalid ||
-                    !sRoutingTable[i].routingRow.AreAllTheSame())
-                    continue;
-
-                var input = sRoutingTable[i].input;
-                var source = input;
-                if (input == CategoryGroupIndex.First)
-                {
-                    if (destination <= (CategoryGroupIndex)CategoryRoutingRow.Length)
-                        continue;
-                    for (int j = i - 1; j >= 0; j--)
-                    {
-                        if (sRoutingTable[j].input == CategoryGroupIndex.Invalid)
-                            continue;
-                        if (sRoutingTable[j].input == destination)
-                        {
-                            var categoryStackNode = sRoutingTable[j];
-                            categoryStackNode.input = source;
-                            sRoutingTable[j] = categoryStackNode;
-                        }
-
-                        var row = sRoutingTable[j].routingRow;
-                        for (int c = 0; c < CategoryRoutingRow.Length; c++)
-                        {
-                            if (row[c] == destination) row[c] = source;
-                        }
-                    }
-                } else
-                {
-                    for (int j = offset; j < categoryStackNodeCount; j++)
-                    {
-                        if (sRoutingTable[j].input == source)
-                        {
-                            var categoryStackNode = sRoutingTable[j];
-                            categoryStackNode.input = destination;
-                            sRoutingTable[j] = categoryStackNode;
-                        }
-
-                        var row = sRoutingTable[j].routingRow;
-                        for (int c = 0; c < CategoryRoutingRow.Length; c++)
-                        {
-                            if (row[c] == source) row[c] = destination;
-                        }
-                    }
-                }
-
-                var item = sRoutingTable[i];
-                item.SetInvalid();
-                sRoutingTable[i] = item;
-            }
-            */
-
-
-            //
-            // Remove nodes that have a polygon destination that is unreachable
-            //
-            for (int n = 0; n < categoryStackNodeCount / 2; n++) // TODO: solve this a better way
-            {
-                sActiveInputs.Clear();
-                sActiveInputs.Add(CategoryGroupIndex.First);
-                for (int i = categoryStackNodeCount - 1; i >= 0; i--)
-                {
-                    var row = sRoutingTable[i].routingRow;
-                    for (int c = 0; c < CategoryRoutingRow.Length; c++)
-                        sActiveInputs.Add(row[c]);
-                }
-
-                for (int i = categoryStackNodeCount - 1; i >= 0; i--)
-                {
-                    var input = sRoutingTable[i].input;
-                    if (sActiveInputs.Contains(input))
-                        continue;
-
-                    var item = sRoutingTable[i];
-                    item.SetInvalid();
-                    sRoutingTable[i] = item;
-                }
-            }
-
-            //
-            // Same as above but in opposite direction to handle some edge cases
-            //
-            offset = 0;
-            for (int i = categoryStackNodeCount - 1; i >= 0; i--)
-            {
-                var destination = sRoutingTable[i].routingRow[0];
-                if (destination >= CategoryGroupIndex.First)
-                {
-                    if (!sRoutingTable[i].routingRow.AreAllTheSame())
-                    {
-                        if (offset > 0)
-                        {
-                            sRoutingTable[i + offset] = sRoutingTable[i];
-                        }
-                        continue;
-                    }
-
-                    var input = sRoutingTable[i].input;
-                    var source = input;
-                    if (input == CategoryGroupIndex.First)
-                    {
-                        if (destination <= (CategoryGroupIndex)CategoryRoutingRow.Length)
-                            continue;
-                        for (int j = i - 1; j >= 0; j--)
-                        {
-                            if (sRoutingTable[j].input == CategoryGroupIndex.Invalid)
-                                continue;
-                            if (sRoutingTable[j].input == destination)
-                            {
-                                var categoryStackNode = sRoutingTable[j];
-                                categoryStackNode.input = source;
-                                sRoutingTable[j] = categoryStackNode;
-                            }
-
-                            var row = sRoutingTable[j].routingRow;
-                            for (int c = 0; c < CategoryRoutingRow.Length; c++)
-                            {
-                                if (row[c] == destination) row[c] = source;
-                            }
-                        }
-                    } else
-                    {
-                        for (int j = categoryStackNodeCount - 1; j >= offset; j--)
-                        {
-                            if (sRoutingTable[j].input == source)
-                            {
-                                var categoryStackNode = sRoutingTable[j];
-                                categoryStackNode.input = destination;
-                                sRoutingTable[j] = categoryStackNode;
-                            }
-
-                            var row = sRoutingTable[j].routingRow;
-                            for (int c = 0; c < CategoryRoutingRow.Length; c++)
-                            {
-                                if (row[c] == source) row[c] = destination;
-                            }
-                        }
-                    }
-                }
-                offset++;
-            }//*
-            if (offset > 0)
-            {
-                categoryStackNodeCount -= offset;
-                if (categoryStackNodeCount > 0 && offset > 0)
-                {
-                    for (int i = 0; i < categoryStackNodeCount; i++)
-                        sRoutingTable[i] = sRoutingTable[i + offset];
-                }
-                if (categoryStackNodeCount < sRoutingTable.Count)
-                    sRoutingTable.RemoveRange(categoryStackNodeCount, sRoutingTable.Count - categoryStackNodeCount);
-            }
-            //*/
-        }
-
-        // Make sure all indices are in order so we can simplify lookups
-        static void ReorderIndices()
-        {
-            if (sRoutingTable.Count < 1)
-                return;
-
-            var remap = new Dictionary<CategoryGroupIndex, CategoryGroupIndex>();
-            var index = RoutingLookup.kRoutingOffset;
-            for (int i = 0; i < sRoutingTable.Count; i++)
-            {
-                remap[sRoutingTable[i].input] = (CategoryGroupIndex)index;
-                index++;
-
-                var item = sRoutingTable[i];
-                var row = item.routingRow;
-                for (int n = 0; n < CategoryRoutingRow.Length; n++)
-                {
-                    if ((int)row[n] <= (int)CategoryIndex.LastCategory)
-                        row[n] = (CategoryGroupIndex)(-(int)row[n]);
-                }
-                item.routingRow = row;
-                sRoutingTable[i] = item;
-            }
-
-            remap[CategoryGroupIndex.First] = CategoryGroupIndex.First;
-            remap[CategoryGroupIndex.Invalid] = CategoryGroupIndex.Invalid;
-            remap[(CategoryGroupIndex)(-(int)(CategoryIndex.Inside))] = (CategoryGroupIndex)(int)CategoryIndex.Inside;
-            remap[(CategoryGroupIndex)(-(int)(CategoryIndex.Aligned))] = (CategoryGroupIndex)(int)CategoryIndex.Aligned;
-            remap[(CategoryGroupIndex)(-(int)(CategoryIndex.ReverseAligned))] = (CategoryGroupIndex)(int)CategoryIndex.ReverseAligned;
-            remap[(CategoryGroupIndex)(-(int)(CategoryIndex.Outside))] = (CategoryGroupIndex)(int)CategoryIndex.Outside;
-
-            for (int i = 0; i < sRoutingTable.Count; i++)
-            {
-                var item = sRoutingTable[i];
-                var row = item.routingRow;
-                item.input = remap[item.input];
-                for (int n = 0; n < CategoryRoutingRow.Length; n++)
-                {
-                    if (remap.ContainsKey(row[n]))
-                        row[n] = remap[row[n]];
-                }
-                item.routingRow = row;
-                sRoutingTable[i] = item;
-            }
-        }
-
-
 
 
         #region Operation tables
+#if HAVE_SELF_CATEGORIES
+        static readonly CategoryRoutingRow[][] operationTables = new[]
+        {
+            // Additive set operation on polygons: output = (left-node || right-node)
+            // Defines final output from combination of categorization of left and right node
+            new CategoryRoutingRow[] // Additive Operation
+            {
+	            //             	  right node                                                                                     |
+	            //                                  other       self            self             other                           |
+	            //                  inside          aligned     aligned		    reverse-aligned  reverse-aligned  outside        |     left-node       
+	            //-----------------------------------------------------------------------------------------------------------------------------------------
+	            new CategoryRoutingRow( CategoryIndex.Inside,         CategoryIndex.Inside,         CategoryIndex.Inside,               CategoryIndex.Inside,               CategoryIndex.Inside,           CategoryIndex.Inside            ), // inside
+	            new CategoryRoutingRow( CategoryIndex.Inside,         CategoryIndex.Aligned,        CategoryIndex.SelfAligned,          CategoryIndex.Inside,               CategoryIndex.Inside,           CategoryIndex.Aligned           ), // other-aligned
+	            new CategoryRoutingRow( CategoryIndex.Inside,         CategoryIndex.Aligned,        CategoryIndex.SelfAligned,          CategoryIndex.Inside,               CategoryIndex.Inside,           CategoryIndex.SelfAligned       ), // self-aligned
+	            new CategoryRoutingRow( CategoryIndex.Inside,         CategoryIndex.Inside,         CategoryIndex.Inside,               CategoryIndex.SelfReverseAligned,   CategoryIndex.ReverseAligned,   CategoryIndex.SelfReverseAligned), // self-reverse-aligned
+	            new CategoryRoutingRow( CategoryIndex.Inside,         CategoryIndex.Inside,         CategoryIndex.Inside,               CategoryIndex.SelfReverseAligned,   CategoryIndex.ReverseAligned,   CategoryIndex.ReverseAligned    ), // other-reverse-aligned
+	            new CategoryRoutingRow( CategoryIndex.Inside,         CategoryIndex.Aligned,        CategoryIndex.SelfAligned,          CategoryIndex.SelfReverseAligned,   CategoryIndex.ReverseAligned,   CategoryIndex.Outside           )  // outside
+            },
+
+            // Subtractive set operation on polygons: output = !(!left-node || right-node)
+            // Defines final output from combination of categorization of left and right node
+            new CategoryRoutingRow[] // Subtractive Operation
+            {
+	            //             	  right node                                                                                     |
+	            //                                  other       self            self             other                           |
+	            //             	    inside          aligned     aligned		    reverse-aligned  reverse-aligned  outside        |     left-node       
+	            //-----------------------------------------------------------------------------------------------------------------------------------------
+	            new CategoryRoutingRow( CategoryIndex.Outside,        CategoryIndex.ReverseAligned, CategoryIndex.SelfReverseAligned,   CategoryIndex.SelfAligned,          CategoryIndex.Aligned,          CategoryIndex.Inside            ), // inside
+	            new CategoryRoutingRow( CategoryIndex.Outside,        CategoryIndex.Outside,        CategoryIndex.Outside,              CategoryIndex.SelfAligned,          CategoryIndex.Aligned,          CategoryIndex.Aligned           ), // other-aligned
+	            new CategoryRoutingRow( CategoryIndex.Outside,        CategoryIndex.Outside,        CategoryIndex.Outside,              CategoryIndex.SelfAligned,          CategoryIndex.Aligned,          CategoryIndex.SelfAligned       ), // self-aligned
+	            new CategoryRoutingRow( CategoryIndex.Outside,        CategoryIndex.ReverseAligned, CategoryIndex.SelfReverseAligned,   CategoryIndex.Outside,              CategoryIndex.Outside,          CategoryIndex.SelfReverseAligned), // self-reverse-aligned
+	            new CategoryRoutingRow( CategoryIndex.Outside,        CategoryIndex.ReverseAligned, CategoryIndex.SelfReverseAligned,   CategoryIndex.Outside,              CategoryIndex.Outside,          CategoryIndex.ReverseAligned    ), // other-reverse-aligned
+	            new CategoryRoutingRow( CategoryIndex.Outside,        CategoryIndex.Outside,        CategoryIndex.Outside,              CategoryIndex.Outside,              CategoryIndex.Outside,          CategoryIndex.Outside           )  // outside
+            },
+
+            // Common set operation on polygons: output = !(!left-node || !right-node)
+            // Defines final output from combination of categorization of left and right node
+            new CategoryRoutingRow[] // Intersection Operation
+            {
+	            //             	  right node                                                                                     |
+	            //             	                    other       self            self             other                           |
+	            //             	    inside          aligned     aligned		    reverse-aligned  reverse-aligned  outside        |     left-node       
+	            //----------------------------------------------------------------------------------------------------------------------------
+	            new CategoryRoutingRow( CategoryIndex.Inside,               CategoryIndex.Aligned,    CategoryIndex.SelfAligned,    CategoryIndex.SelfReverseAligned,   CategoryIndex.ReverseAligned,   CategoryIndex.Outside        ), // inside
+	            new CategoryRoutingRow( CategoryIndex.Aligned,              CategoryIndex.Aligned,    CategoryIndex.SelfAligned,    CategoryIndex.Outside,              CategoryIndex.Outside,          CategoryIndex.Outside        ), // other-aligned
+	            new CategoryRoutingRow( CategoryIndex.SelfAligned,          CategoryIndex.Aligned,    CategoryIndex.SelfAligned,    CategoryIndex.Outside,              CategoryIndex.Outside,          CategoryIndex.Outside        ), // self-aligned
+	            new CategoryRoutingRow( CategoryIndex.SelfReverseAligned,   CategoryIndex.Outside,    CategoryIndex.Outside,        CategoryIndex.SelfReverseAligned,   CategoryIndex.ReverseAligned,   CategoryIndex.Outside        ), // self-reverse-aligned
+	            new CategoryRoutingRow( CategoryIndex.ReverseAligned,       CategoryIndex.Outside,    CategoryIndex.Outside,        CategoryIndex.SelfReverseAligned,   CategoryIndex.ReverseAligned,   CategoryIndex.Outside        ), // other-reverse-aligned
+	            new CategoryRoutingRow( CategoryIndex.Outside,              CategoryIndex.Outside,    CategoryIndex.Outside,        CategoryIndex.Outside,              CategoryIndex.Outside,          CategoryIndex.Outside        )  // outside
+            }
+        };
+#else
         static readonly CategoryRoutingRow[][] operationTables = new[]
         {
             // Additive set operation on polygons: output = (left-node || right-node)
@@ -860,117 +272,97 @@ found:
 			    new CategoryRoutingRow( CategoryIndex.Outside,        CategoryIndex.Outside,        CategoryIndex.Outside,        CategoryIndex.Outside        )  // outside
             }
         };
-        #endregion
+        static readonly CategoryRoutingRow[][] simpleOperationTables = new[]
+        {
+            // Additive set operation on polygons: output = (left-node || right-node)
+            // Defines final output from combination of categorization of left and right node
+            new CategoryRoutingRow[] // Additive Operation
+            {
+			    //                      right node                                                                                                             |
+			    //                                                    other                         other                                                      |
+			    //                      inside                        aligned                       reverse-aligned               outside                      |     left-node       
+			    //                      --------------------------------------------------------------------------------------------------------------------------------------------------
+			    new CategoryRoutingRow( CategoryIndex.Inside,         CategoryIndex.Inside,         CategoryIndex.Inside,         CategoryIndex.Inside         ), // inside
+			    new CategoryRoutingRow( CategoryIndex.Inside,         CategoryIndex.Inside,         CategoryIndex.Inside,         CategoryIndex.Inside         ), // other-aligned
+			    new CategoryRoutingRow( CategoryIndex.Inside,         CategoryIndex.Inside,         CategoryIndex.Inside,         CategoryIndex.Inside         ), // other-reverse-aligned
+			    new CategoryRoutingRow( CategoryIndex.Inside,         CategoryIndex.Inside,         CategoryIndex.Inside,         CategoryIndex.Outside        )  // outside
+            },
+            
+		    // Subtractive set operation on polygons: output = !(!left-node || right-node)
+		    // Defines final output from combination of categorization of left and right node
+            new CategoryRoutingRow[] // Subtractive Operation
+            {
+			    //                      right node                                                                                                             |
+			    //                                                    other                         other                                                      |
+			    //                      inside                        aligned                       reverse-aligned               outside                      |     left-node       
+			    //                      --------------------------------------------------------------------------------------------------------------------------------------------------
+			    new CategoryRoutingRow( CategoryIndex.Outside,        CategoryIndex.Inside,         CategoryIndex.Inside,         CategoryIndex.Inside         ), // inside
+			    new CategoryRoutingRow( CategoryIndex.Outside,        CategoryIndex.Outside,        CategoryIndex.Inside,         CategoryIndex.Inside         ), // other-aligned
+			    new CategoryRoutingRow( CategoryIndex.Outside,        CategoryIndex.Inside,         CategoryIndex.Outside,        CategoryIndex.Inside         ), // other-reverse-aligned
+			    new CategoryRoutingRow( CategoryIndex.Outside,        CategoryIndex.Outside,        CategoryIndex.Outside,        CategoryIndex.Outside        )  // outside
+            },
+            
+		    // Common set operation on polygons: output = !(!left-node || !right-node)
+		    // Defines final output from combination of categorization of left and right node
+            new CategoryRoutingRow[] // Intersection Operation
+            {
+			    //                      right node                                                                                                             |
+			    //                                                    other                         other                                                      |
+			    //                      inside                        aligned                       reverse-aligned               outside                      |     left-node       
+			    //                      --------------------------------------------------------------------------------------------------------------------------------------------------
+			    new CategoryRoutingRow( CategoryIndex.Inside,         CategoryIndex.Inside,         CategoryIndex.Inside,         CategoryIndex.Outside        ), // inside
+			    new CategoryRoutingRow( CategoryIndex.Inside,         CategoryIndex.Inside,         CategoryIndex.Outside,        CategoryIndex.Outside        ), // other-aligned
+			    new CategoryRoutingRow( CategoryIndex.Inside,         CategoryIndex.Outside,        CategoryIndex.Inside,         CategoryIndex.Outside        ), // other-reverse-aligned
+			    new CategoryRoutingRow( CategoryIndex.Outside,        CategoryIndex.Outside,        CategoryIndex.Outside,        CategoryIndex.Outside        )  // outside
+            }
+        };
+#endif
+#endregion
 
 
         static readonly CategoryStackNode[] sEmptyStack = new CategoryStackNode[] { };
 
-        static CategoryRoutingRow ApplyOperation(CategoryRoutingRow[] table, CategoryIndex left, in CategoryRoutingRow right)
+        static CategoryRoutingRow[] GetOperationTable(CSGOperationType operation, bool useFullOperationTables)
         {
-            return new CategoryRoutingRow(table[(int)left][right[0]],
-                                          table[(int)left][right[1]],
-                                          table[(int)left][right[2]],
-                                          table[(int)left][right[3]]);
-        }
-
-        static CategoryStackNode[] ApplyOperation(CSGOperationType operation, CategoryIndex left, CategoryStackNode[] right)
-        {
-            if (operation == CSGOperationType.Invalid)
-                return right;
-
-            if (operation == CSGOperationType.Additive && left == CategoryIndex.Outside)
-                return right;
-
-            var table = GetOperationTable(operation);
-            return ApplyOperation(table, left, right);
-        }
-
-        static CategoryStackNode[] ApplyOperation(CategoryRoutingRow[] table, CategoryIndex left, CategoryStackNode[] right)
-        {
-            if (right.Length == 0)
-                return sEmptyStack;
-
-            var lastNode = right[right.Length - 1].node;
-            ApplyOperation(table, left, right[right.Length - 1].routingRow);
-            for (int r = right.Length - 2; r >= 0; r--)
-            {
-                if (right[r].node != lastNode)
-                    break;
-                ApplyOperation(table, left, right[r].routingRow);
-            }
-            return right;
-        }
-
-        static CategoryRoutingRow[] GetOperationTable(CSGOperationType operation)
-        {
+#if !HAVE_SELF_CATEGORIES
+#if USE_HALF_OPERATION_TABLE
+            if (!useFullOperationTables)
+                return simpleOperationTables[(int)operation];
+#endif
+#endif
             return operationTables[(int)operation];
         }
 
-        static void Dump(CSGTreeNode processedNode, CategoryStackNode[] stack)
-        {
-            if (stack == null)
-            {
-                Debug.Log($"processedNode: {processedNode} null");
-                return;
-            }
-            if (stack.Length == 0)
-            {
-                Debug.Log($"processedNode: {processedNode} stack.Length == 0");
-                return;
-            }
-            var stringBuilder = new System.Text.StringBuilder();
-            for (int i = 0; i < stack.Length; i++)
-                stringBuilder.AppendLine($"[{i}]: {stack[i]}");
-            Debug.Log($"processedNode: {processedNode}\n{stringBuilder.ToString()}");
-        }
-
-        static void Dump(CategoryStackNode[] stack)
-        {
-            if (stack == null)
-            {
-                Debug.Log($"---- null");
-                return;
-            }
-            if (stack.Length == 0)
-            {
-                Debug.Log($"---- stack.Length == 0");
-                return;
-            }
-            var stringBuilder = new System.Text.StringBuilder();
-            for (int i = 0; i < stack.Length; i++)
-                stringBuilder.AppendLine($"[{i}]: {stack[i]}");
-            Debug.Log($"----\n{stringBuilder.ToString()}");
-        }
 
         static void FixUpIndices(List<CategoryStackNode> stack, Dictionary<int, int> remap, int start, int last)
         {
             for (int i = start; i < last; i++)
             {
-                var routingRow = stack[i].routingRow;
+                var categoryRow = stack[i];
+                var routingRow = categoryRow.routingRow;
 
-                if (!remap.ContainsKey((int)routingRow[0]) ||
-                    !remap.ContainsKey((int)routingRow[1]) ||
-                    !remap.ContainsKey((int)routingRow[2]) ||
-                    !remap.ContainsKey((int)routingRow[3]))
+                for (int r = 0; r < CategoryRoutingRow.Length; r++)
                 {
-                    Debug.Log("!");
-                    return;
+                    if (!remap.ContainsKey((int)routingRow[r])) { Debug.Assert(false); return; }
                 }
-                /*
-                routingRow[0] = (CategoryGroupIndex)remap[(int)routingRow[0]];
-                routingRow[1] = (CategoryGroupIndex)remap[(int)routingRow[1]];
-                routingRow[2] = (CategoryGroupIndex)remap[(int)routingRow[2]];
-                routingRow[3] = (CategoryGroupIndex)remap[(int)routingRow[3]];*/
+
+                for (int r = 0; r < CategoryRoutingRow.Length; r++)
+                    routingRow[r] = (CategoryGroupIndex)remap[(int)routingRow[r]];
+
+                categoryRow.routingRow = routingRow;
+                stack[i] = categoryRow;
             }
         }
 
-        static CategoryStackNode[] Combine(BrushIntersectionLookup intersectionTypeLookup, CSGTreeBrush processedNode, CSGTreeNode left, CSGTreeNode right, CSGOperationType operation)
+        static readonly List<CategoryStackNode> sCombineChildren    = new List<CategoryStackNode>();
+        static readonly HashSet<int>            sCombineUsedIndices = new HashSet<int>();
+        static readonly Dictionary<int, int>    sCombineIndexRemap  = new Dictionary<int, int>();
+
+        static CategoryStackNode[] Combine(BrushIntersectionLookup intersectionTypeLookup, CSGTreeBrush processedNode, CategoryStackNode[] leftStack, CategoryStackNode[] rightStack, CSGOperationType operation, ref bool useFullOperationTables, int depth)
         {
             if (operation == CSGOperationType.Invalid)
                 operation = CSGOperationType.Additive;
 
-            var leftStack   = GetStack(intersectionTypeLookup, processedNode, left);
-            var rightStack  = GetStack(intersectionTypeLookup, processedNode, right);
             if (leftStack.Length == 0) // left node has a branch without children or children are not intersecting with processedNode
             {
                 if (rightStack.Length == 0) // right node has a branch without children or children are not intersecting with processedNode
@@ -992,9 +384,9 @@ found:
             }
 
             // TODO: use different tables before and after we passed ourselves to avoid duplicates
-            var table       = GetOperationTable(operation);
-            int index       = 0;
-            int vIndex      = 0;
+            var operationTable  = GetOperationTable(operation, useFullOperationTables);
+            int index           = 0;
+            int vIndex          = 0;
             
             var firstNode   = rightStack[0].node;
 
@@ -1016,19 +408,39 @@ found:
             routingSteps.Add(counter);
 
 
-            var children    = new List<CategoryStackNode>();
-            children.AddRange(leftStack);
+            sCombineChildren.Clear();
+            sCombineChildren.AddRange(leftStack);
 
-            int prevNodeIndex = children.Count - 1;
+            int prevNodeIndex = sCombineChildren.Count - 1;
             while (prevNodeIndex > 0)
             {
-                if (children[prevNodeIndex - 1].node != children[prevNodeIndex].node)
+                if (prevNodeIndex <= 0 ||
+                    sCombineChildren[prevNodeIndex - 1].node != sCombineChildren[prevNodeIndex].node)
                     break;
                 prevNodeIndex--;
             }
-            int startNodeIndex = children.Count;
+            int startNodeIndex = sCombineChildren.Count;
 
-            var indexRemap  = new Dictionary<int, int>();
+            sCombineUsedIndices.Clear();
+            for (int p = prevNodeIndex; p < startNodeIndex; p++)
+            {
+                for (int t = 0; t < CategoryRoutingRow.Length; t++)
+                    sCombineUsedIndices.Add((int)sCombineChildren[p].routingRow[t]);
+            }
+            if (startNodeIndex == 0)
+            {
+                sCombineUsedIndices.Add(0);
+                sCombineUsedIndices.Add(1);
+                sCombineUsedIndices.Add(2);
+                sCombineUsedIndices.Add(3);
+            }
+            /*
+            var usedIndicesArray = usedIndices.ToArray();
+            for (int t = 0; t < usedIndicesArray.Length; t++)
+                Debug.Log(usedIndicesArray[t]);
+            Debug.Log($"{prevNodeIndex} {startNodeIndex} {usedIndicesArray.Length}");
+            */
+            sCombineIndexRemap.Clear();
 
             int nodeIndex = 1;
             prevNode = firstNode;
@@ -1036,114 +448,213 @@ found:
             {
                 if (prevNode != rightStack[r].node)
                 {
-                    if (prevNodeIndex >= 0 && indexRemap.Count > 0)
-                        FixUpIndices(children, indexRemap, prevNodeIndex, startNodeIndex);
+#if USE_OPTIMIZATIONS
+                    //Debug.Log($"[{r}/{rightStack.Length}] &");
+                    if (//nodeIndex > 1 && 
+                        prevNodeIndex >= 0 && sCombineIndexRemap.Count > 0)
+                    {
+                        FixUpIndices(sCombineChildren, sCombineIndexRemap, prevNodeIndex, startNodeIndex);
+#if SHOW_DEBUG_MESSAGES
+                        if (processedNode.NodeID == kDebugNode || kDebugNode == -1)
+                            Dump(sCombineChildren.ToArray(), depth);
+#endif
+                    }
+#endif
 
                     prevNodeIndex = startNodeIndex;
-                    startNodeIndex = children.Count;
+                    startNodeIndex = sCombineChildren.Count;
                     index = 0; vIndex = 0; nodeIndex++;
                     prevNode = rightStack[r].node;
-                    indexRemap.Clear();
+                    sCombineIndexRemap.Clear();
+
+                    sCombineUsedIndices.Clear();
+                    for (int p = prevNodeIndex; p < startNodeIndex; p++)
+                    {
+                        for (int t = 0; t < CategoryRoutingRow.Length; t++)
+                            sCombineUsedIndices.Add((int)sCombineChildren[p].routingRow[t]);
+                    }
                 }
 
                 CategoryRoutingRow routingRow;
                 int routingOffset = 0;
-                if (nodeIndex >= routingSteps.Count)
+                if (nodeIndex >= routingSteps.Count) // last node in right stack
                 {
+                    int ncount = 0;
+                    var startR = r;
                     // Duplicate route multiple times, bake operation into table
                     for (int t = 0; t < CategoryRoutingRow.Length; t++)
                     {
-                        // Fix up output of last node to include operation between
-                        // last left and last right.
-                        // We don't add a routingOffset here since this might be the last node & 
-                        // we don't even know if there is a next node at this point.
-                        routingRow = ApplyOperation(table, (CategoryIndex)t, rightStack[r].routingRow);
-
-                        int foundIndex = -1;/*
-                        for (int n = startNodeIndex; n < children.Count; n++)
+                        for (r = startR; r < rightStack.Length; r++)
                         {
-                            Debug.Assert(rightStack[r].node == children[n].node);
-                            if (children[n].routingRow.Equals(routingRow))
+                            // Fix up output of last node to include operation between
+                            // last left and last right.
+                            // We don't add a routingOffset here since this might be the last node & 
+                            // we don't even know if there is a next node at this point.
+                            routingRow = new CategoryRoutingRow(operationTable, (CategoryIndex)t, rightStack[r].routingRow); // applies operation
+
+                            int foundIndex = -1;
+#if USE_OPTIMIZATIONS
+                            if (sCombineUsedIndices.Contains(vIndex))
+#endif
                             {
-                                foundIndex = (int)children[n].input;
-                                break;
-                            }
-                        }*/
-
-                        // TODO: optimize the results, remove duplicates
-                        //          -> fixup links to these nodes backwards
-                        if (foundIndex == -1)
-                        { 
-                            children.Add( new CategoryStackNode()
+#if USE_OPTIMIZATIONS
+                                for (int n = startNodeIndex; n < sCombineChildren.Count; n++)
                                 {
-                                    node        = rightStack[r].node,
-                                    input       = (CategoryGroupIndex)index,
-                                    routingRow  = routingRow
-                                });
-                            foundIndex = index;
-                            index++;
-                        }
+                                    Debug.Assert(rightStack[r].node == sCombineChildren[n].node);
+                                    if (sCombineChildren[n].routingRow.Equals(routingRow))
+                                    {
+                                        foundIndex = (int)sCombineChildren[n].input;
+                                        break;
+                                    }
+                                }
+#endif
+                                if (foundIndex == -1)
+                                {
+                                    sCombineChildren.Add(new CategoryStackNode()
+                                    {
+                                        node = rightStack[r].node,
+                                        input = (CategoryGroupIndex)index,
+                                        routingRow = routingRow
+                                    });
+                                    foundIndex = index;
+                                    index++;
+                                }
+                            }
 
-                        indexRemap[vIndex] = foundIndex;
-                        vIndex++;
+                            sCombineIndexRemap[vIndex] = foundIndex;
+                            vIndex++;
+                            ncount++;
+                        }
                     }
+#if SHOW_DEBUG_MESSAGES
+                    //if (processedNode.NodeID == kDebugNode || kDebugNode == -1)
+                    //{
+                    //    Debug.Log($"[{startR}/{rightStack.Length}] {ncount} {vIndex} / {sCombineIndexRemap.Count} {rightStack[startR].node} {rightStack.Length - startR} +");
+                    //    Dump(sCombineChildren.ToArray(), depth);
+                    //}
+#endif
                 } else
-                { 
+                {
+                    int ncount = 0;
                     int routingStep = routingSteps[nodeIndex];
                     // Duplicate route multiple times
                     for (int t = 0; t < CategoryRoutingRow.Length; t++, routingOffset += routingStep)
                     {
                         // Fix up routing to include offset b/c duplication
-                        routingRow = new CategoryRoutingRow(rightStack[r].routingRow[0] + routingOffset,
-                                                            rightStack[r].routingRow[1] + routingOffset,
-                                                            rightStack[r].routingRow[2] + routingOffset,
-                                                            rightStack[r].routingRow[3] + routingOffset);
+                        routingRow = rightStack[r].routingRow + routingOffset;
 
-                        int foundIndex = -1;/*
-                        for (int n = startNodeIndex; n < children.Count; n++)
+                        int foundIndex = -1;
+#if USE_OPTIMIZATIONS
+                        if (sCombineUsedIndices.Contains(vIndex))
+#endif
                         {
-                            Debug.Assert(rightStack[r].node == children[n].node);
-                            if (children[n].routingRow.Equals(routingRow))
+#if USE_OPTIMIZATIONS
+                            for (int n = startNodeIndex; n < sCombineChildren.Count; n++)
                             {
-                                foundIndex = (int)children[n].input;
-                                break;
+                                Debug.Assert(rightStack[r].node == sCombineChildren[n].node);
+                                if (sCombineChildren[n].routingRow.Equals(routingRow))
+                                {
+                                    foundIndex = (int)sCombineChildren[n].input;
+                                    break;
+                                }
                             }
-                        }*/
-
-                        // TODO: optimize the results, remove duplicates
-                        //          -> fixup links to these nodes backwards
-                        if (foundIndex == -1)
-                        {
-                            children.Add( new CategoryStackNode()
+#endif
+                            if (foundIndex == -1)
                             {
-                                node        = rightStack[r].node,
-                                input       = (CategoryGroupIndex)index,
-                                routingRow  = routingRow
-                            });
-                            foundIndex = index;
-                            index++;
+                                sCombineChildren.Add(new CategoryStackNode()
+                                {
+                                    node = rightStack[r].node,
+                                    input = (CategoryGroupIndex)index,
+                                    routingRow = routingRow
+                                });
+                                foundIndex = index;
+                                index++;
+                            }
                         }
 
-                        indexRemap[vIndex] = foundIndex;
+                        sCombineIndexRemap[vIndex] = foundIndex;
                         vIndex++;
+                        ncount++;
                     }
+#if SHOW_DEBUG_MESSAGES
+                    //if (processedNode.NodeID == kDebugNode || kDebugNode == -1)
+                    //{
+                    //    Debug.Log($"[{r}/{rightStack.Length}] {ncount} {vIndex} / {sCombineIndexRemap.Count} {rightStack[r].node} -");
+                    //    Dump(sCombineChildren.ToArray(), depth);
+                    //}
+#endif
                 }
             }
-            if (prevNodeIndex >= 0 && indexRemap.Count > 0)
-                FixUpIndices(children, indexRemap, prevNodeIndex, startNodeIndex);
-            Dump(children.ToArray());
 
-            if (children.Count == 0)
+#if USE_OPTIMIZATIONS
+            if (//nodeIndex > 1 && 
+                prevNodeIndex >= 0 && sCombineIndexRemap.Count > 0)
+            {
+                FixUpIndices(sCombineChildren, sCombineIndexRemap, prevNodeIndex, startNodeIndex);
+#if SHOW_DEBUG_MESSAGES
+                if (processedNode.NodeID == kDebugNode || kDebugNode == -1)
+                    Dump(sCombineChildren.ToArray(), depth);
+#endif
+                bool allEqual = true;
+                sCombineIndexRemap.Clear();
+                for (int i = startNodeIndex; i < sCombineChildren.Count; i++)
+                {
+                    if (!sCombineChildren[i].routingRow.AreAllTheSame())
+                    {
+                        allEqual = false;
+                        break;
+                    }
+                    sCombineIndexRemap[(int)sCombineChildren[i].input] = (int)sCombineChildren[i].routingRow[0];
+                }
+                if (allEqual)
+                {
+                    sCombineChildren.RemoveRange(startNodeIndex, sCombineChildren.Count - startNodeIndex);
+                    //Debug.Log($"[-/{rightStack.Length}] remove last");
+                    FixUpIndices(sCombineChildren, sCombineIndexRemap, prevNodeIndex, startNodeIndex);
+#if SHOW_DEBUG_MESSAGES
+                    if (processedNode.NodeID == kDebugNode || kDebugNode == -1)
+                        Dump(sCombineChildren.ToArray(), depth);
+#endif
+                }
+            }
+
+            // When all the paths for the first node lead to the same destination, just remove it
+            while (sCombineChildren.Count > 1 && 
+                    sCombineChildren[0].node != sCombineChildren[1].node &&
+                    sCombineChildren[0].routingRow.AreAllValue(0))
+                sCombineChildren.RemoveAt(0);
+#endif
+
+#if SHOW_DEBUG_MESSAGES
+            if (processedNode.NodeID == kDebugNode || kDebugNode == -1)
+                Dump(sCombineChildren.ToArray(), depth);
+#endif
+
+            if (sCombineChildren.Count == 0)
                 return sEmptyStack;
-            return children.ToArray();
+
+            return sCombineChildren.ToArray();
         }
 
         static CategoryStackNode[] GetStack(BrushIntersectionLookup intersectionTypeLookup, CSGTreeBrush processedNode, CSGTreeNode node)
         {
+            bool useFullOperationTables = false;
+            var stack = GetStack(intersectionTypeLookup, processedNode, node, ref useFullOperationTables, 0);
+            if (stack == null ||
+                stack.Length == 0)
+                return new CategoryStackNode[] { new CategoryStackNode() { node = node, routingRow = CategoryRoutingRow.outside } };
+            return stack;
+        }
+
+        static CategoryStackNode[] GetStack(BrushIntersectionLookup intersectionTypeLookup, CSGTreeBrush processedNode, CSGTreeNode node, ref bool useFullOperationTables, int depth)
+        {
+            Debug.Assert(processedNode.Valid);
+            Debug.Assert(node.Valid);
+
             var nodeIndex           = node.nodeID - 1;
             var intersectionType    = intersectionTypeLookup.Get(nodeIndex);
             if (intersectionType == IntersectionType.NoIntersection)
-                return sEmptyStack;
+                return sEmptyStack;// new CategoryStackNode[] { new CategoryStackNode() { node = node, routingRow = CategoryRoutingRow.outside } };
 
             // TODO: use other intersection types
             //if (intersectionType == IntersectionType.AInsideB) return all_inside;
@@ -1155,49 +666,151 @@ found:
                 {
                     // All surfaces of processedNode are aligned with it's own surfaces, so all categories are Aligned
                     if (processedNode == node)
-                        return new CategoryStackNode[] { new CategoryStackNode() { node = node, routingRow = CategoryRoutingRow.aligned } };
+                    {
+                        useFullOperationTables = true; // switch to full operation tables after we encountered ourselves in the hierarchy
+                        return new CategoryStackNode[] { new CategoryStackNode() { node = node, routingRow = CategoryRoutingRow.selfAligned } };
+                    }
 
                     // Otherwise return identity categories (input == output)
-                    return new CategoryStackNode[] { new CategoryStackNode() { node = node, routingRow = CategoryRoutingRow.identity } };
+#if !HAVE_SELF_CATEGORIES
+                    if (!useFullOperationTables)
+                        return new CategoryStackNode[] { new CategoryStackNode() { node = node, routingRow = CategoryRoutingRow.insideOutside } };
+                    else
+#endif
+                        return new CategoryStackNode[] { new CategoryStackNode() { node = node, routingRow = CategoryRoutingRow.identity } };
                 }
                 default:
                 {
                     var nodeCount = node.Count;
                     if (nodeCount == 0)
-                        return sEmptyStack;
+                        return sEmptyStack;// new CategoryStackNode[] { new CategoryStackNode() { node = node, routingRow = CategoryRoutingRow.outside } };
 
                     // Skip all nodes that are not additive at the start of the branch since they will never produce any geometry
                     int firstIndex = 0;
-                    for (; firstIndex < nodeCount && node[firstIndex].Operation != CSGOperationType.Additive; firstIndex++)
+                    for (; firstIndex < nodeCount && node[firstIndex].Valid && node[firstIndex].Operation != CSGOperationType.Additive; firstIndex++)
                         firstIndex++;
 
-                    if ((nodeCount - firstIndex) == 0)
-                        return sEmptyStack;
+                    if ((nodeCount - firstIndex) <= 0)
+                        return sEmptyStack;// new CategoryStackNode[] { new CategoryStackNode() { node = node, routingRow = CategoryRoutingRow.outside } };
 
                     if ((nodeCount - firstIndex) == 1)
                     {
-                        var stack = GetStack(intersectionTypeLookup, processedNode, node[firstIndex]);
-                        
+                        var stack = GetStack(intersectionTypeLookup, processedNode, node[firstIndex], ref useFullOperationTables, depth + 1);
+
                         // Node operation is always Additive at this point, and operation would be performed against .. nothing ..
                         // Anything added with nothing is itself, so we don't need to apply an operation here.
                         //stack = ApplyOperation(node[firstIndex].Operation, CategoryIndex.Outside, stack);
 
+#if SHOW_DEBUG_MESSAGES
+                        if (processedNode.NodeID == kDebugNode || kDebugNode == -1)
+                            Dump(stack, depth, "stack return ");
+#endif
                         return stack;
                     } else
                     {
-                        var children = new List<CategoryStackNode>();
+//                      if (processedNode.NodeID == kDebugNode || kDebugNode == -1)
+//                          Debug.Log($"{new String(' ', depth)}stack start '{node[firstIndex]}' {useFullOperationTables}");
+                        var previousStack = GetStack(intersectionTypeLookup, processedNode, node[firstIndex], ref useFullOperationTables, depth + 1);
+//                      if (processedNode.NodeID == kDebugNode || kDebugNode == -1)
+//                          Debug.Log($"{new String(' ', depth)}stack end '{node[firstIndex]}' {useFullOperationTables}");
                         for (int i = firstIndex + 1; i < nodeCount; i++)
-                            children.AddRange(
+                        {
+                            if (!node[i].Valid)
+                                continue;
+#if SHOW_DEBUG_MESSAGES
+                            if (processedNode.NodeID == kDebugNode || kDebugNode == -1)
+                                Dump(previousStack, depth, $"before '{node[i-1]}' {node[i].Operation} '{node[i]}' {useFullOperationTables}");
+#endif
+                            var temp = useFullOperationTables;
+//                          if (processedNode.NodeID == kDebugNode || kDebugNode == -1)
+//                              Debug.Log($"{new String(' ', depth)}stack start '{node[i]}' {useFullOperationTables}");
+                            var currentStack = GetStack(intersectionTypeLookup, processedNode, node[i], ref temp, depth + 1);
+//                          if (processedNode.NodeID == kDebugNode || kDebugNode == -1)
+//                              Debug.Log($"{new String(' ', depth)}stack end '{node[i]}' {useFullOperationTables}");
+
+//                          if (processedNode.NodeID == kDebugNode || kDebugNode == -1)
+//                              Debug.Log($"{new String(' ', depth)}combine start");
+                            previousStack =
                                 Combine(
                                         intersectionTypeLookup, processedNode,
-                                        node[i - 1], node[i],
-                                        node[i].Operation
-                                ));
-                        return children.ToArray();
+                                        previousStack, currentStack,
+                                        node[i].Operation,
+                                        ref useFullOperationTables,
+                                        depth + 1
+                                );
+//                          if (processedNode.NodeID == kDebugNode || kDebugNode == -1)
+//                              Debug.Log($"{new String(' ', depth)}combine end");
+                            useFullOperationTables = temp || useFullOperationTables;
+#if SHOW_DEBUG_MESSAGES
+                            if (processedNode.NodeID == kDebugNode || kDebugNode == -1)
+                                Dump(previousStack, depth, $"after '{node[i - 1]}' {node[i].Operation} '{node[i]}' {useFullOperationTables}");
+#endif
+                        }
+                        return previousStack;
                     }
                 }
             }
         }
+
+#if SHOW_DEBUG_MESSAGES
+        static int kDebugNode = 2;
+        static void Dump(CSGTreeNode processedNode, CategoryStackNode[] stack, int depth = 0)
+        {
+            var space = new String(' ', depth);
+            if (stack == null)
+            {
+                Debug.Log($"{space}processedNode: {processedNode} null");
+                return;
+            }
+            if (stack.Length == 0)
+            {
+                Debug.Log($"{space}processedNode: {processedNode} stack.Length == 0");
+                return;
+            }
+            var stringBuilder = new System.Text.StringBuilder();
+            for (int i = 0; i < stack.Length; i++)
+                stringBuilder.AppendLine($"[{i}]: {stack[i]}");
+            Debug.LogWarning($"{space}processedNode: {processedNode}\n{stringBuilder.ToString()}");
+        }
+
+        static void Dump(CSGTreeNode processedNode, List<CategoryStackNode> stack, int depth = 0)
+        {
+            var space = new String(' ', depth);
+            if (stack == null)
+            {
+                Debug.Log($"{space}processedNode: {processedNode} null");
+                return;
+            }
+            if (stack.Count == 0)
+            {
+                Debug.Log($"{space}processedNode: {processedNode} stack.Count == 0");
+                return;
+            }
+            var stringBuilder = new System.Text.StringBuilder();
+            for (int i = 0; i < stack.Count; i++)
+                stringBuilder.AppendLine($"[{i}]: {stack[i]}");
+            Debug.LogWarning($"{space}processedNode: {processedNode}\n{stringBuilder.ToString()}");
+        }
+
+        static void Dump(CategoryStackNode[] stack, int depth = 0, string extra = "")
+        {
+            var space = new String(' ', depth);
+            if (stack == null)
+            {
+                Debug.Log($"{space}---- {extra}null");
+                return;
+            }
+            if (stack.Length == 0)
+            {
+                Debug.Log($"{space}---- {extra}stack.Length == 0");
+                return;
+            }
+            var stringBuilder = new System.Text.StringBuilder();
+            for (int i = 0; i < stack.Length; i++)
+                stringBuilder.AppendLine($"[{i}]: {stack[i]}");
+            Debug.Log($"{space}---- {extra}\n{stringBuilder.ToString()}");
+        }
+#endif
     }
 #endif
-}
+                }

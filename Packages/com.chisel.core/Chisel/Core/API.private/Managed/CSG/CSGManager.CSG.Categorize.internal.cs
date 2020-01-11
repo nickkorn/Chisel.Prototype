@@ -362,8 +362,8 @@ namespace Chisel.Core
         static readonly List<PointFlags> s_PointFlags1 = new List<PointFlags>();
         static readonly List<PointFlags> s_PointFlags2 = new List<PointFlags>();
 
-        static readonly List<CategoryIndex> s_EdgeFlags1 = new List<CategoryIndex>();
-        static readonly List<CategoryIndex> s_EdgeFlags2 = new List<CategoryIndex>();
+        static readonly List<EdgeCategory> s_EdgeFlags1 = new List<EdgeCategory>();
+        static readonly List<EdgeCategory> s_EdgeFlags2 = new List<EdgeCategory>();
 
         public static OperationResult PerformBooleanOperation(VertexSoup soup, Vector3 right, Vector3 forward, Loop polygon1, Loop polygon2, List<Loop> resultLoops, CSGOperationType operationType)
         {
@@ -468,13 +468,13 @@ namespace Chisel.Core
                 if ((s_PointFlags1[i] & PointFlags.On) != PointFlags.None)
                     onPointCount1++;
 
-                if (s_EdgeFlags1[i] == CategoryIndex.Aligned || s_EdgeFlags1[i] == CategoryIndex.ReverseAligned)
+                if (s_EdgeFlags1[i] == EdgeCategory.Aligned || s_EdgeFlags1[i] == EdgeCategory.ReverseAligned)
                     onEdgeCount1++;
 
-                if (s_EdgeFlags1[i] != CategoryIndex. Inside) notInsideEdgeCount1++;
-                if (s_EdgeFlags1[i] == CategoryIndex. Inside) insideEdgeCount1++;
-                if (s_EdgeFlags1[i] == CategoryIndex.Outside) outsideEdgeCount1++;
-                if (s_EdgeFlags1[i] != CategoryIndex.Outside) notOutsideEdgeCount1++;
+                if (s_EdgeFlags1[i] != EdgeCategory. Inside) notInsideEdgeCount1++;
+                if (s_EdgeFlags1[i] == EdgeCategory. Inside) insideEdgeCount1++;
+                if (s_EdgeFlags1[i] == EdgeCategory.Outside) outsideEdgeCount1++;
+                if (s_EdgeFlags1[i] != EdgeCategory.Outside) notOutsideEdgeCount1++;
             }
 
             int onPointCount2 = 0;
@@ -488,13 +488,13 @@ namespace Chisel.Core
                 if ((s_PointFlags2[i] & PointFlags.On) != PointFlags.None)
                     onPointCount2++;
 
-                if (s_EdgeFlags2[i] == CategoryIndex.Aligned || s_EdgeFlags2[i] == CategoryIndex.ReverseAligned)
+                if (s_EdgeFlags2[i] == EdgeCategory.Aligned || s_EdgeFlags2[i] == EdgeCategory.ReverseAligned)
                     onEdgeCount2++;
 
-                if (s_EdgeFlags2[i] != CategoryIndex. Inside) notInsideEdgeCount2++;
-                if (s_EdgeFlags2[i] == CategoryIndex. Inside) insideEdgeCount2++;
-                if (s_EdgeFlags2[i] == CategoryIndex.Outside) outsideEdgeCount2++;
-                if (s_EdgeFlags2[i] != CategoryIndex.Outside) notOutsideEdgeCount2++;
+                if (s_EdgeFlags2[i] != EdgeCategory. Inside) notInsideEdgeCount2++;
+                if (s_EdgeFlags2[i] == EdgeCategory. Inside) insideEdgeCount2++;
+                if (s_EdgeFlags2[i] == EdgeCategory.Outside) outsideEdgeCount2++;
+                if (s_EdgeFlags2[i] != EdgeCategory.Outside) notOutsideEdgeCount2++;
             }
 
 
@@ -551,7 +551,7 @@ namespace Chisel.Core
                         for (int i = 0; i < s_PointFlags1.Count; i++)
                         {
                             if ((s_PointFlags1[i] & PointFlags.On) == PointFlags.None &&
-                                s_EdgeFlags1[i] != CategoryIndex.Inside)
+                                s_EdgeFlags1[i] != EdgeCategory.Inside)
                             {
                                 found = false;
                                 break;
@@ -570,7 +570,7 @@ namespace Chisel.Core
                         for (int i = 0; i < s_PointFlags2.Count; i++)
                         {
                             if ((s_PointFlags2[i] & PointFlags.On) == PointFlags.None &&
-                                s_EdgeFlags2[i] != CategoryIndex.Inside)
+                                s_EdgeFlags2[i] != EdgeCategory.Inside)
                             {
                                 found = false;
                                 break;
@@ -590,7 +590,7 @@ namespace Chisel.Core
                         for (int i = 0; i < s_PointFlags1.Count; i++)
                         {
                             if ((s_PointFlags1[i] & PointFlags.On) == PointFlags.None &&
-                                s_EdgeFlags1[i] != CategoryIndex.Inside)
+                                s_EdgeFlags1[i] != EdgeCategory.Inside)
                             {
                                 found = false;
                                 break;
@@ -700,7 +700,7 @@ namespace Chisel.Core
             IntersectingCrossOver   // CSGOperationType.Intersecting == 2
         };
 
-        private static void DeterminePolygonCrossOvers(CSGOperationType operationType, List<CategoryIndex> edgeFlags, List<PointFlags> pointFlags, List<int> crossingToOtherLoop, ref int crossingCount, bool primary)
+        private static void DeterminePolygonCrossOvers(CSGOperationType operationType, List<EdgeCategory> edgeFlags, List<PointFlags> pointFlags, List<int> crossingToOtherLoop, ref int crossingCount, bool primary)
         {
             Debug.Assert(pointFlags.Count == edgeFlags.Count && crossingToOtherLoop.Count >= edgeFlags.Count);
 
@@ -833,7 +833,7 @@ namespace Chisel.Core
             }
         }
 
-        static void DetermineEdgeFlags(VertexSoup soup, List<CategoryIndex> edgeFlags1, List<PointFlags> pointFlags1, 
+        static void DetermineEdgeFlags(VertexSoup soup, List<EdgeCategory> edgeFlags1, List<PointFlags> pointFlags1, 
                                        List<ushort> indices1, List<int> point1CrossingToIndex2, Vector3 right, Vector3 forward,
                                        List<ushort> indices2, List<int> point2CrossingToIndex1, ref int insideCount)
         {
@@ -864,13 +864,13 @@ namespace Chisel.Core
                         if ((b2 - a2) == 1 ||
                             (a2 == point2CrossingToIndex1.Count - 1 && b2 == 0))
                         {
-                            edgeFlags1.Add(CategoryIndex.Aligned);
+                            edgeFlags1.Add(EdgeCategory.Aligned);
                             continue;
                         } else
                         if ((a2 - b2) == 1 ||
                             (b2 == point2CrossingToIndex1.Count - 1 && a2 == 0))
                         {
-                            edgeFlags1.Add(CategoryIndex.ReverseAligned);
+                            edgeFlags1.Add(EdgeCategory.ReverseAligned);
                             continue;
                         }
 
@@ -891,7 +891,7 @@ namespace Chisel.Core
                             if (degenerate_polygon)
                             {
                                 // TODO: how to determine if it's aligned or reverse aligned?
-                                edgeFlags1.Add(CategoryIndex.Aligned);
+                                edgeFlags1.Add(EdgeCategory.Aligned);
                                 continue;
                             }
                         }
@@ -901,11 +901,11 @@ namespace Chisel.Core
 
                 if (IsPointInPolygon(right, forward, indices2, soup, (vertices[indices1[a1]] + vertices[indices1[b1]]) * 0.5f))
                 {
-                    edgeFlags1.Add(CategoryIndex.Inside);
+                    edgeFlags1.Add(EdgeCategory.Inside);
                     insideCount++;
                 } else
                 {
-                    edgeFlags1.Add(CategoryIndex.Outside);
+                    edgeFlags1.Add(EdgeCategory.Outside);
                 }
             }
         }
@@ -1141,25 +1141,35 @@ namespace Chisel.Core
                 case CSGManagerPerformCSG.OperationResult.Outside: return;
 
                 case CSGManagerPerformCSG.OperationResult.Polygon2InsidePolygon1:
+                {
+                    // This new piece overrides the current loop
+                    if (surfaceLoop.Valid)
                     {
-                        // This new piece overrides the current loop
-                        if (surfaceLoop.Valid)
-                            loopsOnBrushSurface.Add(new Loop(surfaceLoop) { interiorCategory = newHoleCategory });
-                        surfaceLoop.ClearAllIndices();
-                        return;
+                        var newPolygon = new Loop(surfaceLoop) { interiorCategory = newHoleCategory };
+//                      Debug.Log($"<<{newPolygon.loopIndex} | {(CategoryIndex)newPolygon.interiorCategory}");
+                        loopsOnBrushSurface.Add(newPolygon);
                     }
+                    surfaceLoop.ClearAllIndices();
+                    return;
+                }
 
                 case CSGManagerPerformCSG.OperationResult.Overlapping:
+                {
+                    var newPolygon = new Loop(intersectionLoop) { interiorCategory = newHoleCategory };
+                    s_OverlappingArea.Add(newPolygon);
+                    break;
+                }
                 case CSGManagerPerformCSG.OperationResult.Polygon1InsidePolygon2:
-                    {
-                        s_OverlappingArea.Add(new Loop(intersectionLoop) { interiorCategory = newHoleCategory });
-                        break;
-                    }
+                {
+                    var newPolygon = new Loop(intersectionLoop) { interiorCategory = newHoleCategory };
+                    s_OverlappingArea.Add(newPolygon);
+                    break;
+                }
 
                 case CSGManagerPerformCSG.OperationResult.Cut:
-                    {
-                        break;
-                    }
+                {
+                    break;
+                }
             }
 
             // the output of cutting operations are both holes for the original polygon (categorized_loop)
@@ -1174,8 +1184,11 @@ namespace Chisel.Core
                     continue;
 
                 overlappingLoop.interiorCategory = newHoleCategory;
-                surfaceLoop.holes.Add(new Loop(overlappingLoop));  // but it is also a hole for our polygon
-                loopsOnBrushSurface.Add(overlappingLoop);               // this loop is a polygon on its own
+                var newPolygon = new Loop(overlappingLoop) { interiorCategory = newHoleCategory };
+//              Debug.Log($"<<{overlappingLoop.loopIndex} | {(CategoryIndex)overlappingLoop.interiorCategory}");
+//              Debug.Log($"<<{newPolygon.loopIndex} | {(CategoryIndex)newPolygon.interiorCategory}");
+                surfaceLoop.holes.Add(newPolygon);              // but it is also a hole for our polygon
+                loopsOnBrushSurface.Add(overlappingLoop);       // this loop is a polygon on its own
             }
         }
         #endregion
@@ -1210,8 +1223,8 @@ namespace Chisel.Core
                 var interiorCategory = categorized_loop.interiorCategory - 1;
 
                 // Don't bother processing holes when this polygon will not be visible
-                if ((interiorCategory != (CategoryGroupIndex)CategoryIndex.Aligned && 
-                     interiorCategory != (CategoryGroupIndex)CategoryIndex.ReverseAligned) ||
+                if ((interiorCategory != (CategoryGroupIndex)EdgeCategory.Aligned && 
+                     interiorCategory != (CategoryGroupIndex)EdgeCategory.ReverseAligned) ||
                     !categorized_loop.Valid)
                 {
                     // Just remove it since it won't be visible anyway
@@ -1463,6 +1476,8 @@ namespace Chisel.Core
                     }
                 }
 
+                //Debug.Log($"holes {baseloop.loopIndex} {holes.Count}");
+
                 baseloop.destroyed = new bool[baseloop.edges.Count];
                 for (int h1 = holes.Count - 1; h1 >= 0; h1--)
                 {
@@ -1536,8 +1551,8 @@ namespace Chisel.Core
                 loop2.edges.Count == 0)
                 return;
 
-            var categories1 = new CategoryIndex[loop1.edges.Count];
-            var categories2 = new CategoryIndex[loop2.edges.Count];
+            var categories1 = new EdgeCategory[loop1.edges.Count];
+            var categories2 = new EdgeCategory[loop2.edges.Count];
 
 
             // 1. there are edges with two identical vertex indices?
@@ -1571,9 +1586,9 @@ namespace Chisel.Core
             // TODO: reversed edges should cancel?
             for (int e = loop1.edges.Count - 1; e >= 0; e--)
             {
-                if (categories1[e] == CategoryIndex.Outside
-                    //|| categories1[e] == CategoryIndex.Aligned
-                    //|| categories1[e] == CategoryIndex.ReverseAligned
+                if (categories1[e] == EdgeCategory.Outside
+                    //|| categories1[e] == EdgeCategory.Aligned
+                    //|| categories1[e] == EdgeCategory.ReverseAligned
                     )
                     continue;
                 loop1.destroyed[e] = true;
@@ -1581,10 +1596,10 @@ namespace Chisel.Core
 
             for (int e = loop2.edges.Count - 1; e >= 0; e--)
             {
-                if (categories2[e] == CategoryIndex.Inside
-                    //|| categories1[e] == CategoryIndex.Outside
-                    //|| categories1[e] == CategoryIndex.Aligned
-                    //|| categories1[e] == CategoryIndex.ReverseAligned
+                if (categories2[e] == EdgeCategory.Inside
+                    //|| categories1[e] == EdgeCategory.Outside
+                    //|| categories1[e] == EdgeCategory.Aligned
+                    //|| categories1[e] == EdgeCategory.ReverseAligned
                     )
                     continue;
                 loop2.destroyed[e] = true;
@@ -1611,8 +1626,8 @@ namespace Chisel.Core
                 loop2.edges.Count == 0)
                 return;
 
-            var categories1 = new CategoryIndex[loop1.edges.Count];
-            var categories2 = new CategoryIndex[loop2.edges.Count];
+            var categories1 = new EdgeCategory[loop1.edges.Count];
+            var categories2 = new EdgeCategory[loop2.edges.Count];
 
 
             for (int e = 0; e < loop1.edges.Count; e++)
@@ -1628,9 +1643,9 @@ namespace Chisel.Core
 
             for (int e = loop1.edges.Count - 1; e >= 0; e--)
             {
-                if (categories1[e] == CategoryIndex.Outside
-                    //|| categories1[e] == CategoryIndex.ReverseAligned
-                    || categories1[e] == CategoryIndex.Aligned
+                if (categories1[e] == EdgeCategory.Outside
+                    //|| categories1[e] == EdgeCategory.ReverseAligned
+                    || categories1[e] == EdgeCategory.Aligned
                     )
                     continue;
                 loop1.destroyed[e] = true;
@@ -1638,9 +1653,9 @@ namespace Chisel.Core
 
             for (int e = loop2.edges.Count - 1; e >= 0; e--)
             {
-                if (categories2[e] == CategoryIndex.Outside
-                    //|| categories1[e] == CategoryIndex.ReverseAligned
-                    //|| categories1[e] == CategoryIndex.Aligned
+                if (categories2[e] == EdgeCategory.Outside
+                    //|| categories1[e] == EdgeCategory.ReverseAligned
+                    //|| categories1[e] == EdgeCategory.Aligned
                     )
                     continue;
                 loop2.destroyed[e] = true;

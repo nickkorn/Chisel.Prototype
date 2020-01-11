@@ -634,9 +634,11 @@ namespace Chisel.Core
                 for (int l = 0; l < surfaceLoopList.Count; l++)
                 {
                     var interiorCategory = (CategoryIndex)surfaceLoopList[l].interiorCategory;
-                    Debug.Assert(interiorCategory <= CategoryIndex.LastCategory, $"Invalid final category {interiorCategory}");
-                    if (interiorCategory != CategoryIndex.Aligned && 
-                        interiorCategory != CategoryIndex.ReverseAligned)
+                    if (interiorCategory > CategoryIndex.LastCategory)
+                        Debug.Assert(false, $"Invalid final category {interiorCategory}");
+
+                    if (interiorCategory != CategoryIndex.ValidCategory1 && 
+                        interiorCategory != CategoryIndex.ValidCategory2)
                         continue;
 
                     var loop = surfaceLoopList[l];
@@ -655,8 +657,11 @@ namespace Chisel.Core
                     //Debug.Log("intersections.Count == " + loop.edges.Count);
                     continue;
                 }
-                //if (brushNodeID != 3)// || l != 2)
-                  //  continue;
+
+                //Debug.Log($"render {loop.loopIndex} {(CategoryIndex)loop.interiorCategory}");
+                //if (brushNodeID != 5) 
+                //    continue; 
+
                 //Debug.Log($"{brushNodeID} {l}");
 
                 var interiorCategory = (CategoryIndex)loop.interiorCategory;
@@ -702,7 +707,12 @@ namespace Chisel.Core
                     surfaceIndices.Length < 3)
                     continue;
 
+#if HAVE_SELF_CATEGORIES
+                if (interiorCategory == CategoryIndex.SelfReverseAligned ||
+                    interiorCategory == CategoryIndex.ReverseAligned)
+#else
                 if (interiorCategory == CategoryIndex.ReverseAligned)
+#endif
                 {
                     var maxCount = surfaceIndices.Length - 1;
                     for (int n = (maxCount / 2); n >= 0; n--)
@@ -724,7 +734,11 @@ namespace Chisel.Core
                 Vector3[] surfaceNormals = null;
                 if (anySurfaceTargetHasNormals)
                 {
+#if HAVE_SELF_CATEGORIES
+                    var normal = (interiorCategory == CategoryIndex.SelfReverseAligned || interiorCategory == CategoryIndex.ReverseAligned) ? -info.worldPlane.normal : info.worldPlane.normal;
+#else
                     var normal = interiorCategory == CategoryIndex.ReverseAligned ? -info.worldPlane.normal : info.worldPlane.normal;
+#endif
                     surfaceNormals = surfaceVertices == null ? null : new Vector3[surfaceVertices.Length];
                     if (surfaceVertices != null)
                     {
@@ -852,5 +866,5 @@ namespace Chisel.Core
             }
         }
 #endif
-    }
-}
+                }
+            }

@@ -46,7 +46,7 @@ namespace Chisel.Core
         [NonSerialized] public List<Loop>   holes       = new List<Loop>();
         [NonSerialized] public LoopInfo     info;
 
-        [NonSerialized] public CategoryGroupIndex   interiorCategory    = CategoryGroupIndex.First; // determine if the loop is inside another brush or aligned with another brush
+        [NonSerialized] public CategoryGroupIndex   interiorCategory    = CategoryGroupIndex.Invalid; // determine if the loop is inside another brush or aligned with another brush
         [NonSerialized] public bool                 convex              = false;
 
 
@@ -204,16 +204,16 @@ namespace Chisel.Core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public CategoryIndex CategorizeEdge(VertexSoup soup, Edge edge)
+        public EdgeCategory CategorizeEdge(VertexSoup soup, Edge edge)
         {
             if (IndexOf(edge, out bool inverted) != -1)
-                return (inverted) ? CategoryIndex.ReverseAligned : CategoryIndex.Aligned;
+                return (inverted) ? EdgeCategory.ReverseAligned : EdgeCategory.Aligned;
             var vertices = soup.vertices;
             var midPoint = (vertices[edge.index1] + vertices[edge.index2]) * 0.5f;
 
             if (CSGManagerPerformCSG.IsPointInPolygon(info.right, info.forward, indices, soup, midPoint))
-                return CategoryIndex.Inside;
-            return CategoryIndex.Outside;
+                return EdgeCategory.Inside;
+            return EdgeCategory.Outside;
         }
         /*
         public void Split(VertexSoup soup)

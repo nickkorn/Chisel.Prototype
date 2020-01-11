@@ -256,7 +256,7 @@ namespace Chisel.Core
                 // don't want to change the original loops so we copy them
 
                 for (int p = 0; p < outputLoops.basePolygons.Count; p++)
-                    allBrushSurfaces[p].Add(new Loop(outputLoops.basePolygons[p]) { interiorCategory = (CategoryGroupIndex)CategoryIndex.Aligned });
+                    allBrushSurfaces[p].Add(new Loop(outputLoops.basePolygons[p]) { interiorCategory = (CategoryGroupIndex)CategoryIndex.BrushSelfDefault });
                 return true;
             }
 
@@ -284,10 +284,16 @@ namespace Chisel.Core
 
                         // Use categorization lookup between original surface & default category here ...
                         surfaceLoop.interiorCategory = routingRow[CategoryIndex.Outside];
+                        //if (brush.brushNodeID == 2)
+                        //    Debug.Log($"{routingRow} {routingLookup.startIndex} {routingLookup.endIndex}");
+                            //Debug.Log($"{i} {l} {surfaceIndex} | {surfaceLoop.loopIndex} | {(CategoryIndex)(surfaceLoop.interiorCategory-1)}");
 
                         // Add all holes that share the same plane to the polygon
-                        if (intersectionLoop == null) 
-                            continue;
+                        if (intersectionLoop == null)
+                            continue; 
+
+                        //if (surfaceLoop.info.brush.brushNodeID == 5)
+                        //    Debug.Log($"{i} {l} {surfaceIndex} | {intersectionLoop.loopIndex} | {(CategoryIndex)(routingRow[intersectionLoop.interiorCategory] - 1)} {(CategoryIndex)intersectionLoop.interiorCategory} {routingRow}");
 
                         // Categorize between original surface & intersection
                         var intersectionCategory = routingRow[intersectionLoop.interiorCategory];
@@ -311,7 +317,7 @@ namespace Chisel.Core
             return true;
         }
 
-        #endregion
+#endregion
 
         #region Reset/Rebuild
         static void Reset()
@@ -390,7 +396,7 @@ namespace Chisel.Core
             Reset();
             UpdateAllTreeMeshes();
         }
-        #endregion
+                #endregion
     }
 #endif
 }

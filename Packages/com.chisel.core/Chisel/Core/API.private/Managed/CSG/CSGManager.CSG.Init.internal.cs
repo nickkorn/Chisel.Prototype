@@ -62,7 +62,7 @@ namespace Chisel.Core
         }
         
 
-        #region GenerateBasePolygons
+#region GenerateBasePolygons
 
         static readonly List<ushort> s_Indices = new List<ushort>(32);
         public static Bounds GenerateBasePolygons(BrushLoops outputLoops)
@@ -141,7 +141,7 @@ namespace Chisel.Core
                         right           = right,
                         forward         = forward
                     },
-                    interiorCategory = (CategoryGroupIndex)(int)CategoryIndex.Aligned,
+                    interiorCategory = (CategoryGroupIndex)(int)CategoryIndex.BrushSelfDefault,
                     convex           = true,
                     holes            = new List<Loop>()
                 };
@@ -151,12 +151,12 @@ namespace Chisel.Core
                 outputLoops.basePolygons.Add(surfacePolygon);
             }
             var bounds = new Bounds();
-            if (!float.IsInfinity(min.x))
+            if (!float.IsInfinity(min.x)) 
                 bounds.SetMinMax(min, max);
             return bounds;
         }
 
-        #endregion
+#endregion
     }
 #endif
-}
+                }
