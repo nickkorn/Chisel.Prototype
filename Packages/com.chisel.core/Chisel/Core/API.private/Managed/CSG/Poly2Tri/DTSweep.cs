@@ -594,10 +594,10 @@ namespace Poly2Tri
                 triangleIndices.Add(index0);
                 triangleIndices.Add(index1);
                 triangleIndices.Add(index2);
-            } else
+            }/*else
             { 
                 UnityEngine.Debug.LogWarning($"invalid triangle {index0} {index1} {index2} / {vertices.Count}");
-            }
+            }*/
 
             if (!triangle.GetConstrainedEdge(0)) MeshClean(triangle.neighbors[0]);
             if (!triangle.GetConstrainedEdge(1)) MeshClean(triangle.neighbors[1]);

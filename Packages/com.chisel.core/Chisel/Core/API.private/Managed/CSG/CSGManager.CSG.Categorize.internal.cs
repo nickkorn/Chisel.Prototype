@@ -28,108 +28,6 @@ namespace Chisel.Core
     static partial class CSGManagerPerformCSG
     {
         #region PerformBooleanOperation
-
-        #region FindHoleDependencies
-        /*
-        struct LoopDependency
-        {
-            public int      startIndex;
-            public int[]    dependencies;
-        }
-        */
-        static void FillDependencyList(List<int> dependencies, int baseIndex, HashSet<int> skipSet, int[][] intersections)
-        {
-            if (dependencies.Count == intersections.Length)
-                return;
-
-            var baseIntersections = intersections[baseIndex];
-            if (baseIntersections != null)
-            {
-                var startIndex = dependencies.Count;
-                for (int i = 0; i < baseIntersections.Length; i++)
-                {
-                    var loopIndex = baseIntersections[i];
-                    if (!skipSet.Add(loopIndex))
-                        continue;
-
-                    dependencies.Add(loopIndex);
-                }
-
-                // TODO: make this non-recursive
-                // We add the child dependencies later, to ensure the order of the entire list is correct
-                var endIndex = dependencies.Count;
-                for (int i = startIndex; i < endIndex; i++)
-                    FillDependencyList(dependencies, dependencies[i], skipSet, intersections);
-            }
-        }
-        /*
-        static void FindHoleDependencies(VertexSoup soup, List<Loop> holes, List<LoopDependency> loopDependencies)
-        {
-            loopDependencies.Clear();
-
-            // TODO: optimize
-            // Finds all the intersections between all polygons
-            int[][] intersections = new int[holes.Count][];
-            for (int a = 0; a < holes.Count; a++)
-            {
-                if (!holes[a].Valid)
-                {
-                    Debug.Log($"hole[{a}] is not valid");
-                    continue;
-                }
-
-                var foundIntersections = new List<int>();
-                for (int b = 0; b < holes.Count; b++)
-                {
-                    if (a == b)
-                        continue;
-
-                    if (!holes[b].Valid)
-                    {
-                        Debug.Log($"hole[{b}] is not valid");
-                        continue;
-                    }
-
-                    if (Intersects(holes[a], holes[b]) ||
-                        Intersects(holes[b], holes[a]))
-                    {
-                        foundIntersections.Add(b);
-                    } else
-                    {
-                        if (IsInside(soup, holes[a], holes[b]) ||
-                            IsInside(soup, holes[b], holes[a]))
-                        {
-                            foundIntersections.Add(b);
-                        }
-
-                    }
-                }
-                intersections[a] = foundIntersections.ToArray();
-            }
-
-            // Creates a list of dependencies, in order
-            var skipSet = new HashSet<int>();
-            var dependencies = new List<int>();
-            for (int a = 0; a < holes.Count; a++)
-            {
-                dependencies.Clear();
-
-                skipSet.Clear();
-                skipSet.Add(a);
-
-                FillDependencyList(dependencies, a, skipSet, intersections);
-
-                loopDependencies.Add(new LoopDependency()
-                {
-                    startIndex = 0,
-                    dependencies = dependencies.ToArray()
-                });
-            }
-        }
-        */
-        #endregion
-
-
         public enum OperationResult
         {
             Fail,
@@ -137,22 +35,6 @@ namespace Chisel.Core
             Outside,
             Polygon1InsidePolygon2,
             Polygon2InsidePolygon1
-        }
-
-        [Flags]
-        internal enum PointFlags : byte
-        {
-            None = 0,
-
-            On = 1,
-            Inside = 2,
-            Outside = 4,
-
-            Inwards = 8,    // we reached this point going into the shape
-            Outwards = 16,   // after this point we'll exit the shape
-
-            Entering = 32,
-            Removed = 64
         }
 
         public const double kEpsilon = 0.00001;
@@ -164,6 +46,7 @@ namespace Chisel.Core
         {
             if (polygon1.indices.Count != polygon2.indices.Count)
                 return false;
+
 
             Debug.Assert(polygon1.convex && polygon2.convex);
             if (!polygon1.convex || !polygon2.convex)
@@ -342,18 +225,7 @@ namespace Chisel.Core
                 builder.Append($"{index}");
             }
             builder.AppendLine();
-            /*
-            for (int i = 0; i < categorized_loop.indices.Count; i++)
-            {
-                if (i > 0)
-                    builder.Append(",");
-                var index = categorized_loop.indices[i];
-                var vertex = soup.vertices[index];
 
-                builder.Append($"({(Decimal)vertex.x}, {(Decimal)vertex.y}, {(Decimal)vertex.z})");
-            }
-            builder.AppendLine("             ");
-            */
             for (int i = 0; i < categorized_loop.indices.Count; i++)
             {
                 var index = categorized_loop.indices[i];
@@ -412,9 +284,10 @@ namespace Chisel.Core
                                                                                         // and new polygons on the surface of the brush that need to be categorized
                                                                      );
             Debug.Assert(s_OverlappingArea.Count <= 1);
-            
+
             // FIXME: when brush_intersection and categorized_loop are grazing each other, 
             //          technically we cut it but we shouldn't be creating it as a separate polygon + hole (bug7)
+
 
             switch (result)
             {
@@ -429,7 +302,6 @@ namespace Chisel.Core
                     if (surfaceLoop.Valid)
                     {
                         var newPolygon = new Loop(surfaceLoop) { interiorCategory = newHoleCategory };
-//                      Debug.Log($"<<{newPolygon.loopIndex} | {(CategoryIndex)newPolygon.interiorCategory}");
                         loopsOnBrushSurface.Add(newPolygon);
                     }
                     surfaceLoop.ClearAllIndices();
@@ -444,37 +316,39 @@ namespace Chisel.Core
                 }
 
                 case CSGManagerPerformCSG.OperationResult.Cut:
-                {
                     break;
-                }
             }
+
+            Debug.Assert(s_OverlappingArea.Count == 1, s_OverlappingArea.Count);
 
             // the output of cutting operations are both holes for the original polygon (categorized_loop)
             // and new polygons on the surface of the brush that need to be categorized
             if (surfaceLoop.holes.Capacity < surfaceLoop.holes.Count + s_OverlappingArea.Count)
                 surfaceLoop.holes.Capacity = surfaceLoop.holes.Count + s_OverlappingArea.Count;
 
-            for (int o = 0; o < s_OverlappingArea.Count; o++)
+            int o = 0;
+            //for (int o = 0; o < s_OverlappingArea.Count; o++)
             {
                 var overlappingLoop = s_OverlappingArea[o];
-                if (!overlappingLoop.Valid)
-                    continue;
-
-                overlappingLoop.interiorCategory = newHoleCategory;
-                var newPolygon = new Loop(overlappingLoop) { interiorCategory = newHoleCategory };
-//              Debug.Log($"<<{overlappingLoop.loopIndex} | {(CategoryIndex)overlappingLoop.interiorCategory}");
-//              Debug.Log($"<<{newPolygon.loopIndex} | {(CategoryIndex)newPolygon.interiorCategory}");
-                surfaceLoop.holes.Add(newPolygon);              // but it is also a hole for our polygon
-                loopsOnBrushSurface.Add(overlappingLoop);       // this loop is a polygon on its own
+                if (overlappingLoop.Valid)
+                {
+                    if (CSGManagerPerformCSG.AreLoopsOverlapping(surfaceLoop, overlappingLoop))
+                    {
+                        surfaceLoop.interiorCategory = newHoleCategory;
+                    } else
+                    { 
+                        overlappingLoop.interiorCategory = newHoleCategory;
+                        overlappingLoop.holes.AddRange(surfaceLoop.holes);
+                        var newPolygon = new Loop(overlappingLoop) { interiorCategory = newHoleCategory };
+                        surfaceLoop.holes.Add(newPolygon);              // but it is also a hole for our polygon
+                        loopsOnBrushSurface.Add(overlappingLoop);       // this loop is a polygon on its own
+                    }
+                }
             }
         }
         #endregion
 
         #region CleanUp
-
-        static readonly List<Loop> resultLoops2 = new List<Loop>();
-        static readonly List<Loop> resultLoops1 = new List<Loop>();
-
 
         // Clean up, after performing CSG
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -508,8 +382,6 @@ namespace Chisel.Core
                         continue;
                     }
                 }
-
-                //Debug.Log($"holes {baseloop.loopIndex} {holes.Count}");
 
                 baseloop.destroyed = new bool[baseloop.edges.Count];
                 for (int h1 = holes.Count - 1; h1 >= 0; h1--)
@@ -562,6 +434,7 @@ namespace Chisel.Core
                 holes.Clear();
             }
 
+            // TODO: remove the need for this
             for (int l = baseloops.Count - 1; l >= 0; l--)
             {
                 var baseloop = baseloops[l];

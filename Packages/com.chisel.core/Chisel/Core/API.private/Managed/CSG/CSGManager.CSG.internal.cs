@@ -249,21 +249,12 @@ namespace Chisel.Core
 
             var allBrushSurfaces = categorizedLoopList.surfaces;
 
-            // TODO: this doesn't actually make sense, we should at least have our own brush in here
-            if (routingLookups.Length == 0) // we're not intersecting with anything
-            {
-                // TODO: this doesn't work well with subtractive brushes
-                // don't want to change the original loops so we copy them
-
-                for (int p = 0; p < outputLoops.basePolygons.Count; p++)
-                    allBrushSurfaces[p].Add(new Loop(outputLoops.basePolygons[p]) { interiorCategory = (CategoryGroupIndex)CategoryIndex.BrushSelfDefault });
-                return true;
-            }
+            Debug.Assert(routingLookups.Length != 0);
 
             for (int p = 0; p < outputLoops.basePolygons.Count; p++)
             {
                 // Don't want to change the original loops so we copy them
-                var newLoop = new Loop(outputLoops.basePolygons[p]) { interiorCategory = 0 };
+                var newLoop = new Loop(outputLoops.basePolygons[p]) { interiorCategory = CategoryGroupIndex.First };
                 allBrushSurfaces[p].Add(newLoop);
             }
 
@@ -283,28 +274,27 @@ namespace Chisel.Core
                             continue;
 
                         if (!routingLookup.TryGetRoute(routingTable, surfaceLoop.interiorCategory, out CategoryRoutingRow routingRow))
+                        {
+                            Debug.Assert(false, "Could not find route");
                             continue;
+                        }
 
                         bool overlap = intersectionLoop != null && CSGManagerPerformCSG.AreLoopsOverlapping(surfaceLoop, intersectionLoop);
 
                         // Lookup categorization lookup between original surface & other surface ...
                         if (overlap)
                         {
-                            surfaceLoop.interiorCategory = routingRow[CategoryIndex.Aligned];
+                            // TODO: don't forget about reverse-aligned!
+                            surfaceLoop.interiorCategory = routingRow[intersectionLoop.interiorCategory];
                             continue;
                         } else
+                        {
                             surfaceLoop.interiorCategory = routingRow[CategoryIndex.Outside];
-
-                        //if (brush.brushNodeID == 2)
-                        //    Debug.Log($"{routingRow} {routingLookup.startIndex} {routingLookup.endIndex}");
-                        //Debug.Log($"{i} {l} {surfaceIndex} | {surfaceLoop.loopIndex} | {(CategoryIndex)(surfaceLoop.interiorCategory-1)}");
+                        }
 
                         // Add all holes that share the same plane to the polygon
                         if (intersectionLoop != null)
-                        { 
-                            //if (surfaceLoop.info.brush.brushNodeID == 5)
-                            //    Debug.Log($"{i} {l} | {surfaceLoop.loopIndex} 'Brush {surfaceLoop.info.brush}' | {intersectionLoop.loopIndex} 'Brush {intersectionLoop.info.brush}' | {routingRow}");
-
+                        {
                             // Categorize between original surface & intersection
                             var intersectionCategory = routingRow[intersectionLoop.interiorCategory];
 
@@ -312,14 +302,9 @@ namespace Chisel.Core
                             if (intersectionCategory == surfaceLoop.interiorCategory)
                                 continue;
 
-                            //if (!CSGManagerPerformCSG.Intersects(surfaceLoop, intersectionLoop))
-                            //    continue;
-
-                            //Debug.Log($"<<'Brush {surfaceLoop.info.brush}' Intersect");
                             CSGManagerPerformCSG.Intersect(brushVertices, loopsOnBrushSurface, surfaceLoop, intersectionLoop, intersectionCategory);
-                            //Debug.Log($">>'Brush {surfaceLoop.info.brush}' Intersect");
                         }
-
+                        
                     }
 
                     // TODO: remove the need for this (check on insertion)

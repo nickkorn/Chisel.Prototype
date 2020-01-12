@@ -141,7 +141,7 @@ namespace Chisel.Core
                         right           = right,
                         forward         = forward
                     },
-                    interiorCategory = (CategoryGroupIndex)(int)CategoryIndex.BrushSelfDefault,
+                    interiorCategory = (CategoryGroupIndex)(int)CategoryIndex.SelfAligned,
                     convex           = true,
                     holes            = new List<Loop>()
                 };

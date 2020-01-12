@@ -1,6 +1,5 @@
 #define USE_OPTIMIZATIONS
-#define USE_HALF_OPERATION_TABLE
-#define SHOW_DEBUG_MESSAGES
+//#define SHOW_DEBUG_MESSAGES
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,8 +12,7 @@ using UnityEngine;
 namespace Chisel.Core 
 {
 #if USE_MANAGED_CSG_IMPLEMENTATION
-    // TODO: store the routingRows per node, since inputs are in order & increase by 1, we can remove it and look them up directly
-    internal unsafe partial struct CategoryStackNode
+    internal unsafe struct CategoryStackNode
     { 
         public CSGTreeNode node;
         public CategoryGroupIndex input;
@@ -32,16 +30,13 @@ namespace Chisel.Core
             var brushNodeIndex = brush.NodeID - 1;
 
             bitset.Clear();
-            //Debug.Log("<<");
             bitset.Set(brushNodeIndex, IntersectionType.Intersection);
-            //Debug.Log($"{brush.NodeID}");
 
             var parent = brush.Parent;
             while (parent.Valid)
             {
                 var parentIndex = parent.NodeID - 1;
                 bitset.Set(parentIndex, IntersectionType.Intersection);
-                //Debug.Log($"parentIndex: {parent.NodeID}");
                 parent = parent.Parent;
             }
 
@@ -55,14 +50,12 @@ namespace Chisel.Core
                 var touchingType = touch.Value;
                 var touchingBrushIndex = touchingBrush.NodeID - 1;
                 bitset.Set(touchingBrushIndex, touchingType);
-                //Debug.Log($"touchingBrushIndex: {touchingBrush.NodeID}");
 
                 parent = touchingBrush.Parent;
                 while (parent.Valid)
                 {
                     var parentIndex = parent.NodeID - 1;
                     bitset.Set(parentIndex, IntersectionType.Intersection);
-                    //Debug.Log($"parentIndex: {parent.NodeID}");
                     parent = parent.Parent;
                 }
             }
@@ -74,7 +67,6 @@ namespace Chisel.Core
         static List<CategoryGroupIndex>     sInputs             = new List<CategoryGroupIndex>();
         static List<CategoryRoutingRow>     sRoutingRows        = new List<CategoryRoutingRow>();
         static List<Loop[]>                 sIntersectionLoops  = new List<Loop[]>();
-        static HashSet<CategoryGroupIndex>  sActiveInputs       = new HashSet<CategoryGroupIndex>();
 
         public static void GenerateCategorizationTable(CSGTreeNode  rootNode,
                                                        CSGTreeBrush processedNode,
@@ -141,13 +133,13 @@ namespace Chisel.Core
             sInputs.Clear();
             sRoutingRows.Clear();
             sIntersectionLoops.Clear();
+            // TODO: clean up
             for (int i = 0; i < sRoutingTable.Count;)
             {
                 var cutting_node = sRoutingTable[i].node;
                 var cutting_node_id = cutting_node.nodeID;
                 Debug.Assert(cutting_node.Valid);
-
-                // TODO: store the routingRows per node, since inputs are in order & increase by 1, we can remove this and look them up directly
+                
                 int start_index = i;
                 do
                 {
@@ -161,7 +153,11 @@ namespace Chisel.Core
                 // Get the intersection loops between the two brushes on every surface of the brush we're performing CSG on
                 if (!brushOutputLoops.intersectionLoops.TryGetValue(cutting_node_id, out Loop[] cuttingNodeIntersectionLoops))
                 {
-                    Debug.Assert(false, "Brush intersecting with brush has no intersecting surface?");
+                    if (sRoutingTable.Count > 1)
+                    {
+                        Debug.Assert(false, $"Brush intersecting with brush has no intersecting surface?  {cutting_node.nodeID} / {processedNode.NodeID}");
+                        //Dump(processedNode, sRoutingTable.ToArray());
+                    }
                     cuttingNodeIntersectionLoops = null;
                 }
 
@@ -179,7 +175,6 @@ namespace Chisel.Core
 
 
         #region Operation tables
-#if HAVE_SELF_CATEGORIES
         static readonly CategoryRoutingRow[][] operationTables = new[]
         {
             // Additive set operation on polygons: output = (left-node || right-node)
@@ -230,114 +225,13 @@ namespace Chisel.Core
 	            new CategoryRoutingRow( CategoryIndex.Outside,              CategoryIndex.Outside,    CategoryIndex.Outside,        CategoryIndex.Outside,              CategoryIndex.Outside,          CategoryIndex.Outside        )  // outside
             }
         };
-#else
-        static readonly CategoryRoutingRow[][] operationTables = new[]
-        {
-            // Additive set operation on polygons: output = (left-node || right-node)
-            // Defines final output from combination of categorization of left and right node
-            new CategoryRoutingRow[] // Additive Operation
-            {
-			    //                      right node                                                                                                             |
-			    //                                                    other                         other                                                      |
-			    //                      inside                        aligned                       reverse-aligned               outside                      |     left-node       
-			    //                      --------------------------------------------------------------------------------------------------------------------------------------------------
-			    new CategoryRoutingRow( CategoryIndex.Inside,         CategoryIndex.Inside,         CategoryIndex.Inside,         CategoryIndex.Inside         ), // inside
-			    new CategoryRoutingRow( CategoryIndex.Inside,         CategoryIndex.Aligned,        CategoryIndex.Inside,         CategoryIndex.Aligned        ), // other-aligned
-			    new CategoryRoutingRow( CategoryIndex.Inside,         CategoryIndex.Inside,         CategoryIndex.ReverseAligned, CategoryIndex.ReverseAligned ), // other-reverse-aligned
-			    new CategoryRoutingRow( CategoryIndex.Inside,         CategoryIndex.Aligned,        CategoryIndex.ReverseAligned, CategoryIndex.Outside        )  // outside
-            },
-            
-		    // Subtractive set operation on polygons: output = !(!left-node || right-node)
-		    // Defines final output from combination of categorization of left and right node
-            new CategoryRoutingRow[] // Subtractive Operation
-            {
-			    //                      right node                                                                                                             |
-			    //                                                    other                         other                                                      |
-			    //                      inside                        aligned                       reverse-aligned               outside                      |     left-node       
-			    //                      --------------------------------------------------------------------------------------------------------------------------------------------------
-			    new CategoryRoutingRow( CategoryIndex.Outside,        CategoryIndex.ReverseAligned, CategoryIndex.Aligned,        CategoryIndex.Inside         ), // inside
-			    new CategoryRoutingRow( CategoryIndex.Outside,        CategoryIndex.Outside,        CategoryIndex.Aligned,        CategoryIndex.Aligned        ), // other-aligned
-			    new CategoryRoutingRow( CategoryIndex.Outside,        CategoryIndex.ReverseAligned, CategoryIndex.Outside,        CategoryIndex.ReverseAligned ), // other-reverse-aligned
-			    new CategoryRoutingRow( CategoryIndex.Outside,        CategoryIndex.Outside,        CategoryIndex.Outside,        CategoryIndex.Outside        )  // outside
-            },
-            
-		    // Common set operation on polygons: output = !(!left-node || !right-node)
-		    // Defines final output from combination of categorization of left and right node
-            new CategoryRoutingRow[] // Intersection Operation
-            {
-			    //                      right node                                                                                                             |
-			    //                                                    other                         other                                                      |
-			    //                      inside                        aligned                       reverse-aligned               outside                      |     left-node       
-			    //                      --------------------------------------------------------------------------------------------------------------------------------------------------
-			    new CategoryRoutingRow( CategoryIndex.Inside,         CategoryIndex.Aligned,        CategoryIndex.ReverseAligned, CategoryIndex.Outside        ), // inside
-			    new CategoryRoutingRow( CategoryIndex.Aligned,        CategoryIndex.Aligned,        CategoryIndex.Outside,        CategoryIndex.Outside        ), // other-aligned
-			    new CategoryRoutingRow( CategoryIndex.ReverseAligned, CategoryIndex.Outside,        CategoryIndex.ReverseAligned, CategoryIndex.Outside        ), // other-reverse-aligned
-			    new CategoryRoutingRow( CategoryIndex.Outside,        CategoryIndex.Outside,        CategoryIndex.Outside,        CategoryIndex.Outside        )  // outside
-            }
-        };
-        static readonly CategoryRoutingRow[][] simpleOperationTables = new[]
-        {
-            // Additive set operation on polygons: output = (left-node || right-node)
-            // Defines final output from combination of categorization of left and right node
-            new CategoryRoutingRow[] // Additive Operation
-            {
-			    //                      right node                                                                                                             |
-			    //                                                    other                         other                                                      |
-			    //                      inside                        aligned                       reverse-aligned               outside                      |     left-node       
-			    //                      --------------------------------------------------------------------------------------------------------------------------------------------------
-			    new CategoryRoutingRow( CategoryIndex.Inside,         CategoryIndex.Inside,         CategoryIndex.Inside,         CategoryIndex.Inside         ), // inside
-			    new CategoryRoutingRow( CategoryIndex.Inside,         CategoryIndex.Inside,         CategoryIndex.Inside,         CategoryIndex.Inside         ), // other-aligned
-			    new CategoryRoutingRow( CategoryIndex.Inside,         CategoryIndex.Inside,         CategoryIndex.Inside,         CategoryIndex.Inside         ), // other-reverse-aligned
-			    new CategoryRoutingRow( CategoryIndex.Inside,         CategoryIndex.Inside,         CategoryIndex.Inside,         CategoryIndex.Outside        )  // outside
-            },
-            
-		    // Subtractive set operation on polygons: output = !(!left-node || right-node)
-		    // Defines final output from combination of categorization of left and right node
-            new CategoryRoutingRow[] // Subtractive Operation
-            {
-			    //                      right node                                                                                                             |
-			    //                                                    other                         other                                                      |
-			    //                      inside                        aligned                       reverse-aligned               outside                      |     left-node       
-			    //                      --------------------------------------------------------------------------------------------------------------------------------------------------
-			    new CategoryRoutingRow( CategoryIndex.Outside,        CategoryIndex.Inside,         CategoryIndex.Inside,         CategoryIndex.Inside         ), // inside
-			    new CategoryRoutingRow( CategoryIndex.Outside,        CategoryIndex.Outside,        CategoryIndex.Inside,         CategoryIndex.Inside         ), // other-aligned
-			    new CategoryRoutingRow( CategoryIndex.Outside,        CategoryIndex.Inside,         CategoryIndex.Outside,        CategoryIndex.Inside         ), // other-reverse-aligned
-			    new CategoryRoutingRow( CategoryIndex.Outside,        CategoryIndex.Outside,        CategoryIndex.Outside,        CategoryIndex.Outside        )  // outside
-            },
-            
-		    // Common set operation on polygons: output = !(!left-node || !right-node)
-		    // Defines final output from combination of categorization of left and right node
-            new CategoryRoutingRow[] // Intersection Operation
-            {
-			    //                      right node                                                                                                             |
-			    //                                                    other                         other                                                      |
-			    //                      inside                        aligned                       reverse-aligned               outside                      |     left-node       
-			    //                      --------------------------------------------------------------------------------------------------------------------------------------------------
-			    new CategoryRoutingRow( CategoryIndex.Inside,         CategoryIndex.Inside,         CategoryIndex.Inside,         CategoryIndex.Outside        ), // inside
-			    new CategoryRoutingRow( CategoryIndex.Inside,         CategoryIndex.Inside,         CategoryIndex.Outside,        CategoryIndex.Outside        ), // other-aligned
-			    new CategoryRoutingRow( CategoryIndex.Inside,         CategoryIndex.Outside,        CategoryIndex.Inside,         CategoryIndex.Outside        ), // other-reverse-aligned
-			    new CategoryRoutingRow( CategoryIndex.Outside,        CategoryIndex.Outside,        CategoryIndex.Outside,        CategoryIndex.Outside        )  // outside
-            }
-        };
-#endif
-#endregion
+        #endregion
 
 
         static readonly CategoryStackNode[] sEmptyStack = new CategoryStackNode[] { };
 
-        static CategoryRoutingRow[] GetOperationTable(CSGOperationType operation, bool useFullOperationTables)
-        {
-#if !HAVE_SELF_CATEGORIES
-#if USE_HALF_OPERATION_TABLE
-            if (!useFullOperationTables)
-                return simpleOperationTables[(int)operation];
-#endif
-#endif
-            return operationTables[(int)operation];
-        }
-
-
-        static void FixUpIndices(List<CategoryStackNode> stack, Dictionary<int, int> remap, int start, int last)
+        // Remap indices to new destinations, used when destination rows have been merged
+        static void RemapIndices(List<CategoryStackNode> stack, Dictionary<int, int> remap, int start, int last)
         {
             for (int i = start; i < last; i++)
             {
@@ -361,7 +255,7 @@ namespace Chisel.Core
         static readonly HashSet<int>            sCombineUsedIndices = new HashSet<int>();
         static readonly Dictionary<int, int>    sCombineIndexRemap  = new Dictionary<int, int>();
 
-        static CategoryStackNode[] Combine(BrushIntersectionLookup intersectionTypeLookup, CSGTreeBrush processedNode, CategoryStackNode[] leftStack, CategoryStackNode[] rightStack, CSGOperationType operation, ref bool useFullOperationTables, int depth)
+        static CategoryStackNode[] Combine(BrushIntersectionLookup intersectionTypeLookup, CSGTreeBrush processedNode, CategoryStackNode[] leftStack, CategoryStackNode[] rightStack, CSGOperationType operation, int depth)
         {
             if (operation == CSGOperationType.Invalid)
                 operation = CSGOperationType.Additive;
@@ -386,8 +280,7 @@ namespace Chisel.Core
                 }
             }
 
-            // TODO: use different tables before and after we passed ourselves to avoid duplicates
-            var operationTable  = GetOperationTable(operation, useFullOperationTables);
+            var operationTable  = operationTables[(int)operation];
             int index           = 0;
             int vIndex          = 0;
             
@@ -437,12 +330,7 @@ namespace Chisel.Core
                 sCombineUsedIndices.Add(2);
                 sCombineUsedIndices.Add(3);
             }
-            /*
-            var usedIndicesArray = usedIndices.ToArray();
-            for (int t = 0; t < usedIndicesArray.Length; t++)
-                Debug.Log(usedIndicesArray[t]);
-            Debug.Log($"{prevNodeIndex} {startNodeIndex} {usedIndicesArray.Length}");
-            */
+
             sCombineIndexRemap.Clear();
 
             int nodeIndex = 1;
@@ -452,11 +340,9 @@ namespace Chisel.Core
                 if (prevNode != rightStack[r].node)
                 {
 #if USE_OPTIMIZATIONS
-                    //Debug.Log($"[{r}/{rightStack.Length}] &");
-                    if (//nodeIndex > 1 && 
-                        prevNodeIndex >= 0 && sCombineIndexRemap.Count > 0)
+                    if (prevNodeIndex >= 0 && sCombineIndexRemap.Count > 0)
                     {
-                        FixUpIndices(sCombineChildren, sCombineIndexRemap, prevNodeIndex, startNodeIndex);
+                        RemapIndices(sCombineChildren, sCombineIndexRemap, prevNodeIndex, startNodeIndex);
 #if SHOW_DEBUG_MESSAGES
                         if (processedNode.NodeID == kDebugNode || kDebugNode == -1)
                             Dump(sCombineChildren.ToArray(), depth);
@@ -601,7 +487,7 @@ namespace Chisel.Core
             if (//nodeIndex > 1 && 
                 prevNodeIndex >= 0 && sCombineIndexRemap.Count > 0)
             {
-                FixUpIndices(sCombineChildren, sCombineIndexRemap, prevNodeIndex, startNodeIndex);
+                RemapIndices(sCombineChildren, sCombineIndexRemap, prevNodeIndex, startNodeIndex);
 #if SHOW_DEBUG_MESSAGES
                 if (processedNode.NodeID == kDebugNode || kDebugNode == -1)
                     Dump(sCombineChildren.ToArray(), depth);
@@ -621,7 +507,7 @@ namespace Chisel.Core
                 {
                     sCombineChildren.RemoveRange(startNodeIndex, sCombineChildren.Count - startNodeIndex);
                     //Debug.Log($"[-/{rightStack.Length}] remove last");
-                    FixUpIndices(sCombineChildren, sCombineIndexRemap, prevNodeIndex, startNodeIndex);
+                    RemapIndices(sCombineChildren, sCombineIndexRemap, prevNodeIndex, startNodeIndex);
 
 #if SHOW_DEBUG_MESSAGES
                     if (processedNode.NodeID == kDebugNode || kDebugNode == -1)
@@ -650,15 +536,14 @@ namespace Chisel.Core
 
         static CategoryStackNode[] GetStack(BrushIntersectionLookup intersectionTypeLookup, CSGTreeBrush processedNode, CSGTreeNode node)
         {
-            bool useFullOperationTables = false;
-            var stack = GetStack(intersectionTypeLookup, processedNode, node, ref useFullOperationTables, 0);
+            var stack = GetStack(intersectionTypeLookup, processedNode, node, 0);
             if (stack == null ||
                 stack.Length == 0)
                 return new CategoryStackNode[] { new CategoryStackNode() { node = node, routingRow = CategoryRoutingRow.outside } };
             return stack;
         }
 
-        static CategoryStackNode[] GetStack(BrushIntersectionLookup intersectionTypeLookup, CSGTreeBrush processedNode, CSGTreeNode node, ref bool useFullOperationTables, int depth)
+        static CategoryStackNode[] GetStack(BrushIntersectionLookup intersectionTypeLookup, CSGTreeBrush processedNode, CSGTreeNode node, int depth)
         {
             Debug.Assert(processedNode.Valid);
             Debug.Assert(node.Valid);
@@ -678,18 +563,10 @@ namespace Chisel.Core
                 {
                     // All surfaces of processedNode are aligned with it's own surfaces, so all categories are Aligned
                     if (processedNode == node)
-                    {
-                        useFullOperationTables = true; // switch to full operation tables after we encountered ourselves in the hierarchy
                         return new CategoryStackNode[] { new CategoryStackNode() { node = node, routingRow = CategoryRoutingRow.selfAligned } };
-                    }
 
                     // Otherwise return identity categories (input == output)
-#if !HAVE_SELF_CATEGORIES
-                    if (!useFullOperationTables)
-                        return new CategoryStackNode[] { new CategoryStackNode() { node = node, routingRow = CategoryRoutingRow.insideOutside } };
-                    else
-#endif
-                        return new CategoryStackNode[] { new CategoryStackNode() { node = node, routingRow = CategoryRoutingRow.identity } };
+                    return new CategoryStackNode[] { new CategoryStackNode() { node = node, routingRow = CategoryRoutingRow.identity } };
                 }
                 default:
                 {
@@ -707,7 +584,7 @@ namespace Chisel.Core
 
                     if ((nodeCount - firstIndex) == 1)
                     {
-                        var stack = GetStack(intersectionTypeLookup, processedNode, node[firstIndex], ref useFullOperationTables, depth + 1);
+                        var stack = GetStack(intersectionTypeLookup, processedNode, node[firstIndex], depth + 1);
 
                         // Node operation is always Additive at this point, and operation would be performed against .. nothing ..
                         // Anything added with nothing is itself, so we don't need to apply an operation here.
@@ -720,42 +597,27 @@ namespace Chisel.Core
                         return stack;
                     } else
                     {
-//                      if (processedNode.NodeID == kDebugNode || kDebugNode == -1)
-//                          Debug.Log($"{new String(' ', depth)}stack start '{node[firstIndex]}' {useFullOperationTables}");
-                        var previousStack = GetStack(intersectionTypeLookup, processedNode, node[firstIndex], ref useFullOperationTables, depth + 1);
-//                      if (processedNode.NodeID == kDebugNode || kDebugNode == -1)
-//                          Debug.Log($"{new String(' ', depth)}stack end '{node[firstIndex]}' {useFullOperationTables}");
+                        var previousStack = GetStack(intersectionTypeLookup, processedNode, node[firstIndex], depth + 1);
                         for (int i = firstIndex + 1; i < nodeCount; i++)
                         {
                             if (!node[i].Valid)
                                 continue;
 #if SHOW_DEBUG_MESSAGES
                             if (processedNode.NodeID == kDebugNode || kDebugNode == -1)
-                                Dump(previousStack, depth, $"before '{node[i-1]}' {node[i].Operation} '{node[i]}' {useFullOperationTables}");
+                                Dump(previousStack, depth, $"before '{node[i-1]}' {node[i].Operation} '{node[i]}'");
 #endif
-                            var temp = useFullOperationTables;
-//                          if (processedNode.NodeID == kDebugNode || kDebugNode == -1)
-//                              Debug.Log($"{new String(' ', depth)}stack start '{node[i]}' {useFullOperationTables}");
-                            var currentStack = GetStack(intersectionTypeLookup, processedNode, node[i], ref temp, depth + 1);
-//                          if (processedNode.NodeID == kDebugNode || kDebugNode == -1)
-//                              Debug.Log($"{new String(' ', depth)}stack end '{node[i]}' {useFullOperationTables}");
+                            var currentStack = GetStack(intersectionTypeLookup, processedNode, node[i], depth + 1);
 
-//                          if (processedNode.NodeID == kDebugNode || kDebugNode == -1)
-//                              Debug.Log($"{new String(' ', depth)}combine start");
                             previousStack =
                                 Combine(
                                         intersectionTypeLookup, processedNode,
                                         previousStack, currentStack,
                                         node[i].Operation,
-                                        ref useFullOperationTables,
                                         depth + 1
                                 );
-//                          if (processedNode.NodeID == kDebugNode || kDebugNode == -1)
-//                              Debug.Log($"{new String(' ', depth)}combine end");
-                            useFullOperationTables = temp || useFullOperationTables;
 #if SHOW_DEBUG_MESSAGES
                             if (processedNode.NodeID == kDebugNode || kDebugNode == -1)
-                                Dump(previousStack, depth, $"after '{node[i - 1]}' {node[i].Operation} '{node[i]}' {useFullOperationTables}");
+                                Dump(previousStack, depth, $"after '{node[i - 1]}' {node[i].Operation} '{node[i]}'");
 #endif
                         }
                         return previousStack;

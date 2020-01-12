@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
@@ -637,8 +637,8 @@ namespace Chisel.Core
                     if (interiorCategory > CategoryIndex.LastCategory)
                         Debug.Assert(false, $"Invalid final category {interiorCategory}");
 
-                    if (interiorCategory != CategoryIndex.ValidCategory1 && 
-                        interiorCategory != CategoryIndex.ValidCategory2)
+                    if (interiorCategory != CategoryIndex.SelfAligned && 
+                        interiorCategory != CategoryIndex.SelfReverseAligned)
                         continue;
 
                     var loop = surfaceLoopList[l];
@@ -658,15 +658,7 @@ namespace Chisel.Core
                     continue;
                 }
 
-                //if (brushNodeID != 5) 
-                //    continue;
-                //Debug.Log($"render {loop.loopIndex} {(CategoryIndex)loop.interiorCategory} 'Brush {loop.info.brush}'");
-
-                //Debug.Log($"{brushNodeID} {l}");
-
                 var interiorCategory = (CategoryIndex)loop.interiorCategory;
-                //Debug.Assert(interiorCategory == CategoryIndex.Aligned ||
-                //             interiorCategory == CategoryIndex.ReverseAligned);
 
 
                 var info            = loop.info;
@@ -707,12 +699,8 @@ namespace Chisel.Core
                     surfaceIndices.Length < 3)
                     continue;
 
-#if HAVE_SELF_CATEGORIES
                 if (interiorCategory == CategoryIndex.SelfReverseAligned ||
                     interiorCategory == CategoryIndex.ReverseAligned)
-#else
-                if (interiorCategory == CategoryIndex.ReverseAligned)
-#endif
                 {
                     var maxCount = surfaceIndices.Length - 1;
                     for (int n = (maxCount / 2); n >= 0; n--)
@@ -734,11 +722,8 @@ namespace Chisel.Core
                 Vector3[] surfaceNormals = null;
                 if (anySurfaceTargetHasNormals)
                 {
-#if HAVE_SELF_CATEGORIES
                     var normal = (interiorCategory == CategoryIndex.SelfReverseAligned || interiorCategory == CategoryIndex.ReverseAligned) ? -info.worldPlane.normal : info.worldPlane.normal;
-#else
-                    var normal = interiorCategory == CategoryIndex.ReverseAligned ? -info.worldPlane.normal : info.worldPlane.normal;
-#endif
+
                     surfaceNormals = surfaceVertices == null ? null : new Vector3[surfaceVertices.Length];
                     if (surfaceVertices != null)
                     {
