@@ -654,7 +654,6 @@ namespace Chisel.Core
                 var loop            = loops[l];
                 if (loop.edges.Count < 3)
                 {
-                    //Debug.Log("intersections.Count == " + loop.edges.Count);
                     continue;
                 }
 

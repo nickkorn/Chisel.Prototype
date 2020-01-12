@@ -508,20 +508,6 @@ namespace Chisel.Core
                     continue;
                 loop2.destroyed[e] = true;
             }
-
-            /*
-            var builder = new System.Text.StringBuilder();
-            builder.AppendLine($"Subtract {loop1.info.brush.brushNodeID} {loop2.info.brush.brushNodeID}");
-            for (int e = 0; e < loop1.edges.Count; e++)
-            {
-                builder.AppendLine($"loop1[{e}] {loop1.info.brush.brushNodeID} {categories1[e]} {loop1.destroyed[e]} | {loop1.edges[e].index1}/{loop1.edges[e].index2}");
-            }
-
-            for (int e = 0; e < loop2.edges.Count; e++)
-            {
-                builder.AppendLine($"loop2[{e}] {loop2.info.brush.brushNodeID} {categories2[e]} {loop2.destroyed[e]} | {loop2.edges[e].index1}/{loop2.edges[e].index2}");
-            }
-            Debug.Log(builder.ToString());*/
         }
 
         static void Merge(VertexSoup soup, Loop loop1, Loop loop2)
@@ -564,19 +550,6 @@ namespace Chisel.Core
                     continue;
                 loop2.destroyed[e] = true;
             }
-            /*
-            var builder = new System.Text.StringBuilder();
-            builder.AppendLine($"Merge {loop1.info.brush.brushNodeID} {loop2.info.brush.brushNodeID}");
-            for (int e = 0; e < loop1.edges.Count; e++)
-            {
-                builder.AppendLine($"loop1[{e}] {loop1.info.brush.brushNodeID} {categories1[e]} {loop1.destroyed[e]} | {loop1.edges[e].index1}/{loop1.edges[e].index2}");
-            }
-
-            for (int e = 0; e < loop2.edges.Count; e++)
-            {
-                builder.AppendLine($"loop2[{e}] {loop2.info.brush.brushNodeID} {categories2[e]} {loop2.destroyed[e]} | {loop2.edges[e].index1}/{loop2.edges[e].index2}");
-            }
-            Debug.Log(builder.ToString());*/
         }
 
         #endregion

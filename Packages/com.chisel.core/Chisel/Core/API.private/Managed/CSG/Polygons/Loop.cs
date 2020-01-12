@@ -41,32 +41,7 @@ namespace Chisel.Core
         [NonSerialized] public List<Loop>   holes       = new List<Loop>();
         [NonSerialized] public LoopInfo     info;
 
-        /*
-
-        [NonSerialized] public CategoryGroupIndex   _interiorCategory    = CategoryGroupIndex.Invalid; // determine if the loop is inside another brush or aligned with another brush
-        public CategoryGroupIndex   interiorCategory
-        {
-            get
-            {
-                return _interiorCategory;
-            }
-            set
-            {
-                if (debugMessage)
-                {
-                    if (//loopIndex == 153 ||
-                        //loopIndex == 156 ||
-                        //loopIndex == 159 ||
-                        loopIndex == 162)
-                    {
-                        Debug.Log($"<<[{loopIndex}] {_interiorCategory} -> {value} | 'Brush {info.brush}' {info.basePlaneIndex}");
-                    }
-                }
-                _interiorCategory = value;
-            }
-        }/*/
         [NonSerialized] public CategoryGroupIndex   interiorCategory    = CategoryGroupIndex.Invalid; // determine if the loop is inside another brush or aligned with another brush
-        //*/
         [NonSerialized] public bool                 convex              = false;
 
         public bool Valid { [MethodImpl(MethodImplOptions.AggressiveInlining)] get { return indices.Count >= 3; } }

@@ -19,7 +19,7 @@ namespace Chisel.Core
         // TODO: unify all epsilons
         public const float  kDistanceEpsilon	    = 0.0006f;
         public const float  kSqrDistanceEpsilon	    = kDistanceEpsilon * kDistanceEpsilon;
-        public const float  kMergeEpsilon	        = 0.000006f;
+        public const float  kMergeEpsilon	        = 0.00006f;
         public const float  kSqrMergeEpsilon	    = kMergeEpsilon * kMergeEpsilon;
         const float         kNormalEpsilon			= 0.9999f;
         const float         kPlaneDistanceEpsilon	= kDistanceEpsilon;
@@ -145,6 +145,10 @@ namespace Chisel.Core
                     convex           = true,
                     holes            = new List<Loop>()
                 };
+
+                //if (surfacePolygon.loopIndex == 6)
+                //    Debug.Log($"{surfacePolygon.info.brush} {surfacePolygon.info.basePlaneIndex}");
+                
 
                 surfacePolygon.indices.AddRange(s_Indices);
                 surfacePolygon.AddEdges(s_Indices);
