@@ -160,7 +160,10 @@ namespace Chisel.Core
 
                 // Get the intersection loops between the two brushes on every surface of the brush we're performing CSG on
                 if (!brushOutputLoops.intersectionLoops.TryGetValue(cutting_node_id, out Loop[] cuttingNodeIntersectionLoops))
+                {
+                    Debug.Assert(false, "Brush intersecting with brush has no intersecting surface?");
                     cuttingNodeIntersectionLoops = null;
+                }
 
                 sIntersectionLoops.Add(cuttingNodeIntersectionLoops);
 
@@ -204,10 +207,10 @@ namespace Chisel.Core
 	            //             	    inside          aligned     aligned		    reverse-aligned  reverse-aligned  outside        |     left-node       
 	            //-----------------------------------------------------------------------------------------------------------------------------------------
 	            new CategoryRoutingRow( CategoryIndex.Outside,        CategoryIndex.ReverseAligned, CategoryIndex.SelfReverseAligned,   CategoryIndex.SelfAligned,          CategoryIndex.Aligned,          CategoryIndex.Inside            ), // inside
-	            new CategoryRoutingRow( CategoryIndex.Outside,        CategoryIndex.Outside,        CategoryIndex.Outside,              CategoryIndex.SelfAligned,          CategoryIndex.Aligned,          CategoryIndex.Aligned           ), // other-aligned
-	            new CategoryRoutingRow( CategoryIndex.Outside,        CategoryIndex.Outside,        CategoryIndex.Outside,              CategoryIndex.SelfAligned,          CategoryIndex.Aligned,          CategoryIndex.SelfAligned       ), // self-aligned
-	            new CategoryRoutingRow( CategoryIndex.Outside,        CategoryIndex.ReverseAligned, CategoryIndex.SelfReverseAligned,   CategoryIndex.Outside,              CategoryIndex.Outside,          CategoryIndex.SelfReverseAligned), // self-reverse-aligned
-	            new CategoryRoutingRow( CategoryIndex.Outside,        CategoryIndex.ReverseAligned, CategoryIndex.SelfReverseAligned,   CategoryIndex.Outside,              CategoryIndex.Outside,          CategoryIndex.ReverseAligned    ), // other-reverse-aligned
+	            new CategoryRoutingRow( CategoryIndex.Outside,        CategoryIndex.Inside,         CategoryIndex.Inside,               CategoryIndex.SelfAligned,          CategoryIndex.Aligned,          CategoryIndex.Aligned           ), // other-aligned
+	            new CategoryRoutingRow( CategoryIndex.Outside,        CategoryIndex.Inside,         CategoryIndex.Inside,               CategoryIndex.SelfAligned,          CategoryIndex.Aligned,          CategoryIndex.SelfAligned       ), // self-aligned
+	            new CategoryRoutingRow( CategoryIndex.Outside,        CategoryIndex.ReverseAligned, CategoryIndex.SelfReverseAligned,   CategoryIndex.Inside,               CategoryIndex.Inside,           CategoryIndex.SelfReverseAligned), // self-reverse-aligned
+	            new CategoryRoutingRow( CategoryIndex.Outside,        CategoryIndex.ReverseAligned, CategoryIndex.SelfReverseAligned,   CategoryIndex.Inside,               CategoryIndex.Inside,           CategoryIndex.ReverseAligned    ), // other-reverse-aligned
 	            new CategoryRoutingRow( CategoryIndex.Outside,        CategoryIndex.Outside,        CategoryIndex.Outside,              CategoryIndex.Outside,              CategoryIndex.Outside,          CategoryIndex.Outside           )  // outside
             },
 
@@ -481,6 +484,7 @@ namespace Chisel.Core
                 {
                     int ncount = 0;
                     var startR = r;
+
                     // Duplicate route multiple times, bake operation into table
                     for (int t = 0; t < CategoryRoutingRow.Length; t++)
                     {
@@ -527,61 +531,68 @@ namespace Chisel.Core
                         }
                     }
 #if SHOW_DEBUG_MESSAGES
-                    //if (processedNode.NodeID == kDebugNode || kDebugNode == -1)
-                    //{
-                    //    Debug.Log($"[{startR}/{rightStack.Length}] {ncount} {vIndex} / {sCombineIndexRemap.Count} {rightStack[startR].node} {rightStack.Length - startR} +");
-                    //    Dump(sCombineChildren.ToArray(), depth);
-                    //}
+                    /*
+                    if (processedNode.NodeID == kDebugNode || kDebugNode == -1)
+                    {
+                        Debug.Log($"[{startR}/{rightStack.Length}] {ncount} {vIndex} / {sCombineIndexRemap.Count} {rightStack[startR].node} {rightStack.Length - startR} +");
+                        Dump(sCombineChildren.ToArray(), depth);
+                    }*/
 #endif
                 } else
                 {
                     int ncount = 0;
+                    var startR = r;
                     int routingStep = routingSteps[nodeIndex];
+
                     // Duplicate route multiple times
                     for (int t = 0; t < CategoryRoutingRow.Length; t++, routingOffset += routingStep)
                     {
-                        // Fix up routing to include offset b/c duplication
-                        routingRow = rightStack[r].routingRow + routingOffset;
-
-                        int foundIndex = -1;
-#if USE_OPTIMIZATIONS
-                        if (sCombineUsedIndices.Contains(vIndex))
-#endif
+                        //for (r = startR; r < startR + routingSteps[nodeIndex - 1]; r++)
                         {
+                            // Fix up routing to include offset b/c duplication
+                            routingRow = rightStack[r].routingRow + routingOffset;
+
+                            int foundIndex = -1;
 #if USE_OPTIMIZATIONS
-                            for (int n = startNodeIndex; n < sCombineChildren.Count; n++)
+                            if (sCombineUsedIndices.Contains(vIndex))
+#endif
                             {
-                                Debug.Assert(rightStack[r].node == sCombineChildren[n].node);
-                                if (sCombineChildren[n].routingRow.Equals(routingRow))
+#if USE_OPTIMIZATIONS
+                                for (int n = startNodeIndex; n < sCombineChildren.Count; n++)
                                 {
-                                    foundIndex = (int)sCombineChildren[n].input;
-                                    break;
+                                    Debug.Assert(rightStack[r].node == sCombineChildren[n].node);
+                                    if (sCombineChildren[n].routingRow.Equals(routingRow))
+                                    {
+                                        foundIndex = (int)sCombineChildren[n].input;
+                                        break;
+                                    }
+                                }
+#endif
+                                if (foundIndex == -1)
+                                {
+                                    sCombineChildren.Add(new CategoryStackNode()
+                                    {
+                                        node = rightStack[r].node,
+                                        input = (CategoryGroupIndex)index,
+                                        routingRow = routingRow
+                                    });
+                                    foundIndex = index;
+                                    index++;
                                 }
                             }
-#endif
-                            if (foundIndex == -1)
-                            {
-                                sCombineChildren.Add(new CategoryStackNode()
-                                {
-                                    node = rightStack[r].node,
-                                    input = (CategoryGroupIndex)index,
-                                    routingRow = routingRow
-                                });
-                                foundIndex = index;
-                                index++;
-                            }
-                        }
 
-                        sCombineIndexRemap[vIndex] = foundIndex;
-                        vIndex++;
-                        ncount++;
+                            sCombineIndexRemap[vIndex] = foundIndex;
+                            vIndex++;
+                            ncount++;
+                        }
                     }
 #if SHOW_DEBUG_MESSAGES
-                    //if (processedNode.NodeID == kDebugNode || kDebugNode == -1)
-                    //{
-                    //    Debug.Log($"[{r}/{rightStack.Length}] {ncount} {vIndex} / {sCombineIndexRemap.Count} {rightStack[r].node} -");
-                    //    Dump(sCombineChildren.ToArray(), depth);
-                    //}
+                    /*
+                    if (processedNode.NodeID == kDebugNode || kDebugNode == -1)
+                    {
+                        Debug.Log($"[{r}/{rightStack.Length}] {ncount} {vIndex} / {sCombineIndexRemap.Count} {rightStack[r].node} -");
+                        Dump(sCombineChildren.ToArray(), depth);
+                    }*/
 #endif
                 }
             }
@@ -611,6 +622,7 @@ namespace Chisel.Core
                     sCombineChildren.RemoveRange(startNodeIndex, sCombineChildren.Count - startNodeIndex);
                     //Debug.Log($"[-/{rightStack.Length}] remove last");
                     FixUpIndices(sCombineChildren, sCombineIndexRemap, prevNodeIndex, startNodeIndex);
+
 #if SHOW_DEBUG_MESSAGES
                     if (processedNode.NodeID == kDebugNode || kDebugNode == -1)
                         Dump(sCombineChildren.ToArray(), depth);
@@ -753,7 +765,7 @@ namespace Chisel.Core
         }
 
 #if SHOW_DEBUG_MESSAGES
-        static int kDebugNode = 2;
+        static int kDebugNode = 5;
         static void Dump(CSGTreeNode processedNode, CategoryStackNode[] stack, int depth = 0)
         {
             var space = new String(' ', depth);

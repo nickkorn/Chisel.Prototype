@@ -279,33 +279,47 @@ namespace Chisel.Core
                     for (int l = loopsOnBrushSurface.Count - 1; l >= 0; l--)
                     {
                         var surfaceLoop = loopsOnBrushSurface[l];
+                        if (!surfaceLoop.Valid)
+                            continue;
+
                         if (!routingLookup.TryGetRoute(routingTable, surfaceLoop.interiorCategory, out CategoryRoutingRow routingRow))
                             continue;
 
-                        // Use categorization lookup between original surface & default category here ...
-                        surfaceLoop.interiorCategory = routingRow[CategoryIndex.Outside];
+                        bool overlap = intersectionLoop != null && CSGManagerPerformCSG.AreLoopsOverlapping(surfaceLoop, intersectionLoop);
+
+                        // Lookup categorization lookup between original surface & other surface ...
+                        if (overlap)
+                        {
+                            surfaceLoop.interiorCategory = routingRow[CategoryIndex.Aligned];
+                            continue;
+                        } else
+                            surfaceLoop.interiorCategory = routingRow[CategoryIndex.Outside];
+
                         //if (brush.brushNodeID == 2)
                         //    Debug.Log($"{routingRow} {routingLookup.startIndex} {routingLookup.endIndex}");
-                            //Debug.Log($"{i} {l} {surfaceIndex} | {surfaceLoop.loopIndex} | {(CategoryIndex)(surfaceLoop.interiorCategory-1)}");
+                        //Debug.Log($"{i} {l} {surfaceIndex} | {surfaceLoop.loopIndex} | {(CategoryIndex)(surfaceLoop.interiorCategory-1)}");
 
                         // Add all holes that share the same plane to the polygon
-                        if (intersectionLoop == null)
-                            continue; 
+                        if (intersectionLoop != null)
+                        { 
+                            //if (surfaceLoop.info.brush.brushNodeID == 5)
+                            //    Debug.Log($"{i} {l} | {surfaceLoop.loopIndex} 'Brush {surfaceLoop.info.brush}' | {intersectionLoop.loopIndex} 'Brush {intersectionLoop.info.brush}' | {routingRow}");
 
-                        //if (surfaceLoop.info.brush.brushNodeID == 5)
-                        //    Debug.Log($"{i} {l} {surfaceIndex} | {intersectionLoop.loopIndex} | {(CategoryIndex)(routingRow[intersectionLoop.interiorCategory] - 1)} {(CategoryIndex)intersectionLoop.interiorCategory} {routingRow}");
+                            // Categorize between original surface & intersection
+                            var intersectionCategory = routingRow[intersectionLoop.interiorCategory];
 
-                        // Categorize between original surface & intersection
-                        var intersectionCategory = routingRow[intersectionLoop.interiorCategory];
+                            // If the intersection polygon would get the same category, we don't need to do a pointless intersection
+                            if (intersectionCategory == surfaceLoop.interiorCategory)
+                                continue;
 
-                        // If the intersection polygon would get the same category, we don't need to do a pointless intersection
-                        if (intersectionCategory == surfaceLoop.interiorCategory)
-                            continue;
+                            //if (!CSGManagerPerformCSG.Intersects(surfaceLoop, intersectionLoop))
+                            //    continue;
 
-                        //if (!CSGManagerPerformCSG.Intersects(surfaceLoop, intersectionLoop))
-                        //    continue;
+                            //Debug.Log($"<<'Brush {surfaceLoop.info.brush}' Intersect");
+                            CSGManagerPerformCSG.Intersect(brushVertices, loopsOnBrushSurface, surfaceLoop, intersectionLoop, intersectionCategory);
+                            //Debug.Log($">>'Brush {surfaceLoop.info.brush}' Intersect");
+                        }
 
-                        CSGManagerPerformCSG.Intersect(brushVertices, loopsOnBrushSurface, surfaceLoop, intersectionLoop, intersectionCategory);
                     }
 
                     // TODO: remove the need for this (check on insertion)

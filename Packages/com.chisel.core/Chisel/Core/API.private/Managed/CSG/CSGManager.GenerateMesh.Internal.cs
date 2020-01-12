@@ -658,9 +658,9 @@ namespace Chisel.Core
                     continue;
                 }
 
-                //Debug.Log($"render {loop.loopIndex} {(CategoryIndex)loop.interiorCategory}");
                 //if (brushNodeID != 5) 
-                //    continue; 
+                //    continue;
+                //Debug.Log($"render {loop.loopIndex} {(CategoryIndex)loop.interiorCategory} 'Brush {loop.info.brush}'");
 
                 //Debug.Log($"{brushNodeID} {l}");
 

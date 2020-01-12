@@ -29,13 +29,7 @@ namespace Chisel.Core
     // TODO: rename
     [Serializable] 
     public sealed class Loop
-    {/*
-        public static int[] loopTestIndices =
-        {
-            28,92,
-            //35
-        };
-        */
+    {
         public static int loopDebugCounter = 0;
         public int loopIndex = loopDebugCounter++;
 
@@ -46,9 +40,26 @@ namespace Chisel.Core
         [NonSerialized] public List<Loop>   holes       = new List<Loop>();
         [NonSerialized] public LoopInfo     info;
 
-        [NonSerialized] public CategoryGroupIndex   interiorCategory    = CategoryGroupIndex.Invalid; // determine if the loop is inside another brush or aligned with another brush
+        [NonSerialized] public CategoryGroupIndex   _interiorCategory    = CategoryGroupIndex.Invalid; // determine if the loop is inside another brush or aligned with another brush
+        public CategoryGroupIndex   interiorCategory
+        {
+            get
+            {
+                return _interiorCategory;
+            }
+            set
+            {
+                if (loopIndex == 178 ||
+                    loopIndex == 182 ||
+                    loopIndex == 186 ||
+                    loopIndex == 190)
+                {
+                    Debug.Log($"[{loopIndex}] {_interiorCategory} -> {value} | 'Brush {info.brush}' {info.basePlaneIndex}");
+                }
+                _interiorCategory = value;
+            }
+        }
         [NonSerialized] public bool                 convex              = false;
-
 
         public bool Valid { [MethodImpl(MethodImplOptions.AggressiveInlining)] get { return indices.Count >= 3; } }
 
@@ -63,14 +74,6 @@ namespace Chisel.Core
             this.info               = original.info;
             this.interiorCategory   = original.interiorCategory;
             this.convex             = original.convex;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void CopyDetails(Loop other)
-        {
-            info                = other.info;
-            convex              = other.convex;
-            interiorCategory    = other.interiorCategory;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -178,17 +181,6 @@ namespace Chisel.Core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public int IndexOf(Edge edge)
-        {
-            for (int e = 0; e < edges.Count; e++)
-            {
-                if (edges[e].index1 == edge.index1 && edges[e].index2 == edge.index2) 
-                    return e; 
-            }
-            return -1;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int IndexOf(Edge edge, out bool inverted)
         {
             //var builder = new System.Text.StringBuilder();
@@ -215,124 +207,6 @@ namespace Chisel.Core
                 return EdgeCategory.Inside;
             return EdgeCategory.Outside;
         }
-        /*
-        public void Split(VertexSoup soup)
-        {
-            Debug.Log($">>{edges.Count}");
-            for (int i = 0; i < edges.Count; i++)
-            {
-                var edge = edges[i];
-                Debug.Log($"--{i}: {edge} {soup.vertices[edge.index1]} {soup.vertices[edge.index2]}");
-            }
-
-            var newEdges = new List<Edge>();
-            Split(newEdges);
-
-            newEdges.AddRange(edges);
-            edges.Clear();
-            AddEdges(newEdges);
-
-            Debug.Log("<<--");
-        }
-
-        public void Split(List<Edge> newEdges)
-        {
-            if (edges.Count < 3)    
-                return;
-
-            var vertexEdges = new Dictionary<int, List<int>>();
-            for (int i = 0; i < edges.Count; i++)
-            {
-                var edge = edges[i];
-                if (!vertexEdges.TryGetValue(edge.index1, out List<int> destinations))
-                {
-                    destinations = new List<int>();
-                    vertexEdges[edge.index1] = destinations;
-                }
-                destinations.Add(i);
-                if (!vertexEdges.TryGetValue(edge.index2, out destinations))
-                {
-                    destinations = new List<int>();
-                    vertexEdges[edge.index2] = destinations;
-                }
-                destinations.Add(i);
-            }
-            var lastEdgeIndex = 0;
-            var lastEdge = edges[lastEdgeIndex];
-            var foundEdgeIndices = new HashSet<int>();
-            var foundEdges = new List<Edge>();
-            do
-            {
-                if (!foundEdgeIndices.Add(lastEdgeIndex))
-                {
-                    Debug.Log("again?");
-                    break;
-                }
-                foundEdges.Add(lastEdge);
-                //Debug.Log($"Add {lastEdge}");
-                if (vertexEdges.TryGetValue(lastEdge.index2, out List<int> destinations))
-                {
-                    int nextEdgeIndex = -1;
-                    destinations.Remove(lastEdgeIndex);
-                    for (int i = 0; i < destinations.Count; i++)
-                    {
-                        var nextEdge = edges[destinations[i]];
-                        //Debug.Log($"{i}/{destinations[i]}: {lastEdge} => {nextEdge} ");
-                        if (nextEdge.index1 == lastEdge.index2)
-                        {
-                            nextEdgeIndex = destinations[i];
-                            lastEdge = nextEdge;
-                            destinations.RemoveAt(i);
-                            //Debug.Log($"{i}/{nextEdgeIndex}: found {lastEdge}");
-                            break;
-                        }
-                    }
-                    if (nextEdgeIndex == -1)
-                    {
-                        for (int i = 0; i < destinations.Count; i++)
-                        {
-                            var nextEdge = edges[destinations[i]];
-                            //Debug.Log($"{i}/{destinations[i]}: {lastEdge} => {nextEdge} ");
-                            if (nextEdge.index2 == lastEdge.index2)
-                            {
-                                nextEdgeIndex = destinations[i];
-                                nextEdge.Flip();
-                                lastEdge = nextEdge;
-                                destinations.RemoveAt(i);
-                                //Debug.Log($"{i}/{nextEdgeIndex}: found {lastEdge} &");
-                                break;
-                            }
-                        }
-                    }
-                    lastEdgeIndex = nextEdgeIndex;
-                }
-                if (lastEdgeIndex == -1)
-                {
-                    Debug.Log("no connection?");
-                    break;
-                }
-            } while (lastEdgeIndex != -1);
-
-            if (foundEdgeIndices.Count == edges.Count)
-                return;
-
-            //Debug.Log($"<<{sortedEdges.Count}");
-            newEdges.AddRange(foundEdges);
-            
-            var sortedEdges = foundEdgeIndices.ToList();
-            sortedEdges.Sort();
-            for (int i = sortedEdges.Count - 1; i >= 0; i--)
-                edges.RemoveAt(sortedEdges[i]);
-
-            Debug.Log($"<<{newEdges.Count}");
-            for (int i = 0; i < newEdges.Count; i++)
-            {
-                var edge = newEdges[i];
-                Debug.Log($"++{i}: {edge}");
-            }
-
-            Split(newEdges);
-        }*/
     }
 #endif
 }

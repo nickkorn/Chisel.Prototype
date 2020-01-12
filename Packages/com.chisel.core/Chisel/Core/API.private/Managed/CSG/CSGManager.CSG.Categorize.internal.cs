@@ -136,8 +136,7 @@ namespace Chisel.Core
             Cut,
             Outside,
             Polygon1InsidePolygon2,
-            Polygon2InsidePolygon1,
-            Overlapping
+            Polygon2InsidePolygon1
         }
 
         [Flags]
@@ -160,618 +159,131 @@ namespace Chisel.Core
         public const double kEpsilon2 = 0.001;
         public const double kEpsilonSqr = kEpsilon * kEpsilon;
 
-        public unsafe static OperationResult PerformBooleanOperation(VertexSoup soup, Loop polygon1, Loop polygon2, List<Loop> resultLoops, CSGOperationType operationType)//, bool debug = false)
+        // Assumes polygons are convex
+        public unsafe static bool AreLoopsOverlapping(Loop polygon1, Loop polygon2)
+        {
+            if (polygon1.indices.Count != polygon2.indices.Count)
+                return false;
+
+            Debug.Assert(polygon1.convex && polygon2.convex);
+            if (!polygon1.convex || !polygon2.convex)
+                return false;
+            
+            for (int i = 0; i < polygon1.indices.Count; i++)
+            {
+                if (polygon2.indices.IndexOf(polygon1.indices[i]) == -1)
+                    return false;
+            }
+            return true;
+        }
+
+        public unsafe static OperationResult PerformBooleanIntersection(VertexSoup soup, Loop polygon1, Loop polygon2, List<Loop> resultLoops)
         {
             UnityEngine.Profiling.Profiler.BeginSample("PerformBooleanOperation");
             try
             {
                 Loop newPolygon = null;
-                if (operationType == CSGOperationType.Intersecting)
-                {
-                    Debug.Assert(polygon1.convex && polygon2.convex);
-                    if (polygon1.convex && polygon2.convex)
-                    {
-                        bool isOverlapping = true;
-                        for (int i = 0; i < polygon1.indices.Count; i++)
-                        {
-                            if (polygon2.indices.IndexOf(polygon1.indices[i]) == -1)
-                            {
-                                isOverlapping = false;
-                                break;
-                            }
-                        }
-                        if (isOverlapping)
-                            return CSGManagerPerformCSG.OperationResult.Overlapping;
-
-                        var brush1 = polygon1.info.brush;
-                        var mesh1 = BrushMeshManager.GetBrushMesh(brush1.BrushMesh.BrushMeshID);
-                        var nodeToTreeSpaceInversed1 = brush1.TreeToNodeSpaceMatrix;
-                        var nodeToTreeSpace1 = brush1.NodeToTreeSpaceMatrix;
-
-                        var worldSpacePlanes1Length = mesh1.surfaces.Length;
-                        var worldSpacePlanes1 = stackalloc float4[worldSpacePlanes1Length];
-                        fixed (BrushMesh.Surface* mesh1Surfaces = &mesh1.surfaces[0])
-                        {
-                            CSGManagerPerformCSG.TransformByTransposedInversedMatrix(worldSpacePlanes1, (float4*)mesh1Surfaces, mesh1.surfaces.Length, math.transpose(nodeToTreeSpaceInversed1));
-                        }
-
-                        newPolygon = new Loop()
-                        {
-                            info = polygon1.info,
-                            interiorCategory = polygon1.interiorCategory,
-                            convex = true
-                        };
-
-                        for (int i = 0; i < polygon2.indices.Count; i++)
-                        {
-                            var vertexIndex = polygon2.indices[i];
-                            var worldVertex = new float4(soup.vertices[vertexIndex], 1);
-                            if (IsOutsidePlanes(worldSpacePlanes1, worldSpacePlanes1Length, worldVertex))
-                                continue;
-                            if (!newPolygon.indices.Contains(vertexIndex)) 
-                                newPolygon.indices.Add(vertexIndex);
-                        }
-
-                        if (newPolygon.indices.Count == polygon2.indices.Count) // all vertices of polygon2 are inside polygon1
-                            return CSGManagerPerformCSG.OperationResult.Polygon2InsidePolygon1;
-
-
-                        var brush2 = polygon2.info.brush;
-                        var mesh2 = BrushMeshManager.GetBrushMesh(brush2.BrushMesh.BrushMeshID);
-                        var nodeToTreeSpaceInversed2 = brush2.TreeToNodeSpaceMatrix;
-                        var nodeToTreeSpace2 = brush2.NodeToTreeSpaceMatrix;
-
-                        var worldSpacePlanes2Length = mesh2.surfaces.Length;
-                        var worldSpacePlanes2 = stackalloc float4[mesh2.surfaces.Length];
-                        fixed (BrushMesh.Surface* mesh2Surfaces = &mesh2.surfaces[0])
-                        {
-                            CSGManagerPerformCSG.TransformByTransposedInversedMatrix(worldSpacePlanes2, (float4*)mesh2Surfaces, mesh2.surfaces.Length, math.transpose(nodeToTreeSpaceInversed2));
-                        }
-
-                        if (newPolygon.indices.Count == 0) // no vertex of polygon2 is inside polygon1
-                        {
-                            // polygon edges are not intersecting
-                            var vertexIndex = polygon1.indices[0];
-                            var worldVertex = new float4(soup.vertices[vertexIndex], 1);
-                            if (IsOutsidePlanes(worldSpacePlanes2, worldSpacePlanes2Length, worldVertex))
-                                // no vertex of polygon1 can be inside polygon2
-                                return CSGManagerPerformCSG.OperationResult.Outside;
-
-                            // all vertices of polygon1 must be inside polygon2
-                            return CSGManagerPerformCSG.OperationResult.Polygon1InsidePolygon2;
-                        } else
-                        {
-                            // check if all vertices of polygon1 are on or inside polygon2
-                            bool haveOutsideVertices = false;
-                            for (int i = 0; i < polygon1.indices.Count; i++)
-                            {
-                                var vertexIndex = polygon1.indices[i];
-                                var worldVertex = new float4(soup.vertices[vertexIndex], 1);
-                                if (!IsOutsidePlanes(worldSpacePlanes2, worldSpacePlanes2Length, worldVertex))
-                                    continue;
-                                haveOutsideVertices = true;
-                                break;
-                            }
-                            if (!haveOutsideVertices)
-                                return CSGManagerPerformCSG.OperationResult.Polygon1InsidePolygon2;
-                        }
-
-                        // we might be missing vertices on polygon1 that are inside polygon2 (intersections with other loops)
-                        // TODO: optimize
-                        for (int i = 0; i < polygon1.indices.Count; i++)
-                        {
-                            var vertexIndex = polygon1.indices[i];
-                            var worldVertex = new float4(soup.vertices[vertexIndex], 1);
-                            if (IsOutsidePlanes(worldSpacePlanes2, worldSpacePlanes2Length, worldVertex))
-                                continue;
-
-                            if (!newPolygon.indices.Contains(vertexIndex))
-                                newPolygon.indices.Add(vertexIndex);
-                        }
-                        // We need to resort the indices now
-                        // TODO: find a way to not have to do this
-                        SortIndices(newPolygon.indices, soup.vertices, newPolygon.info.worldPlane.normal);
-
-                        newPolygon.AddEdges(newPolygon.indices);
-                        resultLoops.Add(newPolygon);
-                        return CSGManagerPerformCSG.OperationResult.Cut;
-                    }
-                }
-
-                var result = PerformBooleanOperation(soup, polygon1.info.right, polygon1.info.forward, polygon1, polygon2, resultLoops, operationType);//, debug);
-
-                foreach (var overlappingLoop in resultLoops)
-                {
-                    overlappingLoop.interiorCategory = polygon1.interiorCategory;
-                    overlappingLoop.info = polygon1.info;
-                }
-
-                polygon1.edges.Clear();
-                polygon1.AddEdges(polygon1.indices);
-
-                polygon2.edges.Clear();
-                polygon2.AddEdges(polygon2.indices);
-                /*
-                var builder = new System.Text.StringBuilder();
-                Quaternion rotation = Quaternion.identity;
-                if (newPolygon != null)
-                {
-                    rotation = Quaternion.FromToRotation(newPolygon.info.worldPlane.normal, Vector3.forward);
+                Debug.Assert(polygon1.convex && polygon2.convex);
+                if (!polygon1.convex || !polygon2.convex)
+                    return OperationResult.Fail;
                 
-                    builder.AppendLine($"{result}");
-                
-                    builder.AppendLine("polygon1:");
-                    Dump(builder, polygon1, soup, rotation);
+                //if (AreLoopsOverlapping(polygon1, polygon2))
+                //    return CSGManagerPerformCSG.OperationResult.Overlapping;
 
-                    builder.AppendLine("polygon2:");
-                    Dump(builder, polygon2, soup, rotation);
-                
-                    builder.AppendLine();
-                    builder.AppendLine("newloop:");
-                    Dump(builder, newPolygon, soup, rotation);
-                }
-                */
-                if (resultLoops != null)
+                var brush1 = polygon1.info.brush;
+                var mesh1 = BrushMeshManager.GetBrushMesh(brush1.BrushMesh.BrushMeshID);
+                var nodeToTreeSpaceInversed1 = brush1.TreeToNodeSpaceMatrix;
+                var nodeToTreeSpace1 = brush1.NodeToTreeSpaceMatrix;
+
+                var worldSpacePlanes1Length = mesh1.surfaces.Length;
+                var worldSpacePlanes1 = stackalloc float4[worldSpacePlanes1Length];
+                fixed (BrushMesh.Surface* mesh1Surfaces = &mesh1.surfaces[0])
                 {
-                    for (int n = resultLoops.Count - 1; n >= 0; n--)
-                    {
-                        if (!resultLoops[n].Valid)
-                        {
-                            resultLoops.RemoveAt(n);
-                            continue;
-                        }
-                        resultLoops[n].edges.Clear();
-                        resultLoops[n].AddEdges(resultLoops[n].indices);
-                        /*
-                        if (newPolygon != null)
-                        {
-                            builder.AppendLine($"resultLoops[{n}]:");
-                            Dump(builder, resultLoops[n], soup, rotation);
-                        }*/
-                    }
+                    CSGManagerPerformCSG.TransformByTransposedInversedMatrix(worldSpacePlanes1, (float4*)mesh1Surfaces, mesh1.surfaces.Length, math.transpose(nodeToTreeSpaceInversed1));
                 }
-                /*
-                if (newPolygon != null)
-                    Debug.Log(builder.ToString());
-                    */
-                return result;
-            }
-            finally { UnityEngine.Profiling.Profiler.EndSample(); }
-        }
 
-        //  outside       touching/               overlapping    polygon inside 
-        //                outside                                polygon
-        //
-        //  *--*  *--*    *--*--*     *--* *      *-----*        *-----*
-        //  |  |  |  |    |  |  |     |  |/|      |     |        | *-* |
-        //  *--*  *--*    *--*--*     |  *-*      |     |        | | | |
-        //                            *--*        |     |        | *-* | 
-        //                                        *-----*        *-----*
-        //  polygon intersecting
-        //
-        //    *-*                                             *-*         *-*
-        //  *-|-|-*     *---*-*     *-*-*-*     *-*-*-*     *-|-|-*     *-|-|-*
-        //  | | | |     |  /| |     | | | |     | | | |     | | | |     | | | | 
-        //  | *-* |     | *-* |     | *-* |     | | | |     | | | |     | | | |
-        //  *-----*     *-----*     *-----*     *-*-*-*     *-*-*-*     *-|-|-*
-        //                                                                *-*
-
-        // TODO: find all intersection vertices before trying to do boolean operations, should get rid of a lot of precision issues
-        //          snap vertices/edges to edges on other brushes?
-
-        static readonly List<PointFlags> s_PointFlags1 = new List<PointFlags>();
-        static readonly List<PointFlags> s_PointFlags2 = new List<PointFlags>();
-
-        static readonly List<EdgeCategory> s_EdgeFlags1 = new List<EdgeCategory>();
-        static readonly List<EdgeCategory> s_EdgeFlags2 = new List<EdgeCategory>();
-
-        public static OperationResult PerformBooleanOperation(VertexSoup soup, Vector3 right, Vector3 forward, Loop polygon1, Loop polygon2, List<Loop> resultLoops, CSGOperationType operationType)
-        {
-            // TODO: store 'loop' as a list of edges (2 ushorts to vertices)
-            //          -> do CSG on edges being inside/on/outside other brush, don't bother with ordering
-            //          -> use these edges with triangulation code
-
-            if (!polygon1.Valid ||
-                !polygon2.Valid)
-                return OperationResult.Outside;
-
-            // Get list of all points from this polygon (including all intersection points with other polygon)
-            List<ushort> indices1, indices2;
-
-            indices1 = polygon1.indices;//.ToList();
-            indices2 = polygon2.indices;//.ToList(); 
-
-            if (indices1.Count < 3 ||
-                indices2.Count < 3)
-                return OperationResult.Outside;
-
-            DetermineOnEdgeFlags(//soup.vertices, 
-                                indices2, indices1, s_PointFlags1);
-            DetermineOnEdgeFlags(//soup.vertices, 
-                                indices1, indices2, s_PointFlags2);
-
-            var point1CrossingToIndex2 = new List<int>();//[vertices1.Count];
-            var point2CrossingToIndex1 = new List<int>();//[vertices2.Count];
-            if (point1CrossingToIndex2.Capacity < indices1.Count)
-                point1CrossingToIndex2.Capacity = indices1.Count;
-            if (point2CrossingToIndex1.Capacity < indices2.Count)
-                point2CrossingToIndex1.Capacity = indices2.Count;
-            for (int i = 0; i < indices1.Count; i++) point1CrossingToIndex2.Add(-1);
-            for (int i = 0; i < indices2.Count; i++) point2CrossingToIndex1.Add(-1);
-
-
-            Debug.Assert(s_PointFlags1.Count == indices1.Count);
-            Debug.Assert(s_PointFlags2.Count == indices2.Count);
-
-            int onEdgeCount = 0;
-            for (int currIndex2 = indices2.Count - 1,
-                     nextIndex2 = 0;
-
-                     nextIndex2 < indices2.Count;
-
-                     currIndex2 = nextIndex2,
-                     nextIndex2++)
-            {
-                var flags2 = s_PointFlags2[currIndex2];
-                if ((flags2 & PointFlags.On) == PointFlags.None)
-                    continue;
-
-                var currVertexIndex2 = indices2[currIndex2];
-                //var currVertex2 = soup.vertices[indices2[currIndex2]];
-                for (int currIndex1 = indices1.Count - 1,
-                         nextIndex1 = 0;
-
-                         nextIndex1 < indices1.Count;
-
-                         currIndex1 = nextIndex1,
-                         nextIndex1++)
+                newPolygon = new Loop()
                 {
-                    var flags1 = s_PointFlags1[currIndex1];
-                    if ((flags1 & PointFlags.On) == PointFlags.None)
+                    info = polygon1.info,
+                    interiorCategory = polygon1.interiorCategory,
+                    convex = true
+                };
+
+                for (int i = 0; i < polygon2.indices.Count; i++)
+                {
+                    var vertexIndex = polygon2.indices[i];
+                    var worldVertex = new float4(soup.vertices[vertexIndex], 1);
+                    if (IsOutsidePlanes(worldSpacePlanes1, worldSpacePlanes1Length, worldVertex))
                         continue;
+                    if (!newPolygon.indices.Contains(vertexIndex)) 
+                        newPolygon.indices.Add(vertexIndex);
+                }
 
-                    var currVertexIndex1 = indices1[currIndex1];
-                    //var currVertex1 = soup.vertices[indices1[currIndex1]];
-                    //if (currVertex1.Equals(currVertex2, kEpsilon))
-                    if (currVertexIndex1 == currVertexIndex2)
+                if (newPolygon.indices.Count == polygon2.indices.Count) // all vertices of polygon2 are inside polygon1
+                    return CSGManagerPerformCSG.OperationResult.Polygon2InsidePolygon1;
+
+
+                var brush2 = polygon2.info.brush;
+                var mesh2 = BrushMeshManager.GetBrushMesh(brush2.BrushMesh.BrushMeshID);
+                var nodeToTreeSpaceInversed2 = brush2.TreeToNodeSpaceMatrix;
+                var nodeToTreeSpace2 = brush2.NodeToTreeSpaceMatrix;
+
+                var worldSpacePlanes2Length = mesh2.surfaces.Length;
+                var worldSpacePlanes2 = stackalloc float4[mesh2.surfaces.Length];
+                fixed (BrushMesh.Surface* mesh2Surfaces = &mesh2.surfaces[0])
+                {
+                    CSGManagerPerformCSG.TransformByTransposedInversedMatrix(worldSpacePlanes2, (float4*)mesh2Surfaces, mesh2.surfaces.Length, math.transpose(nodeToTreeSpaceInversed2));
+                }
+
+                if (newPolygon.indices.Count == 0) // no vertex of polygon2 is inside polygon1
+                {
+                    // polygon edges are not intersecting
+                    var vertexIndex = polygon1.indices[0];
+                    var worldVertex = new float4(soup.vertices[vertexIndex], 1);
+                    if (IsOutsidePlanes(worldSpacePlanes2, worldSpacePlanes2Length, worldVertex))
+                        // no vertex of polygon1 can be inside polygon2
+                        return CSGManagerPerformCSG.OperationResult.Outside;
+
+                    // all vertices of polygon1 must be inside polygon2
+                    return CSGManagerPerformCSG.OperationResult.Polygon1InsidePolygon2;
+                } else
+                {
+                    // check if all vertices of polygon1 are on or inside polygon2
+                    bool haveOutsideVertices = false;
+                    for (int i = 0; i < polygon1.indices.Count; i++)
                     {
-                        point1CrossingToIndex2[currIndex1] = currIndex2;
-                        point2CrossingToIndex1[currIndex2] = currIndex1;
-                        onEdgeCount++;
+                        var vertexIndex = polygon1.indices[i];
+                        var worldVertex = new float4(soup.vertices[vertexIndex], 1);
+                        if (!IsOutsidePlanes(worldSpacePlanes2, worldSpacePlanes2Length, worldVertex))
+                            continue;
+                        haveOutsideVertices = true;
                         break;
                     }
-                }
-            }
-
-
-            if (s_EdgeFlags1.Capacity < s_PointFlags1.Count)
-                s_EdgeFlags1.Capacity = s_PointFlags1.Count;
-            if (s_EdgeFlags2.Capacity < s_PointFlags2.Count)
-                s_EdgeFlags2.Capacity = s_PointFlags2.Count;
-
-            int insideCount1 = 0;
-            int insideCount2 = 0;
-            DetermineEdgeFlags(soup, s_EdgeFlags1, s_PointFlags1, indices1, point1CrossingToIndex2, right, forward, indices2, point2CrossingToIndex1, ref insideCount1);
-            DetermineEdgeFlags(soup, s_EdgeFlags2, s_PointFlags2, indices2, point2CrossingToIndex1, right, forward, indices1, point1CrossingToIndex2, ref insideCount2);
-
-
-            // TODO: optimize, simplify
-
-            int onPointCount1 = 0;
-            int onEdgeCount1 = 0;
-            int insideEdgeCount1 = 0;
-            int notInsideEdgeCount1 = 0;
-            int notOutsideEdgeCount1 = 0;
-            int outsideEdgeCount1 = 0;
-            for (int i = 0; i < s_PointFlags1.Count; i++)
-            {
-                if ((s_PointFlags1[i] & PointFlags.On) != PointFlags.None)
-                    onPointCount1++;
-
-                if (s_EdgeFlags1[i] == EdgeCategory.Aligned || s_EdgeFlags1[i] == EdgeCategory.ReverseAligned)
-                    onEdgeCount1++;
-
-                if (s_EdgeFlags1[i] != EdgeCategory. Inside) notInsideEdgeCount1++;
-                if (s_EdgeFlags1[i] == EdgeCategory. Inside) insideEdgeCount1++;
-                if (s_EdgeFlags1[i] == EdgeCategory.Outside) outsideEdgeCount1++;
-                if (s_EdgeFlags1[i] != EdgeCategory.Outside) notOutsideEdgeCount1++;
-            }
-
-            int onPointCount2 = 0;
-            int onEdgeCount2 = 0;
-            int insideEdgeCount2 = 0;
-            int notInsideEdgeCount2 = 0;
-            int notOutsideEdgeCount2 = 0;
-            int outsideEdgeCount2 = 0;
-            for (int i = 0; i < s_PointFlags2.Count; i++)
-            {
-                if ((s_PointFlags2[i] & PointFlags.On) != PointFlags.None)
-                    onPointCount2++;
-
-                if (s_EdgeFlags2[i] == EdgeCategory.Aligned || s_EdgeFlags2[i] == EdgeCategory.ReverseAligned)
-                    onEdgeCount2++;
-
-                if (s_EdgeFlags2[i] != EdgeCategory. Inside) notInsideEdgeCount2++;
-                if (s_EdgeFlags2[i] == EdgeCategory. Inside) insideEdgeCount2++;
-                if (s_EdgeFlags2[i] == EdgeCategory.Outside) outsideEdgeCount2++;
-                if (s_EdgeFlags2[i] != EdgeCategory.Outside) notOutsideEdgeCount2++;
-            }
-
-
-
-            // If both polygons have all edges "on edge", then they must be overlapping
-            if (indices1.Count == onEdgeCount1 && indices1.Count == onPointCount1 &&
-                indices2.Count == onEdgeCount2 && indices2.Count == onPointCount2)
-            {
-                Debug.Assert(indices1.Count == indices2.Count);
-                return OperationResult.Overlapping;
-            }
-
-            // If all edges of both polygons are outside or "on edge", then they must be outside each other
-            // (since they can't be overlapping)
-            if (notInsideEdgeCount1 == indices1.Count &&
-                notInsideEdgeCount2 == indices2.Count)
-            {
-                if (operationType != CSGOperationType.Additive ||
-                    (outsideEdgeCount1 == indices1.Count &&
-                     outsideEdgeCount2 == indices2.Count))
-                    return OperationResult.Outside;
-            }
-
-            // If all edges of one polygon is inside and the other is outside, then one must be inside the other
-            if (outsideEdgeCount1 == indices1.Count && insideEdgeCount2 == indices2.Count) return OperationResult.Polygon2InsidePolygon1;
-            if (outsideEdgeCount2 == indices2.Count && insideEdgeCount1 == indices1.Count) return OperationResult.Polygon1InsidePolygon2;
-
-            // If one of the polygons has all it's edges "on edge", but not the other, then one of the polygons must be super thin
-            if (operationType != CSGOperationType.Additive)
-            {
-                if (indices1.Count == onPointCount1 && notOutsideEdgeCount2 == 0) { return OperationResult.Outside; }
-                if (indices2.Count == onPointCount2 && notOutsideEdgeCount1 == 0) { return OperationResult.Outside; }
-            }
-
-
-            // Since some of the edges must be intersecting or on/inside we have to cut
-            int innerDirection = (operationType == CSGOperationType.Subtractive) ? -1 : 1;
-            int outerDirection = 1;
-
-            int crossingCount = 0;
-            DeterminePolygonCrossOvers(operationType, s_EdgeFlags1, s_PointFlags1, point1CrossingToIndex2, ref crossingCount, primary: true);
-            DeterminePolygonCrossOvers(operationType, s_EdgeFlags2, s_PointFlags2, point2CrossingToIndex1, ref crossingCount, primary: false);
-            
-
-
-            //*
-            if (onEdgeCount == 0)
-            {
-                if (indices1.Count == insideCount1)
-                {
-                    bool found = true;
-                    if (indices2.Count == insideCount1)
-                    {
-                        for (int i = 0; i < s_PointFlags1.Count; i++)
-                        {
-                            if ((s_PointFlags1[i] & PointFlags.On) == PointFlags.None &&
-                                s_EdgeFlags1[i] != EdgeCategory.Inside)
-                            {
-                                found = false;
-                                break;
-                            }
-                        }
-                    }
-                    if (found)
-                        return OperationResult.Polygon1InsidePolygon2;
+                    if (!haveOutsideVertices)
+                        return CSGManagerPerformCSG.OperationResult.Polygon1InsidePolygon2;
                 }
 
-                if (indices2.Count == insideCount2)
+                // we might be missing vertices on polygon1 that are inside polygon2 (intersections with other loops)
+                // TODO: optimize
+                for (int i = 0; i < polygon1.indices.Count; i++)
                 {
-                    bool found = true;
-                    if (indices1.Count == insideCount2)
-                    {
-                        for (int i = 0; i < s_PointFlags2.Count; i++)
-                        {
-                            if ((s_PointFlags2[i] & PointFlags.On) == PointFlags.None &&
-                                s_EdgeFlags2[i] != EdgeCategory.Inside)
-                            {
-                                found = false;
-                                break;
-                            }
-                        }
-                    }
-                    if (found)
-                        return OperationResult.Polygon2InsidePolygon1;
+                    var vertexIndex = polygon1.indices[i];
+                    var worldVertex = new float4(soup.vertices[vertexIndex], 1);
+                    if (IsOutsidePlanes(worldSpacePlanes2, worldSpacePlanes2Length, worldVertex))
+                        continue;
+
+                    if (!newPolygon.indices.Contains(vertexIndex))
+                        newPolygon.indices.Add(vertexIndex);
                 }
-            } else
-            {
-                if (indices1.Count <= onEdgeCount + insideCount1)
-                {
-                    bool found = true;
-                    //if (vertices.Count <= onEdgeCount + insideCount1)
-                    {
-                        for (int i = 0; i < s_PointFlags1.Count; i++)
-                        {
-                            if ((s_PointFlags1[i] & PointFlags.On) == PointFlags.None &&
-                                s_EdgeFlags1[i] != EdgeCategory.Inside)
-                            {
-                                found = false;
-                                break;
-                            }
-                        }
-                    }
-                    if (found)
-                        return OperationResult.Polygon1InsidePolygon2;
-                }
+                // We need to resort the indices now
+                // TODO: find a way to not have to do this
+                SortIndices(newPolygon.indices, soup.vertices, newPolygon.info.worldPlane.normal);
+
+                newPolygon.AddEdges(newPolygon.indices);
+                resultLoops.Add(newPolygon);
+                return CSGManagerPerformCSG.OperationResult.Cut;
             }
-
-
-            resultLoops.Clear();
-            if (crossingCount > 0)
-            {/*
-                if (polygon1.loopIndex == 121 &&
-                    polygon2.loopIndex == 125)
-                {
-                    var builder = new System.Text.StringBuilder();
-                    var rotation = Quaternion.FromToRotation(polygon1.info.worldPlane.normal, Vector3.forward);
-                    Dump(builder, polygon1, soup, rotation);
-                    Dump(builder, polygon2, soup, rotation);
-                    Debug.Log(builder.ToString());
-                }*/
-                Combine(soup,
-                        indices1, point1CrossingToIndex2, polygon1.loopIndex,
-                        indices2, point2CrossingToIndex1, polygon2.loopIndex,
-                        resultLoops, innerDirection, outerDirection, operationType);
-            }
-
-
-            if (resultLoops.Count != 0)
-                return OperationResult.Cut;
-
-            return OperationResult.Outside;
-        }
-
-
-        private static readonly bool[][,] IntersectingCrossOver  = new bool[][,]
-        {
-            new bool[,]
-            //  From:               Reverse-
-            //  Inside     Aligned  Aligned  Outside
-            {                                          // To:
-                { false,   true,    true,    true  },  // Inside
-                { false,   false,   false,   true  },  // Aligned
-                { false,   false,   false,   false },  // ReverseAligned
-                { false,   false,   false,   false },  // Outside 
-            },
-            new bool[,]
-            //  From:               Reverse-
-            //  Inside     Aligned  Aligned  Outside
-            {                                          // To:
-                { false,   true,    true,    true  },  // Inside
-                { false,   false,   false,   true  },  // Aligned
-                { false,   false,   false,   false },  // ReverseAligned
-                { false,   false,   false,   false },  // Outside 
-            }
-        };
-        private static readonly bool[][,] AdditiveCrossOver      = new bool[][,]
-        {
-            new bool[,]
-            //  From:               Reverse-
-            //  Inside     Aligned  Aligned  Outside
-            {                                          // To:
-                { false,   false,   false,   false },  // Inside
-                { true,    false,   true,    false },  // Aligned
-                { false,   false,   false,   false },  // ReverseAligned
-                { true,    false,   true,    false },  // Outside
-            },
-            new bool[,]
-            //  From:               Reverse-
-            //  Inside     Aligned  Aligned  Outside
-            {                                          // To:
-                { false,   false,   false,   false },  // Inside
-                { true,    false,   true,    false },  // Aligned
-                { false,   false,   false,   false },  // ReverseAligned
-                { true,    false,   true,    false },  // Outside
-            }
-        };
-        private static readonly bool[][,] SubtractiveCrossOver   = new bool[][,]
-        {
-            new bool[,]
-            //  From:               Reverse-
-            //  Inside     Aligned  Aligned  Outside
-            {                                          // To:
-                { false,   false,   false,   false },  // Inside
-                { false,   false,   false,   false },  // Aligned
-                { true,    true,    false,   false },  // ReverseAligned
-                { false,   true,    false,   false },  // Outside
-            },
-            new bool[,]
-            //  From:               Reverse-
-            //  Inside     Aligned  Aligned  Outside
-            {                                          // To:
-                { false,   false,   false,   false },  // Inside
-                { true,    true,    true,    false },  // Aligned
-                { true,    true,    true,    false },  // ReverseAligned
-                { false,   true,    true,    false },  // Outside
-            }
-        };
-
-        private static readonly bool[][][,] EdgeOperations =
-        {
-            AdditiveCrossOver,      // CSGOperationType.Additive == 0
-            SubtractiveCrossOver,   // CSGOperationType.Subtractive == 1
-            IntersectingCrossOver   // CSGOperationType.Intersecting == 2
-        };
-
-        private static void DeterminePolygonCrossOvers(CSGOperationType operationType, List<EdgeCategory> edgeFlags, List<PointFlags> pointFlags, List<int> crossingToOtherLoop, ref int crossingCount, bool primary)
-        {
-            Debug.Assert(pointFlags.Count == edgeFlags.Count && crossingToOtherLoop.Count >= edgeFlags.Count);
-
-            var operationTable = EdgeOperations[(int)operationType][primary ? 0 : 1];
-            for (int fromIndex = pointFlags.Count - 2, toIndex = pointFlags.Count - 1, p2 = 0; p2 < pointFlags.Count; fromIndex = toIndex, toIndex = p2, p2++)
-            {
-                // from-edge goes from A to B, to-edge goes from B-C
-                // point1CrossingToIndex2 is index B
-                if (crossingToOtherLoop[fromIndex] == -1)
-                    continue;
-                    
-                var fromFlags = edgeFlags[fromIndex];
-                var toFlags   = edgeFlags[toIndex];
-
-                if (!operationTable[(int)fromFlags, (int)toFlags])
-                {
-                    crossingToOtherLoop[fromIndex] = -1;
-                    continue;
-                }
-                    
-                pointFlags[fromIndex] |= PointFlags.Entering;
-                crossingCount++;
-            }
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static bool Intersects(Loop polygon1, Loop polygon2)
-        {
-            if (!polygon2.Valid ||
-                !polygon1.Valid)
-                return false;
-
-            var edges1 = polygon1.edges;
-            var edges2 = polygon2.edges;
-
-            for (int i = 0; i < polygon1.edges.Count; i++)
-            {
-                if (edges1[i].index1 == edges1[i].index2)
-                    continue;
-
-                var vertexIndex1 = edges1[i].index1;
-                var vertexIndex2 = edges1[i].index2;
-
-                for (int j = 0; j < edges2.Count; j++)
-                {
-                    var vertexIndex3 = edges2[j].index1;
-                    var vertexIndex4 = edges2[j].index2;
-
-                    // Does given line segment intersect this line segment?
-                    if (vertexIndex3 == vertexIndex1 || vertexIndex3 == vertexIndex2 ||
-                        vertexIndex4 == vertexIndex1 || vertexIndex4 == vertexIndex2)
-                        return true;
-                }
-            }
-            return false;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        static bool IsInside(VertexSoup soup, Loop polygon1, Loop polygon2)
-        {
-            if (!polygon2.Valid ||
-                !polygon1.Valid)
-                return false;
-
-            var vertices = soup.vertices;
-            var edges1 = polygon1.edges;
-
-            if (IsPointInPolygon(polygon2.info.right, polygon2.info.forward, polygon2.indices, soup, vertices[edges1[0].index1]))
-                return true;
-
-            return false;
+            finally { UnityEngine.Profiling.Profiler.EndSample(); }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -810,237 +322,6 @@ namespace Chisel.Core
             return result;
         }
 
-        static void DetermineOnEdgeFlags(//List<Vector3> vertices, 
-                                            List<ushort> indices1, List<ushort> indices2, List<PointFlags> pointFlags)
-        {
-            pointFlags.Clear();
-            if (pointFlags.Capacity < indices2.Count)
-                pointFlags.Capacity = indices2.Count;
-
-            for (int i = 0; i < indices2.Count; i++)
-                pointFlags.Add(PointFlags.None);
-
-            for (int i = indices2.Count - 1, j = 0; j < indices2.Count; i = j, j++)
-            {
-                var index1 = indices2[i];
-                //var vertex1 = vertices[index1];
-                for (int a = indices1.Count - 1, b = 0; b < indices1.Count; a = b, b++)
-                {
-                    var index2 = indices1[a];
-                    if (index1 == index2)// || vertices[index2].Equals(vertex1, kEpsilon))
-                        pointFlags[i] = PointFlags.On;
-                }
-            }
-        }
-
-        static void DetermineEdgeFlags(VertexSoup soup, List<EdgeCategory> edgeFlags1, List<PointFlags> pointFlags1, 
-                                       List<ushort> indices1, List<int> point1CrossingToIndex2, Vector3 right, Vector3 forward,
-                                       List<ushort> indices2, List<int> point2CrossingToIndex1, ref int insideCount)
-        {
-            bool all_on = true;
-            for (int i = 0; i < pointFlags1.Count; i++)
-            {
-                if (point1CrossingToIndex2[i] == -1)
-                {
-                    all_on = false;
-                    continue;
-                }
-                Debug.Assert((pointFlags1[i] & PointFlags.On) == PointFlags.On);
-            }
-
-            var vertices = soup.vertices;
-
-            edgeFlags1.Clear();
-            for (int a1 = pointFlags1.Count - 1, b1 = 0; b1 < pointFlags1.Count; a1 = b1, b1++)
-            {
-                if ((pointFlags1[a1] & PointFlags.On) == PointFlags.On &&
-                    (pointFlags1[b1] & PointFlags.On) == PointFlags.On)
-                {
-                    var a2 = point1CrossingToIndex2[a1];
-                    var b2 = point1CrossingToIndex2[b1];
-                    if (a2 >= 0 && b2 >= 0)
-                    {
-
-                        if ((b2 - a2) == 1 ||
-                            (a2 == point2CrossingToIndex1.Count - 1 && b2 == 0))
-                        {
-                            edgeFlags1.Add(EdgeCategory.Aligned);
-                            continue;
-                        } else
-                        if ((a2 - b2) == 1 ||
-                            (b2 == point2CrossingToIndex1.Count - 1 && a2 == 0))
-                        {
-                            edgeFlags1.Add(EdgeCategory.ReverseAligned);
-                            continue;
-                        }
-
-                        //*
-                        if (all_on)
-                        {
-                            var va1 = vertices[indices1[a1]];
-                            var vb1 = vertices[indices1[b1]];
-                            bool degenerate_polygon = true;
-                            for (int i = 0; i < indices2.Count; i++)
-                            {
-                                if (GeometryMath.SqrDistanceFromPointToLineSegment(vertices[indices2[i]], va1, vb1) > kEpsilonSqr)
-                                {
-                                    degenerate_polygon = false;
-                                    break;
-                                }
-                            }
-                            if (degenerate_polygon)
-                            {
-                                // TODO: how to determine if it's aligned or reverse aligned?
-                                edgeFlags1.Add(EdgeCategory.Aligned);
-                                continue;
-                            }
-                        }
-                        //*/
-                    }
-                }
-
-                if (IsPointInPolygon(right, forward, indices2, soup, (vertices[indices1[a1]] + vertices[indices1[b1]]) * 0.5f))
-                {
-                    edgeFlags1.Add(EdgeCategory.Inside);
-                    insideCount++;
-                } else
-                {
-                    edgeFlags1.Add(EdgeCategory.Outside);
-                }
-            }
-        }
-
-
-        static void Combine(VertexSoup soup,
-                            List<ushort> indices1, List<int> point1CrossingToIndex2, int loopIndex1,
-                            List<ushort> indices2, List<int> point2CrossingToIndex1, int loopIndex2,
-                            List<Loop> newPolygons, int innerDirection, int outerDirection, CSGOperationType operationType)
-        {
-            int maxVertices = indices1.Count + indices2.Count;
-
-            var loopPolyIndex = 0;
-            while (true)
-            {
-                if (loopPolyIndex > point1CrossingToIndex2.Count) { Debug.Log($"Infinite loop bug (poly) {loopIndex1} {loopIndex2}"); break; }
-                loopPolyIndex++;
-                 
-                int currIndex1 = -1;
-                for (int i = 0; i < point1CrossingToIndex2.Count; i++)
-                {
-                    if (point1CrossingToIndex2[i] >= 0)
-                    {
-                        if (point2CrossingToIndex1[point1CrossingToIndex2[i]] == -2)
-                        {
-                            point1CrossingToIndex2[i] = -2;
-                        } else
-                        {
-                            currIndex1 = i;
-                            break;
-                        }
-                    }
-                }
-
-                if (currIndex1 < 0)
-                    break;
-
-                var loopVertIndex   = 0;
-                var newPolygon      = new Loop();
-                newPolygon.indices.Capacity = maxVertices;
-                var newIndices  = newPolygon.indices;
-                int firstIndex1 = -1; 
-                for (; currIndex1 != firstIndex1; currIndex1 = Step(currIndex1, outerDirection, point1CrossingToIndex2.Count))
-                {
-                    if (firstIndex1 < 0)
-                        firstIndex1 = (int)currIndex1;
-
-                    if (loopVertIndex > maxVertices) { Debug.Log($"Infinite loop bug (outer) {loopIndex1} {loopIndex2}"); break; }
-                    loopVertIndex++;
-
-                    var currVertexIndex1 = indices1[currIndex1];
-                    //var currVert1 = soup.vertices[indices1[currIndex1]];
-                    if (newIndices.Count == 0 ||
-                        (newIndices[0] != currVertexIndex1 &&
-                         newIndices[newIndices.Count - 1] != currVertexIndex1))
-                    //(!soup.vertices[newIndices[0]].Equals(currVert1, kEpsilon) &&
-                    // !soup.vertices[newIndices[newIndices.Count - 1]].Equals(currVert1, kEpsilon)))
-                    {
-                        Debug.Assert(newPolygon.indices.Count == 0 ||
-                                     (newPolygon.indices[0] != currVertexIndex1 &&
-                                     newPolygon.indices[newPolygon.indices.Count - 1] != currVertexIndex1));
-                        newPolygon.indices.Add(currVertexIndex1);
-                    }
-
-                    int crossingIndexTo2 = point1CrossingToIndex2[currIndex1];
-
-                    if (crossingIndexTo2 < 0)
-                    {
-                        if (crossingIndexTo2 == -2)
-                            goto ExitLoop;
-
-                        continue;
-                    }
-
-                    int currIndex2 = crossingIndexTo2;
-                    if (point2CrossingToIndex1[currIndex2] == -2)
-                        continue;
-                    
-                    var startIndex1 = currIndex1;
-                    do
-                    {
-                        if (loopVertIndex > maxVertices) { Debug.Log($"Infinite loop bug (inner) {loopIndex1} {loopIndex2}"); break; }
-                        loopVertIndex++;
-
-                        currIndex2 = Step(currIndex2, innerDirection, point2CrossingToIndex1.Count);
-                        if (currIndex2 == crossingIndexTo2)
-                        {
-                            if (operationType == CSGOperationType.Subtractive)
-                                break;
-                            
-                            point1CrossingToIndex2[startIndex1] = -2;
-                            goto ExitLoop;
-                        }
-
-                        var currVertexIndex2 = indices2[currIndex2];
-                        //var currVert2 = soup.vertices[indices2[currIndex2]];
-                        if (newIndices.Count == 0 ||
-                            (newIndices[0] != currVertexIndex2 &&
-                             newIndices[newIndices.Count - 1] != currVertexIndex2))
-                        //(!soup.vertices[newIndices[0]].Equals(currVert2, kEpsilon) &&
-                        // !soup.vertices[newIndices[newIndices.Count - 1]].Equals(currVert2, kEpsilon)))
-                        {
-                            Debug.Assert(newPolygon.indices.Count == 0 ||
-                                         (newPolygon.indices[0] != currVertexIndex2 &&
-                                         newPolygon.indices[newPolygon.indices.Count - 1] != currVertexIndex2));
-                            newPolygon.indices.Add(currVertexIndex2);
-                        }
-
-                        var crossingIndexTo1 = point2CrossingToIndex1[currIndex2];
-
-                        if (crossingIndexTo1 >= 0)
-                        {
-                            currIndex1 = crossingIndexTo1;
-                            break;
-                        }
-                    } while (true);
-
-                    point1CrossingToIndex2[startIndex1] = -2;
-                }
-                
-            ExitLoop:
-                ;
-                
-                if (IsDegenerate(soup, newPolygon.indices))
-                    continue;
-
-                newPolygons.Add(newPolygon);
-            }
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static int Step(int index, int offset, int count)
-        {
-            return (index + count + offset) % count;
-        }
         #endregion
 
 
@@ -1125,20 +406,22 @@ namespace Chisel.Core
             //       Make an intersection boolean operation that assumes everything is convex
             s_OverlappingArea.Clear();
             OperationResult result;
-            result = CSGManagerPerformCSG.PerformBooleanOperation(brushVertices,
-                                                                    intersectionLoop, surfaceLoop,
-                                                                    s_OverlappingArea,  // the output of cutting operations are both holes for the original polygon (categorized_loop)
+            result = CSGManagerPerformCSG.PerformBooleanIntersection(brushVertices,
+                                                                     intersectionLoop, surfaceLoop,
+                                                                     s_OverlappingArea  // the output of cutting operations are both holes for the original polygon (categorized_loop)
                                                                                         // and new polygons on the surface of the brush that need to be categorized
-                                                                    CSGOperationType.Intersecting);
+                                                                     );
             Debug.Assert(s_OverlappingArea.Count <= 1);
-
+            
             // FIXME: when brush_intersection and categorized_loop are grazing each other, 
             //          technically we cut it but we shouldn't be creating it as a separate polygon + hole (bug7)
 
             switch (result)
             {
-                case CSGManagerPerformCSG.OperationResult.Fail:     return;
-                case CSGManagerPerformCSG.OperationResult.Outside: return;
+                default:
+                case CSGManagerPerformCSG.OperationResult.Fail:     
+                case CSGManagerPerformCSG.OperationResult.Outside:
+                    return;
 
                 case CSGManagerPerformCSG.OperationResult.Polygon2InsidePolygon1:
                 {
@@ -1153,12 +436,6 @@ namespace Chisel.Core
                     return;
                 }
 
-                case CSGManagerPerformCSG.OperationResult.Overlapping:
-                {
-                    var newPolygon = new Loop(intersectionLoop) { interiorCategory = newHoleCategory };
-                    s_OverlappingArea.Add(newPolygon);
-                    break;
-                }
                 case CSGManagerPerformCSG.OperationResult.Polygon1InsidePolygon2:
                 {
                     var newPolygon = new Loop(intersectionLoop) { interiorCategory = newHoleCategory };
@@ -1209,250 +486,6 @@ namespace Chisel.Core
 
         internal static void CleanUp(VertexSoup soup, List<Loop> baseloops, int surfaceIndex)
         {
-            /*
-            var loopDependencies = new List<LoopDependency>(baseloops.Count);
-
-            if (resultLoops1.Capacity < baseloops.Count * 2)
-                resultLoops1.Capacity = baseloops.Count * 2;
-            if (resultLoops2.Capacity < baseloops.Count * 2)
-                resultLoops2.Capacity = baseloops.Count * 2;
-
-            for (int l = baseloops.Count - 1; l >= 0; l--)
-            {
-                var categorized_loop = baseloops[l];
-                var interiorCategory = categorized_loop.interiorCategory - 1;
-
-                // Don't bother processing holes when this polygon will not be visible
-                if ((interiorCategory != (CategoryGroupIndex)EdgeCategory.Aligned && 
-                     interiorCategory != (CategoryGroupIndex)EdgeCategory.ReverseAligned) ||
-                    !categorized_loop.Valid)
-                {
-                    // Just remove it since it won't be visible anyway
-                    baseloops.RemoveAt(l);
-                    continue;
-                }
-
-                var holes = categorized_loop.holes;
-                if (holes.Count == 0)
-                    continue;
-                
-                if (categorized_loop.info.brush.brushNodeID == 3 &&
-                    categorized_loop.info.worldPlane.normal.y != 1 &&
-                    categorized_loop.info.worldPlane.normal.y != -1 &&
-                    categorized_loop.info.worldPlane.normal.x < 0)
-                {
-                    Debug.Log($"{categorized_loop.info.brush.brushNodeID} {categorized_loop.info.worldPlane} {categorized_loop.holes.Count} {interiorCategory}");
-                    for (int h = 0; h < categorized_loop.holes.Count; h++)
-                    {
-                        Debug.Log($"  {categorized_loop.holes[h].info.brush.brushNodeID} {categorized_loop.holes[h].edges.Count} <");
-                        for (int e = 0; e < categorized_loop.holes[h].edges.Count; e++)
-                            Debug.Log($"  ({categorized_loop.holes[h].edges[e].index1}, {categorized_loop.holes[h].edges[e].index2})");
-                    }
-                    Debug.Log($"  <<");
-                    for (int e = 0; e < categorized_loop.edges.Count; e++)
-                        Debug.Log($"  ({categorized_loop.edges[e].index1}, {categorized_loop.edges[e].index2})");
-                }
-
-                categorized_loop.convex = false;
-
-                // If we have more than one hole, we need to merge those that touch, to avoid issues during triangulation
-                if (holes.Count > 1)
-                {
-                    FindHoleDependencies(soup, holes, loopDependencies);
-
-                    {
-                        int a = 0;
-                        while (true)
-                        {
-#if DEBUG
-                            if (loopDependencies.Count > holes.Count * holes.Count * 2) { Debug.Log("Infinite loop bug"); break; }
-#endif
-                            if (a >= loopDependencies.Count ||
-                                a >= holes.Count)
-                                break;
-
-                            var loopDependency = loopDependencies[a];
-                            var dependencies = loopDependency.dependencies;
-
-                            for (; loopDependency.startIndex < dependencies.Length; loopDependency.startIndex++)
-                            {
-                                var b = dependencies[loopDependency.startIndex];
-                                if (!holes[a].Valid ||
-                                    !holes[b].Valid)
-                                    continue;
-                                 
-                                resultLoops1.Clear();
-                                var resultType = CSGManagerPerformCSG.PerformBooleanOperation(soup, holes[a], holes[b], resultLoops1, CSGOperationType.Additive);
-                                
-                                if (categorized_loop.info.brush.brushNodeID == 3 &&
-                                    categorized_loop.info.worldPlane.normal.y != 1 &&
-                                    categorized_loop.info.worldPlane.normal.y != -1 &&
-                                    categorized_loop.info.worldPlane.normal.x < 0)
-                                {
-                                    Debug.Log($"{resultType}");
-                                    Debug.Log($"   {a}");
-                                    for (int e = 0; e < holes[a].edges.Count; e++)
-                                        Debug.Log($"  ({holes[a].edges[e].index1}, {holes[a].edges[e].index2})");
-                                    Debug.Log($"   {b}");
-                                    for (int e = 0; e < holes[b].edges.Count; e++)
-                                        Debug.Log($"  ({holes[b].edges[e].index1}, {holes[b].edges[e].index2})");
-                                }
-                                
-                                switch (resultType)
-                                {
-                                    case CSGManagerPerformCSG.OperationResult.Outside:
-                                    case CSGManagerPerformCSG.OperationResult.Fail:
-                                        continue;
-
-                                    case CSGManagerPerformCSG.OperationResult.Polygon1InsidePolygon2:
-                                    {
-                                        holes[a].ClearAllIndices();
-                                        continue;
-                                    }
-                                    case CSGManagerPerformCSG.OperationResult.Overlapping:
-                                    case CSGManagerPerformCSG.OperationResult.Polygon2InsidePolygon1:
-                                        //holes[a].vertices.Clear();
-                                        continue;
-                                }
-
-                                // We clear them since we can't easily remove them yet, since it would change the order of the indices
-                                // TODO: find a better way to do this
-                                holes[a].ClearAllIndices();
-                                holes[b].ClearAllIndices();
-                                loopDependency.startIndex++;
-
-                                if (resultLoops1 != null &&
-                                    resultLoops1.Count > 0)
-                                {
-                                    for (int n = 0; n < resultLoops1.Count; n++)
-                                    {
-                                        loopDependencies.Add(loopDependency);
-                                        resultLoops1[n].CopyDetails(holes[a]);
-                                    }
-
-                                    for (int i = 0; i < resultLoops1.Count; i++)
-                                    {
-                                        if (!resultLoops1[i].Valid)
-                                            continue;
-                                        holes.Add(resultLoops1[i]);
-                                    }
-                                }
-                                break;
-                            }
-                            a++;
-                        }
-                    }
-                }
-
-                if (!categorized_loop.Valid)
-                {
-                    baseloops.RemoveAt(l);
-                    continue;
-                }
-
-                for (int h = holes.Count - 1; h >= 0; h--)
-                {
-                    if (!holes[h].Valid)
-                    {
-                        holes.RemoveAt(h);
-                        continue;
-                    }
-                }
-
-                if (holes.Count == 0)
-                    continue;
-
-
-                // Subtract holes that touch the outside of the polygon to avoid issues during triangulation
-                // Since we already merged all touching holes, we don't need to worry about dependencies between holes here anymore
-                {
-                    var testLoops = new List<Loop>
-                    {
-                        new Loop(categorized_loop)
-                    };
-                    baseloops.RemoveAt(l);
-                    for (int h = holes.Count - 1; h >= 0; h--)
-                    {
-                        for (int t = testLoops.Count - 1; t >= 0; t--)
-                        {
-                            if (!testLoops[t].Valid)
-                            {
-                                testLoops.RemoveAt(t);
-                                continue;
-                            }
-
-
-                            var testLoop = testLoops[t];
-                            var testHole = holes[h];
-
-                            resultLoops2.Clear();
-                            var resultType = CSGManagerPerformCSG.PerformBooleanOperation(soup, testLoop, testHole, resultLoops2, CSGOperationType.Subtractive);
-
-                            switch (resultType)
-                            {
-                                case CSGManagerPerformCSG.OperationResult.Outside:
-                                case CSGManagerPerformCSG.OperationResult.Fail:
-                                    continue;
-
-                                case CSGManagerPerformCSG.OperationResult.Overlapping:
-                                {
-                                    // our hole is completely overlapping us, we've just been eliminated.
-                                    testLoops.RemoveAt(t);
-                                    continue;
-                                }
-                                case CSGManagerPerformCSG.OperationResult.Polygon1InsidePolygon2:
-                                    //holes.RemoveAt(h);
-                                    continue;
-                                case CSGManagerPerformCSG.OperationResult.Polygon2InsidePolygon1:
-                                    // keep hole as hole
-                                    testLoop.holes.Add(new Loop(testHole));
-                                    continue;
-                                default:
-                                {
-                                    testLoop.ClearAllIndices();
-                                    foreach (var resultLoop in resultLoops2)
-                                    {
-                                        var temp = new Loop(resultLoop);
-                                        foreach (var otherHole in testLoop.holes)
-                                            temp.holes.Add(new Loop(otherHole));
-                                        testLoops.Add(temp);
-                                    }
-                                    continue;
-                                }
-                            }
-                        }
-                    }
-
-                    for (int t = 0; t < testLoops.Count; t++)
-                    {
-                        if (testLoops[t].Valid)
-                            baseloops.Add(testLoops[t]);
-                    }
-                }
-            }
-
-            for (int l = 0; l < baseloops.Count; l++)
-            {
-                var loop = baseloops[l];
-                if (!loop.Valid)
-                {
-                    loop.edges.Clear();
-                    continue;
-                }
-
-                //loop.edges.Clear();
-                //loop.AddEdges(loop.indices);
-
-                for (int h = 0; h < loop.holes.Count; h++)
-                {
-                    var hole = loop.holes[h];
-                    loop.AddEdges(hole.edges);
-                }
-            }
-            /*/
-
-            // TODO: figure out why code can't handle situation where polygon is split into multiple parts
-
             for (int l = baseloops.Count - 1; l >= 0; l--)
             {
                 var baseloop = baseloops[l];
@@ -1528,14 +561,12 @@ namespace Chisel.Core
 
                 holes.Clear();
             }
-            //*/
 
             for (int l = baseloops.Count - 1; l >= 0; l--)
             {
                 var baseloop = baseloops[l];
                 if (baseloop.edges.Count < 3)
                 {
-                    //Debug.Log($"{baseloop.info.brush.brushNodeID} {l}");
                     baseloops.RemoveAt(l);
                     continue;
                 }
