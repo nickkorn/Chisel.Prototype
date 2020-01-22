@@ -3,6 +3,7 @@ using System.Collections;
 using Chisel.Core;
 using System.Collections.Generic;
 using System;
+using System.Runtime.CompilerServices;
 
 namespace Chisel.Core
 {
@@ -11,6 +12,20 @@ namespace Chisel.Core
         const float kDistanceEpsilon = 0.00001f;
         const float kEqualityEpsilon = 0.0001f;
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool IsEmpty()
+        {
+            if (this.surfaces == null || this.surfaces.Length == 0)
+                return true;
+            if (this.polygons == null || this.polygons.Length == 0)
+                return true;
+            if (this.vertices == null || this.vertices.Length == 0)
+                return true;
+            if (this.halfEdges == null || this.halfEdges.Length == 0)
+                return true;
+            return false;
+        }
+
         public bool IsConcave()
         {
             bool hasConcaveEdges    = false;
@@ -18,8 +33,7 @@ namespace Chisel.Core
             // Detect if outline is concave
             for (int p = 0; p < polygons.Length; p++)
             {
-                var localPlaneVector = surfaces[p].localPlane;
-                var localPlane = new Plane((Vector3)localPlaneVector, localPlaneVector.w);
+                var localPlane = (Plane)surfaces[p];
                 ref readonly var polygon = ref polygons[p];
                 var firstEdge = polygon.firstEdge;
                 var edgeCount = polygon.edgeCount;
@@ -92,8 +106,7 @@ namespace Chisel.Core
             // Detect if outline is inside-out
             for (int p = 0; p < polygons.Length; p++)
             {
-                var localPlaneVector = surfaces[p].localPlane;
-                var localPlane = new Plane((Vector3)localPlaneVector, localPlaneVector.w);
+                var localPlane = (Plane)surfaces[p];
                 ref readonly var polygon = ref polygons[p];
                 var firstEdge = polygon.firstEdge;
                 var edgeCount = polygon.edgeCount;
@@ -206,6 +219,7 @@ namespace Chisel.Core
 
         private static class VertPair
         {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static ulong Create(int a, int b)
             {
                 var a32 = (ulong)a;
@@ -218,6 +232,7 @@ namespace Chisel.Core
 
         private static class TriangleIndex
         {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static ulong Create(int a, int b, int c)
             {
                 // FIXME: assumes vertex indices are 16-bit
@@ -674,8 +689,7 @@ namespace Chisel.Core
 
                 var firstEdge   = polygons[p].firstEdge;
                 var lastEdge    = firstEdge + edgeCount;
-                var planeVector = surfaces[p].localPlane;
-                var plane       = new Plane((Vector3)planeVector, planeVector.w);
+                var plane       = (Plane)surfaces[p];
 
                 bool isPlanar = true;
                 for (int e = firstEdge; e < lastEdge; e++)

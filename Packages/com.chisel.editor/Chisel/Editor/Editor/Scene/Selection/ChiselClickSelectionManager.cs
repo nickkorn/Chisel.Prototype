@@ -26,9 +26,9 @@ namespace Chisel.Editors
         public Vector3      point;
         public Plane        plane;
         public Vector3		normal		{ get { return plane.normal; } }
-        public Quaternion	orientation { get { return Quaternion.LookRotation(plane.normal); } }
-        public ChiselNode      node;
-        public ChiselModel     model;
+        public Quaternion   orientation { get { return (plane.normal.sqrMagnitude == 0) ? Quaternion.identity : Quaternion.LookRotation(plane.normal); } }
+        public ChiselNode   node;
+        public ChiselModel  model;
     }
 
     public sealed class GUIClip

@@ -619,7 +619,7 @@ namespace Chisel.Components
             nodeToinstanceIDLookup.Remove(component);
             instanceIDToNodeLookup.Remove(instanceID);
 
-            var sceneHierarchy = component.hierarchyItem.sceneHierarchy;
+            var sceneHierarchy = component.hierarchyItem.SceneHierarchy;
             if (sceneHierarchy == null)
                 return;
         
@@ -663,6 +663,10 @@ namespace Chisel.Components
 
             try
             {
+                ChiselBrushContainerAssetManager.Update();
+                ChiselBrushMaterialManager.Update();
+                UpdateTrampoline();
+                // TODO: fix that generators create brushes inside the trampoline, requiring us to call things twice
                 ChiselBrushContainerAssetManager.Update();
                 ChiselBrushMaterialManager.Update();
                 UpdateTrampoline();
@@ -938,7 +942,7 @@ namespace Chisel.Components
                             if (parentHierarchyItem.Parent == null &&
                                 ChiselGeneratedComponentManager.IsDefaultModel(parentHierarchyItem.Component))
                             {
-                                var hierarchy = hierarchyItem.sceneHierarchy;
+                                var hierarchy = hierarchyItem.SceneHierarchy;
                                 if (hierarchy != null)
                                     hierarchy.RootItems.Remove(hierarchyItem);
                             }
@@ -956,7 +960,7 @@ namespace Chisel.Components
                             }
                         } else
                         {
-                            var hierarchy = hierarchyItem.sceneHierarchy;
+                            var hierarchy = hierarchyItem.SceneHierarchy;
                             if (hierarchy != null)
                             {
                                 hierarchy.RootItems.Remove(hierarchyItem);
@@ -1117,7 +1121,7 @@ namespace Chisel.Components
                         if (parentHierarchyItem.Parent == null &&
                             ChiselGeneratedComponentManager.IsDefaultModel(parentHierarchyItem.Component))
                         {
-                            var hierarchy = hierarchyItem.sceneHierarchy;
+                            var hierarchy = hierarchyItem.SceneHierarchy;
                             if (hierarchy != null)
                                 hierarchy.RootItems.Remove(hierarchyItem);
                         }
@@ -1135,7 +1139,7 @@ namespace Chisel.Components
                         }
                     } else
                     {
-                        var hierarchy = hierarchyItem.sceneHierarchy;
+                        var hierarchy = hierarchyItem.SceneHierarchy;
                         if (hierarchy != null)
                         {
                             hierarchy.RootItems.Remove(hierarchyItem);
@@ -1168,7 +1172,7 @@ namespace Chisel.Components
                         sceneHierarchy = new ChiselSceneHierarchy() { Scene = scene };
                         sceneHierarchies[scene] = sceneHierarchy;
                     }
-                    hierarchyItem.sceneHierarchy = sceneHierarchy;
+                    hierarchyItem.SceneHierarchy = sceneHierarchy;
 
                     var defaultModel = false;
                     var parentComponent = UpdateSiblingIndices(sceneHierarchy, hierarchyItem);
@@ -1296,6 +1300,7 @@ namespace Chisel.Components
             if (destroyNodesList.Count > 0)
             {                
                 // Destroy all old nodes after we created new nodes, to make sure we don't get conflicting IDs
+                // TODO: add 'generation' to indices to avoid needing to do this
                 CSGManager.Destroy(destroyNodesList.ToArray());
                 destroyNodesList.Clear();
             }

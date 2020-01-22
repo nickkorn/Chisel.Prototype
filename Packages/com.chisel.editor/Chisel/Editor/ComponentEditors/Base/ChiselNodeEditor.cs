@@ -583,6 +583,9 @@ namespace Chisel.Editors
             var removeTargets = new HashSet<T>();
             foreach (var target in targets)
             {
+                if (!target)
+                    continue;
+
                 if (!knownTargets.Add(target))
                     continue;
                 
@@ -678,12 +681,14 @@ namespace Chisel.Editors
 
             var sceneView   = SceneView.currentDrawingSceneView;
 
-            var modelMatrix = ChiselNodeHierarchyManager.FindModelTransformMatrixOfTransform(generator.hierarchyItem.Transform);
-            var brush       = generator.TopNode;
+            var modelMatrix     = ChiselNodeHierarchyManager.FindModelTransformMatrixOfTransform(generator.hierarchyItem.Transform);
+            var generatorNode   = generator.TopNode;
+            if (!generatorNode.Valid)
+                return;
             
             // NOTE: could loop over multiple instances from here, once we support that
             {
-                using (new UnityEditor.Handles.DrawingScope(UnityEditor.Handles.yAxisColor, modelMatrix * brush.NodeToTreeSpaceMatrix))
+                using (new UnityEditor.Handles.DrawingScope(UnityEditor.Handles.yAxisColor, modelMatrix * generatorNode.NodeToTreeSpaceMatrix))
                 {
                     EditorGUI.BeginChangeCheck();
                     {

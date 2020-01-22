@@ -1,26 +1,13 @@
 ﻿using System;
+using System.Runtime.CompilerServices;
 using UnityEngine;
 
 namespace Chisel.Core
 {
     partial struct CSGTreeNode
     {
-        internal static Matrix4x4 GetTreeToNodeSpaceMatrix(Int32 nodeID)
-        {
-            Matrix4x4 result = Matrix4x4.identity;
-            if (GetTreeToNodeSpaceMatrix(nodeID, out result))
-                return result;
-            return Matrix4x4.identity;
-        }		
 
-        internal static Matrix4x4 GetNodeToTreeSpaceMatrix(Int32 nodeID)
-        {
-            Matrix4x4 result = Matrix4x4.identity;
-            if (GetNodeToTreeSpaceMatrix(nodeID, out result))
-                return result;
-            return Matrix4x4.identity;
-        }
-
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static Matrix4x4 GetNodeLocalTransformation(Int32 nodeID)
         {
             Matrix4x4 result = Matrix4x4.identity;
@@ -29,6 +16,7 @@ namespace Chisel.Core
             return Matrix4x4.identity;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static int CopyTo(Int32 nodeID, CSGTreeNode[] children, int arrayIndex)
         {
             if (children == null)

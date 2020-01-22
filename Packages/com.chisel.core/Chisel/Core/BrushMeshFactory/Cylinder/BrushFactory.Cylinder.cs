@@ -223,7 +223,7 @@ namespace Chisel.Core
         }
 
 
-        public static bool GenerateConicalFrustumSubMesh(ref BrushMesh brushMesh, ChiselCircleDefinition  bottom, ChiselCircleDefinition  top, float rotation, int segments, in ChiselSurfaceDefinition surfaceDefinition)
+        public static bool GenerateConicalFrustumSubMesh(ref BrushMesh brushMesh, ChiselCircleDefinition bottom, ChiselCircleDefinition  top, float rotation, int segments, in ChiselSurfaceDefinition surfaceDefinition)
         {
             if (segments < 3 || (top.height - bottom.height) == 0 || (bottom.diameterX == 0 && top.diameterX == 0) || (bottom.diameterZ == 0 && top.diameterZ == 0))
             {

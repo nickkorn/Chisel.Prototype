@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace Chisel.Core
@@ -10,6 +11,7 @@ namespace Chisel.Core
     [Serializable]
     public struct GeneratedMeshKey : IEqualityComparer<GeneratedMeshKey>, IEquatable<GeneratedMeshKey>
     {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public GeneratedMeshKey(GeneratedMeshDescription meshDescription)
         {
             geometryHashValue	= meshDescription.geometryHashValue;
@@ -36,6 +38,7 @@ namespace Chisel.Core
 
         #region Comparison
         [EditorBrowsable(EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override bool Equals(object obj)
         {
             if (!(obj is GeneratedMeshKey))
@@ -48,12 +51,14 @@ namespace Chisel.Core
         }
 
         [EditorBrowsable(EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Equals(GeneratedMeshKey x, GeneratedMeshKey y)
         {
             return x.Equals(y);
         }
 
         [EditorBrowsable(EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Equals(GeneratedMeshKey other)
         {
             return geometryHashValue	== other.geometryHashValue &&
@@ -64,11 +69,13 @@ namespace Chisel.Core
         }
 
         [EditorBrowsable(EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override int GetHashCode()
         {
             return GetHashCode(this);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int GetHashCode(GeneratedMeshKey obj)
         {
             var hashCode = -190551774;
@@ -82,6 +89,7 @@ namespace Chisel.Core
         }
 
         [EditorBrowsable(EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool operator ==(GeneratedMeshKey left, GeneratedMeshKey right)
         {
             return left.geometryHashValue == right.geometryHashValue &&
@@ -92,6 +100,7 @@ namespace Chisel.Core
         }
 
         [EditorBrowsable(EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool operator !=(GeneratedMeshKey left, GeneratedMeshKey right)
         {
             return left.geometryHashValue != right.geometryHashValue ||
@@ -155,6 +164,7 @@ namespace Chisel.Core
 
         #region Comparison
         [EditorBrowsable(EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override bool Equals(object obj)
         {
             if (!(obj is GeneratedMeshDescription))
@@ -174,6 +184,7 @@ namespace Chisel.Core
         }
 
         [EditorBrowsable(EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override int GetHashCode()
         {
             var hashCode = -190551774;
@@ -190,6 +201,7 @@ namespace Chisel.Core
         }
 
         [EditorBrowsable(EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool operator == (GeneratedMeshDescription left, GeneratedMeshDescription right)
         {
             return	left.meshQuery			== right.meshQuery &&
@@ -203,6 +215,7 @@ namespace Chisel.Core
         }
 
         [EditorBrowsable(EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool operator != (GeneratedMeshDescription left, GeneratedMeshDescription right)
         {
             return	left.meshQuery			!= right.meshQuery ||

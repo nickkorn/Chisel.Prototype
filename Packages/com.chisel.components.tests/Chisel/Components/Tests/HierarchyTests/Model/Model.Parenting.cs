@@ -290,7 +290,7 @@ namespace HierarchyTests
             yield return null;
                 
             Assert.AreEqual(0, model1.Node.Count);
-            var defaultModel = brush.hierarchyItem.sceneHierarchy.DefaultModel;
+            var defaultModel = brush.hierarchyItem.SceneHierarchy.DefaultModel;
             Assert.AreEqual(defaultModel.NodeID, brush.TopNode.Tree.NodeID);
         }
 

@@ -1,15 +1,18 @@
 ﻿using System;
+using System.Runtime.CompilerServices;
 using UnityEngine;
 
 namespace Chisel.Core
 {
     partial struct CSGTreeBrush
     {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static bool SetBrushMesh(Int32 brushNodeID, BrushMeshInstance brushMesh)
         {
             return SetBrushMeshID(brushNodeID, brushMesh.brushMeshID);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static BrushMeshInstance GetBrushMesh(Int32 brushNodeID)
         {
             return new BrushMeshInstance { brushMeshID = GetBrushMeshID(brushNodeID) };
@@ -24,10 +27,11 @@ namespace Chisel.Core
             }
             public float MinX,MaxX,MinY,MaxY,MinZ,MaxZ;
 
-            public Vector3 Center	{ get { return new Vector3((MinX + MaxX) * 0.5f, (MinY + MaxY) * 0.5f, (MinZ + MaxZ) * 0.5f); } }
-            public Vector3 Size		{ get { return new Vector3(MaxX - MinX, MaxY - MinY, MaxZ - MinZ); } }
+            public Vector3 Center	{ [MethodImpl(MethodImplOptions.AggressiveInlining)] get { return new Vector3((MinX + MaxX) * 0.5f, (MinY + MaxY) * 0.5f, (MinZ + MaxZ) * 0.5f); } }
+            public Vector3 Size		{ [MethodImpl(MethodImplOptions.AggressiveInlining)] get { return new Vector3(MaxX - MinX, MaxY - MinY, MaxZ - MinZ); } }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static Bounds GetBrushBounds(Int32 brushNodeID)
         {
 #if USE_MANAGED_CSG_IMPLEMENTATION

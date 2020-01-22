@@ -173,6 +173,9 @@ namespace Chisel.Components
             if (!ValidNodes)
                 return;
 
+            if (Nodes[0].LocalTransformation == TopTransformation)
+                return;
+
             Nodes[0].LocalTransformation = TopTransformation;
         }
 
@@ -277,12 +280,12 @@ namespace Chisel.Components
             if (requiredNodeLength == 0)
             {
                 Nodes = new CSGTreeNode[1];
-                Nodes[0] = CSGTreeBrush.Create(userID: instanceID, localTransformation: TopTransformation, operation: operation);
+                Nodes[0] = CSGTreeBrush.Create(userID: instanceID, operation: operation);
             } else
             if (requiredNodeLength == 1)
             {
                 Nodes = new CSGTreeNode[1];
-                Nodes[0] = CSGTreeBrush.Create(userID: instanceID, localTransformation: TopTransformation, operation: operation);
+                Nodes[0] = CSGTreeBrush.Create(userID: instanceID, operation: operation);
             } else
             {
                 Nodes = new CSGTreeNode[requiredNodeLength];
@@ -290,7 +293,7 @@ namespace Chisel.Components
                 for (int i = 0; i < requiredNodeLength - 1; i++)
                     children[i] = CSGTreeBrush.Create(userID: instanceID);
 
-                Nodes[0] = CSGTreeBranch.Create(instanceID, operation, children);
+                Nodes[0] = CSGTreeBranch.Create(instanceID, operation: operation, children: children);
                 for (int i = 1; i < Nodes.Length; i++)
                     Nodes[i] = children[i - 1];
             }

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -35,10 +35,14 @@ namespace Chisel.Editors
 
         public static void Rebuild()
         {
+            var startTime = EditorApplication.timeSinceStartup;
             ChiselNodeHierarchyManager.Rebuild();
+            var csg_endTime = EditorApplication.timeSinceStartup;
+            Debug.Log($"Full CSG rebuild done in {((csg_endTime - startTime) * 1000)} ms. ");
         }
 
-        static void OnBottomBarUI(int windowID)
+        static readonly GUI.WindowFunction OnBottomBarUI = OnBottomBarUIFunction;
+        static void OnBottomBarUIFunction(int windowID)
         {
             EditorGUI.BeginChangeCheck();
             GUILayout.BeginHorizontal();

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using Unity.Mathematics;
 using UnityEngine;
 
 namespace Chisel.Core
@@ -31,6 +32,55 @@ namespace Chisel.Core
             acc ^= val;
             acc = acc * PRIME64_1 + PRIME64_4;
             return acc;
+        }
+
+        public static ulong ComputeHashKey(int[] bb)
+        {
+            // FIXME: we need a proper hashing solution, but for now we just 
+            //          randomize it to ensure that meshes are updated
+            return (ulong)(UnityEngine.Random.value * ulong.MaxValue);
+        }
+
+        public static ulong ComputeHashKey(float[] bb)
+        {
+            // FIXME: we need a proper hashing solution, but for now we just 
+            //          randomize it to ensure that meshes are updated
+            return (ulong)(UnityEngine.Random.value * ulong.MaxValue);
+        }
+
+        public static ulong ComputeHashKey(Vector2[] bb)
+        {
+            // FIXME: we need a proper hashing solution, but for now we just 
+            //          randomize it to ensure that meshes are updated
+            return (ulong)(UnityEngine.Random.value * ulong.MaxValue);
+        }
+
+        public static ulong ComputeHashKey(Vector3[] bb)
+        {
+            // FIXME: we need a proper hashing solution, but for now we just 
+            //          randomize it to ensure that meshes are updated
+            return (ulong)(UnityEngine.Random.value * ulong.MaxValue);
+        }
+
+        public static ulong ComputeHashKey(float3[] bb)
+        {
+            // FIXME: we need a proper hashing solution, but for now we just 
+            //          randomize it to ensure that meshes are updated
+            return (ulong)(UnityEngine.Random.value * ulong.MaxValue);
+        }
+
+        public static ulong ComputeHashKey(Vector4[] bb)
+        {
+            // FIXME: we need a proper hashing solution, but for now we just 
+            //          randomize it to ensure that meshes are updated
+            return (ulong)(UnityEngine.Random.value * ulong.MaxValue);
+        }
+
+        public static ulong ComputeHashKey(byte[] bb)
+        {
+            // FIXME: we need a proper hashing solution, but for now we just 
+            //          randomize it to ensure that meshes are updated
+            return (ulong)(UnityEngine.Random.value * ulong.MaxValue);
         }
     }
 }

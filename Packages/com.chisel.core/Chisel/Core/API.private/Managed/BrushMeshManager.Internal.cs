@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using UnityEngine;
 
 namespace Chisel.Core
@@ -11,24 +12,28 @@ namespace Chisel.Core
         static List<int>		userIDs			= new List<int>();
         static List<int>		unusedIDs		= new List<int>();
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static bool		IsBrushMeshIDValid		(Int32 brushMeshInstanceID)	{ return brushMeshInstanceID > 0 && brushMeshInstanceID <= brushMeshes.Count; }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static bool			AssertBrushMeshIDValid	(Int32 brushMeshInstanceID)
         {
             if (!IsBrushMeshIDValid(brushMeshInstanceID))
             {
                 var nodeIndex = brushMeshInstanceID - 1;
                 if (nodeIndex >= 0 && nodeIndex < brushMeshes.Count)
-                    Debug.LogError("Invalid ID " + brushMeshInstanceID);
+                    Debug.LogError($"Invalid ID {brushMeshInstanceID}");
                 else
-                    Debug.LogError("Invalid ID " + brushMeshInstanceID + ", outside of bounds");
+                    Debug.LogError($"Invalid ID {brushMeshInstanceID}, outside of bounds (min 1, max {brushMeshes.Count})");
                 return false;
             }
             return true;
         }
-        
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static int			GetBrushMeshCount		()					{ return brushMeshes.Count - unusedIDs.Count; }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Int32			GetBrushMeshUserID		(Int32 brushMeshInstanceID)
         {
             if (!AssertBrushMeshIDValid(brushMeshInstanceID))
@@ -36,11 +41,15 @@ namespace Chisel.Core
             return userIDs[brushMeshInstanceID - 1];
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static BrushMesh		GetBrushMesh			(Int32 brushMeshInstanceID)
         {
             if (!AssertBrushMeshIDValid(brushMeshInstanceID))
                 return null;
-            return brushMeshes[brushMeshInstanceID - 1];
+            var brushMesh = brushMeshes[brushMeshInstanceID - 1];
+            if (brushMesh == null)
+                return null;
+            return brushMesh;
         }
 
         public static Int32 CreateBrushMesh(Int32				 userID,

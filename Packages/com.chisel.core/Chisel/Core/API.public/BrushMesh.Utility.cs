@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using UnityEngine;
 
@@ -30,6 +31,7 @@ namespace Chisel.Core
             public TraversalSide Traversal1;
         };
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         Plane CalculatePlane(in Polygon polygon)
         {        
             // Newell's algorithm to create a plane for concave polygons.
@@ -56,6 +58,7 @@ namespace Chisel.Core
         }
 
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void CalculatePlanes()
         {
             if (polygons == null)
@@ -674,6 +677,7 @@ namespace Chisel.Core
             Debug.Log(builder.ToString());
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void RemoveEdge(int removeEdgeIndex)
         {
             if (removeEdgeIndex < 0 ||
@@ -765,7 +769,8 @@ namespace Chisel.Core
                 builder.AppendLine("vertices[" + i + "]:" + vertices[i]);
             Debug.Log(builder.ToString());
         }
-        
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void SplitHalfEdge(int halfEdgeIndex, int newVertexIndex, out int newEdgeIndex)
         {
             SplitHalfEdge(halfEdgeIndex, newVertexIndex, null, out newEdgeIndex);
@@ -930,6 +935,7 @@ namespace Chisel.Core
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Clear()
         {
             surfaces = null;
@@ -1168,6 +1174,7 @@ namespace Chisel.Core
             return true;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public Vector3 GetPolygonCenter(int polygonIndex)
         {
             if (polygonIndex < 0 || polygonIndex >= polygons.Length)
@@ -1196,7 +1203,8 @@ namespace Chisel.Core
 
             return (min + max) * 0.5f;
         }
-        
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public Vector3 GetPolygonCentroid(int polygonIndex)
         {
             const float kMinimumArea = 1E-7f;
@@ -1242,6 +1250,7 @@ namespace Chisel.Core
         }
 
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool IsInside(Vector3 localPoint)
         {
             if (surfaces == null)
@@ -1249,13 +1258,14 @@ namespace Chisel.Core
 
             for (int s = 0; s < surfaces.Length; s++)
             {
-                var localPlane = new Plane((Vector3)surfaces[s].localPlane, surfaces[s].localPlane.w);
+                var localPlane = (Plane)surfaces[s];
                 if (localPlane.GetDistanceToPoint(localPoint) > -kDistanceEpsilon)
                     return false;
             }
             return true;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool IsInsideOrOn(Vector3 localPoint)
         {
             if (surfaces == null)
@@ -1263,13 +1273,14 @@ namespace Chisel.Core
 
             for (int s = 0; s < surfaces.Length; s++)
             {
-                var localPlane = new Plane((Vector3)surfaces[s].localPlane, surfaces[s].localPlane.w);
+                var localPlane = (Plane)surfaces[s];
                 if (localPlane.GetDistanceToPoint(localPoint) > kDistanceEpsilon)
                     return false;
             }
             return true;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int FindVertexIndexOfVertex(Vector3 vertex)
         {
             for (int v = 0; v < vertices.Length; v++)
@@ -1283,6 +1294,7 @@ namespace Chisel.Core
             return -1;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int FindEdgeByVertexIndices(int vertexIndex1, int vertexIndex2)
         {
             for (int e = 0; e < halfEdges.Length; e++)
@@ -1295,7 +1307,8 @@ namespace Chisel.Core
             }
             return -1;
         }
-        
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int FindPolygonEdgeByVertexIndex(int polygonIndex, int vertexIndex)
         {
             var edgeCount = polygons[polygonIndex].edgeCount;
@@ -1310,6 +1323,7 @@ namespace Chisel.Core
             return -1;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int FindAnyHalfEdgeWithVertexIndex(int vertexIndex)
         {
             for (int e = 0; e < halfEdges.Length; e++)
@@ -1321,6 +1335,7 @@ namespace Chisel.Core
             return -1;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool IsVertexIndexPartOfPolygon(int polygonIndex, int vertexIndex)
         {
             ref var polygon = ref polygons[polygonIndex];
@@ -1336,6 +1351,7 @@ namespace Chisel.Core
             return false;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool IsEdgeIndexPartOfPolygon(int polygonIndex, int edgeIndex)
         {
             ref var polygon = ref polygons[polygonIndex];
