@@ -298,8 +298,8 @@ namespace Chisel.Core
 
         struct PlanePair
         {
-            public double4 N0;
-            public double4 N1;
+            //public double4 N0;
+            //public double4 N1;
             public int P0;
             public int P1;
         }
@@ -397,7 +397,7 @@ namespace Chisel.Core
                 var vI0 = mesh1.halfEdges[e].vertexIndex;
                 var vI1 = mesh1.halfEdges[twinIndex].vertexIndex;
 
-                PlaneExtensions.IntersectionFirst(localSpacePlanes1[pI0], localSpacePlanes1[pI1], out double4 N0, out double4 N1);
+                //PlaneExtensions.IntersectionFirst(localSpacePlanes1[pI0], localSpacePlanes1[pI1], out double4 N0, out double4 N1);
 
                 usedVertices1.Add(vI0);
                 usedVertices1.Add(vI1);
@@ -405,8 +405,8 @@ namespace Chisel.Core
                 {
                     P0 = sI0,
                     P1 = sI1,
-                    N0 = N0,
-                    N1 = N1,
+                    //N0 = N0,
+                    //N1 = N1,
                 });
             }
         }
@@ -422,17 +422,29 @@ namespace Chisel.Core
             for (int a = 0; a < intersectingPlanes1.Count; a++)
             {
                 var pI2 = intersectingPlanes1[a];
-                var lp2 = localSpacePlanes1[pI2];
-                //var plane2 = localSpacePlanes1[pI2];
+                //var lp2 = localSpacePlanes1[pI2];
+                var plane2 = localSpacePlanes1[pI2];
 
                 Loop loop = null;
                 for (int i = 0; i < usedPlanePairs2.Count; i++)
                 {
                     var planePair2  = usedPlanePairs2[i];
-                    //var plane0      = localSpacePlanes2[planePair2.P0];
-                    //var plane1      = localSpacePlanes2[planePair2.P1];
-                    //var localVertex = PlaneExtensions.Intersection(plane2, plane0, plane1);
-                    var localVertex = PlaneExtensions.IntersectionSecond(lp2, planePair2.N0, planePair2.N1);
+                    var plane0      = localSpacePlanes2[planePair2.P0];
+                    var plane1      = localSpacePlanes2[planePair2.P1];
+
+                    if (math.abs(plane0.w - plane2.w) < kPlaneDistanceEpsilon)
+                    {
+                        if (math.dot(plane0.xyz, plane2.xyz) > kNormalEpsilon)
+                            continue;
+                    }
+                    if (math.abs(plane1.w - plane2.w) < kPlaneDistanceEpsilon)
+                    {
+                        if (math.dot(plane1.xyz, plane2.xyz) > kNormalEpsilon)
+                            continue;
+                    }
+
+                    var localVertex = PlaneExtensions.Intersection(plane2, plane0, plane1);
+                    //var localVertex = PlaneExtensions.IntersectionSecond(lp2, planePair2.N0, planePair2.N1);
                     var t           = localVertex.x + localVertex.y + localVertex.z;
                     if (float.IsNaN(t) || float.IsInfinity(t))
                         continue;
@@ -460,6 +472,7 @@ namespace Chisel.Core
                     if (loop == null) loop = Loop.FindOrAddLoop(holeLoops1, pI2, brush2);
 
                     var worldVertex = math.mul(nodeToTreeSpaceMatrix1, new float4(localVertex, 1)).xyz;
+
                     // TODO: should be having a Loop for each plane that intersects this vertex, and add that vertex
                     var vertexIndex1 = brushVertices1.Add(worldVertex);
 
