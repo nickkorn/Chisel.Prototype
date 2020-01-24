@@ -163,6 +163,20 @@ namespace Chisel.Core
             return (float3)(E.zwx / E.y);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static float3 Intersection(float4 inPlane1, float4 inPlane2, float4 inPlane3)
+        {
+            var N0 = inPlane2.wzyx * inPlane3.yxwz - inPlane2.yxwz * inPlane3.wzyx;
+            var Nx = inPlane2.yyww * inPlane3.xzzx - inPlane2.xzzx * inPlane3.yyww;
+
+            var tx = inPlane1 * N0;
+            var ty = inPlane1.wxyz * Nx;
+            var tz = inPlane1.yzwx * -Nx.wxyz;
+
+            var E = tx + ty + tz;
+            return E.zwx / E.y;
+        }
+
 
 
 

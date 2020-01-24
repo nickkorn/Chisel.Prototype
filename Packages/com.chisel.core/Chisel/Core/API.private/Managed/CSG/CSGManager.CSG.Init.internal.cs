@@ -17,12 +17,12 @@ namespace Chisel.Core
     static partial class CSGManagerPerformCSG
     {
         // TODO: unify all epsilons
-        public const float  kDistanceEpsilon	    = 0.0006f;
+        public const float  kDistanceEpsilon	    = 0.0001f;//0.01f;
         public const float  kSqrDistanceEpsilon	    = kDistanceEpsilon * kDistanceEpsilon;
         public const float  kMergeEpsilon	        = 0.00006f;
         public const float  kSqrMergeEpsilon	    = kMergeEpsilon * kMergeEpsilon;
         const float         kNormalEpsilon			= 0.9999f;
-        const float         kPlaneDistanceEpsilon	= kDistanceEpsilon;
+        const float         kPlaneDistanceEpsilon	= 0.0006f;
 
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -89,6 +89,12 @@ namespace Chisel.Core
 
             outputLoops.vertexSoup.Clear(vertices.Length);
 
+
+            var removeIdenticalIndicesJob = new RemoveIdenticalIndicesJob
+            {
+                vertices = outputLoops.vertexSoup.vertices
+            };
+
             var min = new Vector3(float.PositiveInfinity, float.PositiveInfinity, float.PositiveInfinity);
             var max = new Vector3(float.NegativeInfinity, float.NegativeInfinity, float.NegativeInfinity);
 
@@ -126,6 +132,12 @@ namespace Chisel.Core
                                     s_Indices[s_Indices.Count - 1] != newIndex));
                     s_Indices.Add(newIndex);
                 }
+
+
+                // THEORY: can end up with duplicate vertices when close enough vertices are snapped together
+                removeIdenticalIndicesJob.indices = s_Indices;
+                // TODO: eventually actually use jobs
+                removeIdenticalIndicesJob.Execute();
 
                 if (CSGManagerPerformCSG.IsDegenerate(outputLoops.vertexSoup, s_Indices))
                     continue;

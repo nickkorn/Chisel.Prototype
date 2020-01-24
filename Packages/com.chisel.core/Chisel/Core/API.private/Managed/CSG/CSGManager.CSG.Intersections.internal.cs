@@ -298,10 +298,23 @@ namespace Chisel.Core
 
         struct PlanePair
         {
+            public float4 Plane0;
+            public float4 Plane1;
             //public double4 N0;
             //public double4 N1;
             public int P0;
             public int P1;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static unsafe bool IsOutsidePlanes(float4[] planes, int planeCount, float4 localVertex)
+        {
+            for (int n = 0; n < planeCount; n++)
+            {
+                var distance = math.dot(planes[n], localVertex);
+                if (distance > CSGManagerPerformCSG.kDistanceEpsilon) return true;
+            }
+            return false;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -329,11 +342,13 @@ namespace Chisel.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         static unsafe bool IsOutsidePlanes(float4* planes, int length, float4 localVertex)
         {
+            const float kEpsilon = CSGManagerPerformCSG.kDistanceEpsilon;
             for (int n = 0; n < length; n++)
             {
                 var distance = math.dot(planes[n], localVertex);
-                //Debug.Log($"[{n}/{planes.Length}] {planes[n]} {distance} {localVertex}");
-                if (distance > CSGManagerPerformCSG.kDistanceEpsilon)
+                
+                // will be 'false' when distance is NaN or Infinity
+                if (!(distance <= kEpsilon))
                     return true;
             }
             return false;
@@ -366,11 +381,11 @@ namespace Chisel.Core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        static void AllIntersectionFirst(HashSet<int>       usedVertices1,
-                                         List<PlanePair>    usedPlanePairs1,
-                                         in List<int>       intersectingPlanes1,
-                                         in float4[]        localSpacePlanes1,
-                                         in BrushMesh       mesh1)
+        static void FindPlanePairs(HashSet<int>       usedVertices1,
+                                   List<PlanePair>    usedPlanePairs1,
+                                   in List<int>       intersectingPlanes1,
+                                   in float4[]        localSpacePlanes1,
+                                   in BrushMesh       mesh1)
         {
             // TODO: this can be partially stored in brushmesh 
             // TODO: optimize
@@ -403,6 +418,8 @@ namespace Chisel.Core
                 usedVertices1.Add(vI1);
                 usedPlanePairs1.Add(new PlanePair()
                 {
+                    Plane0 = localSpacePlanes1[pI0],
+                    Plane1 = localSpacePlanes1[pI1],
                     P0 = sI0,
                     P1 = sI1,
                     //N0 = N0,
@@ -412,42 +429,28 @@ namespace Chisel.Core
         }
 
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        static void AllIntersectionSecond(float4x4 nodeToTreeSpaceMatrix1,
-                                          List<int> intersectingPlanes1, float4[] localSpacePlanes1, VertexSoup brushVertices1, List<Loop> holeLoops1, CSGTreeBrush brush1,
-                                          List<int> intersectingPlanes2, float4[] localSpacePlanes2, VertexSoup brushVertices2, List<Loop> holeLoops2, CSGTreeBrush brush2, 
-                                          List<PlanePair> usedPlanePairs2)
+        [BurstCompile]
+        unsafe struct FindIntersectionsJob : IJobParallelFor
         {
-            // find all edges of brush2 that intersect brush1, and put their intersections into the appropriate loops
-            for (int a = 0; a < intersectingPlanes1.Count; a++)
+            public float4x4             nodeToTreeSpaceMatrix1;
+            public float4               plane0;
+            public float4               plane1;
+            [NativeDisableUnsafePtrRestriction] [ReadOnly] public float4*   intersectingPlanes1;
+            [NativeDisableUnsafePtrRestriction] [ReadOnly] public float4*   intersectingPlanes2;
+            public int                  intersectingPlanes1Length;
+            public int                  intersectingPlanes2Length;
+
+            [WriteOnly] public NativeStream.Writer  foundVertices;
+            
+            public void Execute(int index)
             {
-                var pI2 = intersectingPlanes1[a];
-                //var lp2 = localSpacePlanes1[pI2];
-                var plane2 = localSpacePlanes1[pI2];
+                foundVertices.BeginForEachIndex(index);
+                var plane2 = intersectingPlanes1[index];
 
-                Loop loop = null;
-                for (int i = 0; i < usedPlanePairs2.Count; i++)
+                if ((math.abs(plane0.w - plane2.w) >= kPlaneDistanceEpsilon || math.dot(plane0.xyz, plane2.xyz) <= kNormalEpsilon) &&
+                    (math.abs(plane1.w - plane2.w) >= kPlaneDistanceEpsilon || math.dot(plane1.xyz, plane2.xyz) <= kNormalEpsilon))
                 {
-                    var planePair2  = usedPlanePairs2[i];
-                    var plane0      = localSpacePlanes2[planePair2.P0];
-                    var plane1      = localSpacePlanes2[planePair2.P1];
-
-                    if (math.abs(plane0.w - plane2.w) < kPlaneDistanceEpsilon)
-                    {
-                        if (math.dot(plane0.xyz, plane2.xyz) > kNormalEpsilon)
-                            continue;
-                    }
-                    if (math.abs(plane1.w - plane2.w) < kPlaneDistanceEpsilon)
-                    {
-                        if (math.dot(plane1.xyz, plane2.xyz) > kNormalEpsilon)
-                            continue;
-                    }
-
-                    var localVertex = PlaneExtensions.Intersection(plane2, plane0, plane1);
-                    //var localVertex = PlaneExtensions.IntersectionSecond(lp2, planePair2.N0, planePair2.N1);
-                    var t           = localVertex.x + localVertex.y + localVertex.z;
-                    if (float.IsNaN(t) || float.IsInfinity(t))
-                        continue;
+                    var localVertex = new float4(PlaneExtensions.Intersection(plane2, plane0, plane1), 1);
 
                     // FIXME: sometimes we have two planes of a brush2 intersecting one plane on brush1, 
                     //		  and even though it's outside of brush1, it's still *just* within kDistanceEpsilon
@@ -456,104 +459,190 @@ namespace Chisel.Core
                     // TODO: since we're using a pair in the outer loop, we could also determine which 
                     //       2 planes it intersects at both ends and just check those two planes ..
 
-                    if (IsOutsidePlanes(intersectingPlanes2, localSpacePlanes2, new float4(localVertex, 1)) ||
-                        IsOutsidePlanes(intersectingPlanes1, localSpacePlanes1, new float4(localVertex, 1)))
-                    {
-                        continue;
-                    }
-
-                    //(3, 1, -5.5),(3, 1, -6),(3, 1, -7),(5, 1, -7),(5, 1, -6),(5, 1, -5.5)
-
                     // NOTE: for brush2, the intersection will always be only on two planes
                     //       UNLESS it's a corner vertex along that edge (we can compare to the two vertices)
                     //       in which case we could use a pre-calculated list of planes ..
                     //       OR when the intersection is outside of the edge ..
 
-                    if (loop == null) loop = Loop.FindOrAddLoop(holeLoops1, pI2, brush2);
-
-                    var worldVertex = math.mul(nodeToTreeSpaceMatrix1, new float4(localVertex, 1)).xyz;
-
-                    // TODO: should be having a Loop for each plane that intersects this vertex, and add that vertex
-                    var vertexIndex1 = brushVertices1.Add(worldVertex);
-
-                    loop.AddIndex(brushVertices1, vertexIndex1);
-                    //loop.indices.Add(vertexIndex1);
-
-                    var vertexIndex2 = brushVertices2.Add(worldVertex);
-                    var planeLoop0 = Loop.FindOrAddLoop(holeLoops2, planePair2.P0, brush1);
-                    var planeLoop1 = Loop.FindOrAddLoop(holeLoops2, planePair2.P1, brush1);
-
-                    planeLoop0.AddIndex(brushVertices2, vertexIndex2);
-                    //planeLoop0.indices.Add(vertexIndex2);
-                    if (planeLoop0 != planeLoop1)
+                    if (!IsOutsidePlanes(intersectingPlanes2, intersectingPlanes2Length, localVertex) &&
+                        !IsOutsidePlanes(intersectingPlanes1, intersectingPlanes1Length, localVertex))
                     {
-                        planeLoop1.AddIndex(brushVertices2, vertexIndex2);
-                        //planeLoop1.indices.Add(vertexIndex2);
+                        var worldVertex = math.mul(nodeToTreeSpaceMatrix1, localVertex).xyz;
+                        foundVertices.Write(worldVertex);
+                    }
+                }
+
+                foundVertices.EndForEachIndex();
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        unsafe static void FindPlanePairIntersections(float4x4 nodeToTreeSpaceMatrix1,
+                                                      List<int> intersectingPlaneIndices1, float4* intersectingPlanes1, int intersectingPlanes1Length, VertexSoup brushVertices1, LoopGroup holeLoops1, CSGTreeBrush brush1,
+                                                                                           float4* intersectingPlanes2, int intersectingPlanes2Length, VertexSoup brushVertices2, LoopGroup holeLoops2, CSGTreeBrush brush2, 
+                                                      List<PlanePair> usedPlanePairs2)
+        {
+
+
+            // find all edges of brush2 that intersect brush1, and put their intersections into the appropriate loops
+            for (int i = 0; i < usedPlanePairs2.Count; i++)
+            {
+                var planePair2  = usedPlanePairs2[i];
+
+                // should never happen
+                if (planePair2.P0 == planePair2.P1)
+                    continue;
+
+                var plane0      = planePair2.Plane0;
+                var plane1      = planePair2.Plane1;
+
+                //*
+                var foundVertices = new NativeStream(intersectingPlanes1Length, Allocator.TempJob);
+                try
+                { 
+                    var job = new FindIntersectionsJob
+                    {
+                        nodeToTreeSpaceMatrix1      = nodeToTreeSpaceMatrix1,
+                        plane0                      = plane0,
+                        plane1                      = plane1,
+                        intersectingPlanes1         = intersectingPlanes1,
+                        intersectingPlanes2         = intersectingPlanes2,
+                        intersectingPlanes1Length   = intersectingPlanes1Length,
+                        intersectingPlanes2Length   = intersectingPlanes2Length,
+
+                        foundVertices               = foundVertices.AsWriter()
+                    };
+                    job.Run(intersectingPlanes1Length);
+                    {
+                        var vertexReader = foundVertices.AsReader();
+                        int maxIndex = vertexReader.ForEachCount;
+
+                        int index = 0;
+                        vertexReader.BeginForEachIndex(index++);
+                        while (vertexReader.RemainingItemCount == 0 && index < maxIndex)
+                            vertexReader.BeginForEachIndex(index++);
+                        while (vertexReader.RemainingItemCount > 0)
+                        {
+                            var worldVertex = vertexReader.Read<float3>();
+
+                            // TODO: should be having a Loop for each plane that intersects this vertex, and add that vertex
+                            var vertexIndex1 = brushVertices1.Add(worldVertex);
+                            holeLoops1.FindOrAddLoop(intersectingPlaneIndices1[index - 1], brush2).AddIndex(brushVertices1, vertexIndex1);
+
+                            var vertexIndex2 = brushVertices2.Add(worldVertex);
+                            holeLoops2.FindOrAddLoop(planePair2.P0, brush1).AddIndex(brushVertices2, vertexIndex2);
+                            holeLoops2.FindOrAddLoop(planePair2.P1, brush1).AddIndex(brushVertices2, vertexIndex2);
+
+                            while (vertexReader.RemainingItemCount == 0 && index < maxIndex)
+                                vertexReader.BeginForEachIndex(index++);
+                        }
+                    }
+                }
+                finally
+                { 
+                    foundVertices.Dispose();
+                }
+                /*/
+                for (int a = 0; a < intersectingPlanes1Length; a++)
+                {
+                    var plane2 = intersectingPlanes1[a];
+
+                    if ((math.abs(plane0.w - plane2.w) >= kPlaneDistanceEpsilon || math.dot(plane0.xyz, plane2.xyz) <= kNormalEpsilon) &&
+                        (math.abs(plane1.w - plane2.w) >= kPlaneDistanceEpsilon || math.dot(plane1.xyz, plane2.xyz) <= kNormalEpsilon))
+                    {
+                        var localVertex = new float4(PlaneExtensions.Intersection(plane2, plane0, plane1), 1);
+
+                        // FIXME: sometimes we have two planes of a brush2 intersecting one plane on brush1, 
+                        //		  and even though it's outside of brush1, it's still *just* within kDistanceEpsilon
+                        //		  and can cause issues .. we need to find a better way of doing this
+
+                        // TODO: since we're using a pair in the outer loop, we could also determine which 
+                        //       2 planes it intersects at both ends and just check those two planes ..
+
+                        if (!IsOutsidePlanes(intersectingPlanes2, intersectingPlanes2Length, localVertex) &&
+                            !IsOutsidePlanes(intersectingPlanes1, intersectingPlanes1Length, localVertex))
+                        {
+                            var worldVertex = math.mul(nodeToTreeSpaceMatrix1, localVertex).xyz;
+
+                            // NOTE: for brush2, the intersection will always be only on two planes
+                            //       UNLESS it's a corner vertex along that edge (we can compare to the two vertices)
+                            //       in which case we could use a pre-calculated list of planes ..
+                            //       OR when the intersection is outside of the edge ..
+
+                            // TODO: should be having a Loop for each plane that intersects this vertex, and add that vertex
+                            var vertexIndex1 = brushVertices1.Add(worldVertex);
+                            holeLoops1.FindOrAddLoop(intersectingPlaneIndices1[a], brush2).AddIndex(brushVertices1, vertexIndex1);
+
+                            var vertexIndex2 = brushVertices2.Add(worldVertex);
+                            holeLoops2.FindOrAddLoop(planePair2.P0, brush1).AddIndex(brushVertices2, vertexIndex2);
+                            holeLoops2.FindOrAddLoop(planePair2.P1, brush1).AddIndex(brushVertices2, vertexIndex2);
+                        }
+                    }
+                }
+                //*/
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static unsafe void FindSharedVertices(CSGTreeBrush brush2,
+                                                                                   float4* intersectingPlanes2, int intersectingPlanes2Length,
+                                              List<int> intersectingPlaneIndices1, float4* intersectingPlanes1, int intersectingPlanes1Length,
+                                              LoopGroup holeLoops1, 
+                                              HashSet<int> usedVertices1, VertexSoup brushVertices1,
+                                              BrushMesh inputMesh1,
+
+                                              float4x4 nodeToTreeSpaceMatrix,
+                                              float4x4 vertexToLocal1)
+        {
+            // TODO: when all vertices of a polygon are inside the other brush, don't bother intersecting it.
+            //       same when two planes overlap each other ...
+
+            // Find all vertices of brush1 that are inside brush2, and put their intersections into the appropriate loops
+            foreach (var vertexIndex1 in usedVertices1)
+            {
+                var brushVertex1 = new float4(inputMesh1.vertices[vertexIndex1], 1);
+                var localVertex1 = math.mul(vertexToLocal1, brushVertex1);
+                if (CSGManagerPerformCSG.IsOutsidePlanes(intersectingPlanes2, intersectingPlanes2Length, localVertex1))
+                    continue;
+
+                var worldVertex = math.mul(nodeToTreeSpaceMatrix, brushVertex1).xyz;
+                var worldVertexIndex = -1;
+                // TODO: optimize this, we already know these vertices are ON the planes of this brush, just not which: this can be precalculated
+                for (int i = 0; i < intersectingPlanes1Length; i++)
+                {
+                    var planeIndex = intersectingPlaneIndices1[i];
+                    var distance = math.dot(intersectingPlanes1[i], localVertex1);
+
+                    // skip any plane this vertex is NOT on
+                    if (distance >= -kDistanceEpsilon && distance <= kDistanceEpsilon) // is false on NaN/Infinity
+                    {
+                        if (worldVertexIndex == -1)
+                            worldVertexIndex = brushVertices1.Add(worldVertex);
+
+                        var planeLoop = holeLoops1.FindOrAddLoop(planeIndex, brush2);
+                        planeLoop.AddIndex(brushVertices1, (ushort)worldVertexIndex);
                     }
                 }
             }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        static void AllCreateLoopsFromIntersections(SurfaceLoops   outputLoops,
-                                                    List<int>      intersectingPlanes2, float4[] localSpacePlanes2,
-                                                    CSGTreeBrush   brush2,
+        static unsafe void AllCreateLoopsFromIntersections(SurfaceLoops   outputLoops, 
+                                                           LoopGroup      holeLoops1,     int[] alignedPlaneLookup1,
+                                                           VertexSoup brushVertices1, 
+                                                           BrushMesh      inputMesh1,
 
-                                                    List<int>      intersectingPlanes1, float4[] localSpacePlanes1,                         
-                                                    List<Loop>     holeLoops1,     int[] alignedPlaneLookup1,
-                                                    HashSet<int>   usedVertices1,  VertexSoup brushVertices1, 
-                                                    BrushMesh      inputMesh1,
-
-                                                    float4x4 nodeToTreeSpaceMatrix, 
-                                                    float4x4 treeToNodeSpaceMatrix, 
-                                                    float4x4 vertexToLocal1)
+                                                           float4x4 treeToNodeSpaceMatrix)
         {
             outputLoops.EnsureSize(inputMesh1.surfaces.Length);
-#if true
-            // TODO: when all vertices of a polygon are inside the other brush, don't bother intersecting it.
-            //       same when two planes overlap each other ...
-
-            // find all vertices of brush1 that are inside brush2, and put their intersections into the appropriate loops
-            foreach (var vertexIndex1 in usedVertices1)
-            {
-                var brushVertex1 = new float4(inputMesh1.vertices[vertexIndex1], 1);
-                var localVertex1 = math.mul(vertexToLocal1, brushVertex1);
-                if (CSGManagerPerformCSG.IsOutsidePlanes(intersectingPlanes2, localSpacePlanes2, localVertex1))
-                    continue;
-
-                var worldVertex         = math.mul(nodeToTreeSpaceMatrix, brushVertex1).xyz;
-                var worldVertexIndex    = -1;
-                // TODO: optimize this, we already know these vertices are ON the planes of this brush, just not which: this can be precalculated
-                for (int i = 0; i < intersectingPlanes1.Count; i++)
-                {
-                    var planeIndex  = intersectingPlanes1[i];
-                    var distance    = math.dot(localSpacePlanes1[planeIndex], localVertex1);
-
-                    // skip any plane this vertex is NOT on
-                    if (distance < -kDistanceEpsilon || distance > kDistanceEpsilon)
-                        continue;
-
-
-                    if (worldVertexIndex == -1)
-                        worldVertexIndex = brushVertices1.Add(worldVertex);
-
-                    var planeLoop = Loop.FindOrAddLoop(holeLoops1, planeIndex, brush2);
-
-
-                    planeLoop.AddIndex(brushVertices1, (ushort)worldVertexIndex);
-                }
-            }
-#endif
             var inverseNodeToTreeSpaceMatrix1 = math.transpose(treeToNodeSpaceMatrix);
 
-            for (int l = holeLoops1.Count - 1; l >= 0; l--)
+            var loops = holeLoops1.loops;
+            for (int l = loops.Count - 1; l >= 0; l--)
             {
-                var hole = holeLoops1[l];
+                var hole = loops[l];
                 if (!hole.Valid)
-                {
-                    holeLoops1.RemoveAt(l);
                     continue;
-                }
 
                 var basePlaneIndex = hole.info.basePlaneIndex;
 
@@ -572,31 +661,34 @@ namespace Chisel.Core
                 hole.info.forward       = forward;
                 hole.info.layers        = inputMesh1.polygons[basePlaneIndex].surface.brushMaterial.LayerDefinition;
 
-
                 // TODO: make sorting of vertices work in local space
                 // TODO: or rewrite, use plane information for sorting
                 SortIndices(hole.indices, brushVertices1.vertices, hole.info.worldPlane.normal);
-
-                if (CSGManagerPerformCSG.IsDegenerate(brushVertices1, hole.indices))
-                    continue;
+                
+                //if (CSGManagerPerformCSG.IsDegenerate(brushVertices1, hole.indices))
+                //    continue;
 
                 outputLoops.surfaces[basePlaneIndex].Add(hole);
             }
         }
         #endregion
         
-        static readonly List<int>       s_IntersectingPlanes1   = new List<int>();
-        static readonly List<int>       s_IntersectingPlanes2   = new List<int>();
-        static readonly List<Loop>      s_HoleLoops1            = new List<Loop>();
-        static readonly List<Loop>      s_HoleLoops2            = new List<Loop>();
-        static readonly List<PlanePair> s_UsedPlanePairs2       = new List<PlanePair>();
-        static readonly List<PlanePair> s_UsedPlanePairs1       = new List<PlanePair>();
-        static readonly HashSet<int>    s_UsedVertices1         = new HashSet<int>();
-        static readonly HashSet<int>    s_UsedVertices2         = new HashSet<int>();
+        static readonly List<int>       s_IntersectingPlaneIndices1 = new List<int>();
+        static readonly List<int>       s_IntersectingPlaneIndices2 = new List<int>();
+        
+        static float4[]                 s_IntersectingPlanes1       = new float4[0];
+        static float4[]                 s_IntersectingPlanes2       = new float4[0];
+
+        static readonly LoopGroup       s_HoleLoops1        = new LoopGroup();
+        static readonly LoopGroup       s_HoleLoops2        = new LoopGroup();
+        static readonly List<PlanePair> s_UsedPlanePairs2   = new List<PlanePair>();
+        static readonly List<PlanePair> s_UsedPlanePairs1   = new List<PlanePair>();
+        static readonly HashSet<int>    s_UsedVertices1     = new HashSet<int>();
+        static readonly HashSet<int>    s_UsedVertices2     = new HashSet<int>();
 
         // TODO: create loops for both brushes TOGETHER, taking advantage of overlapping edges/vertices (necessary to avoid gaps!)
         //       right now loops are generated separately for each brush
-        internal static void GetIntersectionLoops(CSGTreeBrush brush1, CSGTreeBrush brush2, ref SurfaceLoops loops12, ref SurfaceLoops loops21)
+        internal unsafe static void GetIntersectionLoops(CSGTreeBrush brush1, CSGTreeBrush brush2, ref SurfaceLoops loops12, ref SurfaceLoops loops21)
         {
             loops12.Clear();
             loops21.Clear();
@@ -642,19 +734,20 @@ namespace Chisel.Core
             var treeToNodeSpaceMatrix2  = (float4x4)brush2.TreeToNodeSpaceMatrix;
             var node1ToNode2            = math.mul(treeToNodeSpaceMatrix2, nodeToTreeSpaceMatrix1);
             var inversedNode2ToNode1    = math.transpose(node1ToNode2); //math.inverse(node1ToNode2);
-            GetIntersectingPlanes(s_IntersectingPlanes2, mesh2.surfaces, mesh1.localBounds, mesh1.vertices, inversedNode2ToNode1);
+            GetIntersectingPlanes(s_IntersectingPlaneIndices2, mesh2.surfaces, mesh1.localBounds, mesh1.vertices, inversedNode2ToNode1);
 
             var treeToNodeSpaceMatrix1  = (float4x4)brush1.TreeToNodeSpaceMatrix;
             var nodeToTreeSpaceMatrix2  = (float4x4)brush2.NodeToTreeSpaceMatrix;
             var node2ToNode1            = math.mul(treeToNodeSpaceMatrix1, nodeToTreeSpaceMatrix2);
             var inversedNode1ToNode2    = math.transpose(node2ToNode1); //math.inverse(node2ToNode1);
-            GetIntersectingPlanes(s_IntersectingPlanes1, mesh1.surfaces, mesh2.localBounds, mesh2.vertices, inversedNode1ToNode2);
-            if (s_IntersectingPlanes1.Count == 0 ||
-                s_IntersectingPlanes2.Count == 0)
+            GetIntersectingPlanes(s_IntersectingPlaneIndices1, mesh1.surfaces, mesh2.localBounds, mesh2.vertices, inversedNode1ToNode2);
+            if (s_IntersectingPlaneIndices1.Count == 0 ||
+                s_IntersectingPlaneIndices2.Count == 0)
             {
-                Debug.Assert(s_IntersectingPlanes2.Count == 0 && s_IntersectingPlanes1.Count == 0, $"Expected intersection, but no intersection found between {brush1.NodeID} & {brush2.NodeID}");
+                Debug.Assert(s_IntersectingPlaneIndices2.Count == 0 && s_IntersectingPlaneIndices1.Count == 0, $"Expected intersection, but no intersection found between {brush1.NodeID} & {brush2.NodeID}");
                 return;
             }
+
 
             // TODO: we don't actually use ALL of these planes .. Optimize this
             var localSpacePlanes1 = new float4[mesh1.surfaces.Length];
@@ -669,12 +762,22 @@ namespace Chisel.Core
                 localSpacePlanes2[p] = transformedPlane / math.length(transformedPlane.xyz);
             }
 
+            if (s_IntersectingPlanes1.Length < s_IntersectingPlaneIndices1.Count)
+                s_IntersectingPlanes1 = new float4[s_IntersectingPlaneIndices1.Count];
+            
+            if (s_IntersectingPlanes2.Length < s_IntersectingPlaneIndices2.Count)
+                s_IntersectingPlanes2 = new float4[s_IntersectingPlaneIndices2.Count];
 
+            for (int i = 0; i < s_IntersectingPlaneIndices1.Count; i++)
+                s_IntersectingPlanes1[i] = localSpacePlanes1[s_IntersectingPlaneIndices1[i]];
+            for (int i = 0; i < s_IntersectingPlaneIndices2.Count; i++)
+                s_IntersectingPlanes2[i] = localSpacePlanes2[s_IntersectingPlaneIndices2[i]];
+            
             s_HoleLoops1.Clear();
             s_HoleLoops2.Clear();
 
-            AllIntersectionFirst(s_UsedVertices2, s_UsedPlanePairs2, s_IntersectingPlanes2, localSpacePlanes2, mesh2);
-            AllIntersectionFirst(s_UsedVertices1, s_UsedPlanePairs1, s_IntersectingPlanes1, localSpacePlanes1, mesh1);
+            FindPlanePairs(s_UsedVertices2, s_UsedPlanePairs2, s_IntersectingPlaneIndices2, localSpacePlanes2, mesh2);
+            FindPlanePairs(s_UsedVertices1, s_UsedPlanePairs1, s_IntersectingPlaneIndices1, localSpacePlanes1, mesh1);
 
             // decide which planes of brush1 align with brush2
             // TODO: optimize
@@ -683,13 +786,13 @@ namespace Chisel.Core
             var alignedPlaneLookup2 = new int[mesh2.surfaces.Length];
             if (reverseOrder)
             {
-                for (int i2 = 0; i2 < s_IntersectingPlanes2.Count; i2++)
+                for (int i2 = 0; i2 < s_IntersectingPlaneIndices2.Count; i2++)
                 {
-                    var p2          = s_IntersectingPlanes2[i2];
+                    var p2          = s_IntersectingPlaneIndices2[i2];
                     var localPlane2 = localSpacePlanes2[p2];
-                    for (int i1 = 0; i1 < s_IntersectingPlanes1.Count; i1++)
+                    for (int i1 = 0; i1 < s_IntersectingPlaneIndices1.Count; i1++)
                     {
-                        var p1          = s_IntersectingPlanes1[i1];
+                        var p1          = s_IntersectingPlaneIndices1[i1];
                         var localPlane1 = localSpacePlanes1[p1];
                         if (math.abs(localPlane1.w - localPlane2.w) >= kPlaneDistanceEpsilon ||
                             math.dot(localPlane1.xyz, localPlane2.xyz) <= kNormalEpsilon)
@@ -710,13 +813,13 @@ namespace Chisel.Core
                 }
             } else
             {
-                for (int i1 = 0; i1 < s_IntersectingPlanes1.Count; i1++)
+                for (int i1 = 0; i1 < s_IntersectingPlaneIndices1.Count; i1++)
                 {
-                    var p1          = s_IntersectingPlanes1[i1];
+                    var p1          = s_IntersectingPlaneIndices1[i1];
                     var localPlane1 = localSpacePlanes1[p1];
-                    for (int i2 = 0; i2 < s_IntersectingPlanes2.Count; i2++)
+                    for (int i2 = 0; i2 < s_IntersectingPlaneIndices2.Count; i2++)
                     {
-                        var p2          = s_IntersectingPlanes2[i2];
+                        var p2          = s_IntersectingPlaneIndices2[i2];
                         var localPlane2 = localSpacePlanes2[p2];
                         if (math.abs(localPlane1.w - localPlane2.w) >= kPlaneDistanceEpsilon ||
                             math.dot(localPlane1.xyz, localPlane2.xyz) < kNormalEpsilon)
@@ -740,38 +843,34 @@ namespace Chisel.Core
             var brushVertices1 = CSGManager.GetBrushInfo(brush1.brushNodeID).brushOutputLoops.vertexSoup;
             var brushVertices2 = CSGManager.GetBrushInfo(brush2.brushNodeID).brushOutputLoops.vertexSoup;
 
-            AllIntersectionSecond(nodeToTreeSpaceMatrix1,
-                s_IntersectingPlanes1, localSpacePlanes1, brushVertices1, s_HoleLoops1, brush1,
-                s_IntersectingPlanes2, localSpacePlanes2, brushVertices2, s_HoleLoops2, brush2, 
-                s_UsedPlanePairs2);
+            fixed (float4* intersectingPlanes1Ptr = &s_IntersectingPlanes1[0])
+            {
+                fixed (float4* intersectingPlanes2Ptr = &s_IntersectingPlanes2[0])
+                {
+                    FindSharedVertices(brush2,
+                                                                      intersectingPlanes2Ptr, s_IntersectingPlaneIndices2.Count,                         
+                                       s_IntersectingPlaneIndices1,   intersectingPlanes1Ptr, s_IntersectingPlaneIndices1.Count, 
+                                       s_HoleLoops1, s_UsedVertices1, brushVertices1, mesh1, nodeToTreeSpaceMatrix1, float4x4.identity);
 
-            AllIntersectionSecond(nodeToTreeSpaceMatrix1,
-                s_IntersectingPlanes2, localSpacePlanes2, brushVertices2, s_HoleLoops2, brush2,
-                s_IntersectingPlanes1, localSpacePlanes1, brushVertices1, s_HoleLoops1, brush1, 
-                s_UsedPlanePairs1);
+                    FindSharedVertices(brush1,
+                                                                      intersectingPlanes1Ptr, s_IntersectingPlaneIndices1.Count,
+                                       s_IntersectingPlaneIndices2,   intersectingPlanes2Ptr, s_IntersectingPlaneIndices2.Count, 
+                                       s_HoleLoops2, s_UsedVertices2, brushVertices2, mesh2, nodeToTreeSpaceMatrix2, node2ToNode1);
 
-            AllCreateLoopsFromIntersections(loops12, 
-                 s_IntersectingPlanes2, localSpacePlanes2,
-                 brush2,
+                    FindPlanePairIntersections(nodeToTreeSpaceMatrix1,
+                        s_IntersectingPlaneIndices1, intersectingPlanes1Ptr, s_IntersectingPlaneIndices1.Count, brushVertices1, s_HoleLoops1, brush1,
+                                                     intersectingPlanes2Ptr, s_IntersectingPlaneIndices2.Count, brushVertices2, s_HoleLoops2, brush2,
+                        s_UsedPlanePairs2);
 
-                 s_IntersectingPlanes1, localSpacePlanes1, 
-                 s_HoleLoops1,          alignedPlaneLookup1, 
-                 s_UsedVertices1,       brushVertices1, 
-                 mesh1,
+                    FindPlanePairIntersections(nodeToTreeSpaceMatrix1,
+                        s_IntersectingPlaneIndices2, intersectingPlanes2Ptr, s_IntersectingPlaneIndices2.Count, brushVertices2, s_HoleLoops2, brush2,
+                                                     intersectingPlanes1Ptr, s_IntersectingPlaneIndices1.Count, brushVertices1, s_HoleLoops1, brush1,
+                        s_UsedPlanePairs1);
 
-                 nodeToTreeSpaceMatrix1, treeToNodeSpaceMatrix1, float4x4.identity);
-             
-            AllCreateLoopsFromIntersections(loops21, 
-                 s_IntersectingPlanes1, localSpacePlanes1,
-                 brush1,
-
-                 s_IntersectingPlanes2, localSpacePlanes2, 
-                 s_HoleLoops2,          alignedPlaneLookup2, 
-                 s_UsedVertices2,       brushVertices2, 
-                 mesh2,
-
-                 nodeToTreeSpaceMatrix2, treeToNodeSpaceMatrix2, node2ToNode1);
-
+                    AllCreateLoopsFromIntersections(loops12, s_HoleLoops1, alignedPlaneLookup1, brushVertices1, mesh1, treeToNodeSpaceMatrix1);             
+                    AllCreateLoopsFromIntersections(loops21, s_HoleLoops2, alignedPlaneLookup2, brushVertices2, mesh2, treeToNodeSpaceMatrix2);
+                }
+            }
         }
         #endregion
 

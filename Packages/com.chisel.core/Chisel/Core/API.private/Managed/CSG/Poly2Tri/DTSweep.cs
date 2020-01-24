@@ -483,6 +483,8 @@ namespace Poly2Tri
         ushort LocateNode(float x)
         {
             var nodeIndex = searchNodeIndex;
+            if (nodeIndex >= advancingFrontNodes.Count)
+                return ushort.MaxValue;
             if (x < advancingFrontNodes[nodeIndex].nodePoint.x)
             {
                 nodeIndex = advancingFrontNodes[nodeIndex].prevNodeIndex;
@@ -773,10 +775,7 @@ namespace Poly2Tri
                 var frontNodeIndex  = LocateNode(point.x);
 
                 if (frontNodeIndex == ushort.MaxValue)
-                {
-                    Debug.Log($"{i}/{sortedPoints.Count}");
                     continue;
-                }
 
                 var triangleIndex       = (ushort)triangles.Count;
                 var frontNodeNextIndex  = advancingFrontNodes[frontNodeIndex].nextNodeIndex;

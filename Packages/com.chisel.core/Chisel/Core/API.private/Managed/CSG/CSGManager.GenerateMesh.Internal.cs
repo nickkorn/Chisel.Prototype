@@ -637,9 +637,20 @@ namespace Chisel.Core
                     if (interiorCategory > CategoryIndex.LastCategory)
                         Debug.Assert(false, $"Invalid final category {interiorCategory}");
 
+                    //*
                     if (interiorCategory != CategoryIndex.SelfAligned && 
                         interiorCategory != CategoryIndex.SelfReverseAligned)
                         continue;
+                    /*/
+
+                    if (brushNodeID != 1)
+                        continue;
+
+                    if (interiorCategory == CategoryIndex.SelfReverseAligned)
+                        surfaceLoopList[l].interiorCategory = (CategoryGroupIndex)CategoryIndex.SelfAligned;
+                    if (interiorCategory == CategoryIndex.ReverseAligned)
+                        surfaceLoopList[l].interiorCategory = (CategoryGroupIndex)CategoryIndex.Aligned;
+                    //*/
 
                     var loop = surfaceLoopList[l];
                     loops.Add(loop);

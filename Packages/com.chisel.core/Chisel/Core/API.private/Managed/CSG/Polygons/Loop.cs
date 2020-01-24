@@ -27,13 +27,38 @@ namespace Chisel.Core
     }
 
     // TODO: rename
-    [Serializable] 
+    public sealed class LoopGroup
+    {
+        public Dictionary<int, Loop> loopLookup = new Dictionary<int, Loop>();
+        public List<Loop> loops = new List<Loop>();
+
+        public void Clear()
+        {
+            loopLookup.Clear();
+            loops.Clear();
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public Loop FindOrAddLoop(int basePlaneIndex, CSGTreeBrush brush, bool isConvex = true)
+        {
+            if (!loopLookup.TryGetValue(basePlaneIndex, out Loop loop))
+            {
+                loop = new Loop() { info = new LoopInfo() { basePlaneIndex = basePlaneIndex, brush = brush }, convex = isConvex };
+                loopLookup.Add(basePlaneIndex, loop);
+                loops.Add(loop);
+            }
+            return loop;
+        }
+    }
+
+    // TODO: rename
     public sealed class Loop
     {
         public static bool debugMessage = false;
         public static int loopDebugCounter = 0;
         public int loopIndex = loopDebugCounter++;
-
+        
+        public readonly HashSet<ushort>     indexUsed   = new HashSet<ushort>();
         public readonly List<ushort>        indices     = new List<ushort>();
         public List<Edge>                   edges       = new List<Edge>();
         public bool[]                       destroyed;
@@ -62,6 +87,7 @@ namespace Chisel.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ClearAllIndices()
         {
+            indexUsed.Clear();
             indices.Clear();
             edges.Clear();
         }
@@ -69,31 +95,10 @@ namespace Chisel.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void AddIndex(VertexSoup soup, ushort newIndex)
         {
-            if (indices.Contains(newIndex))
+            if (indexUsed.Contains(newIndex))
                 return;
-
+            indexUsed.Add(newIndex);
             indices.Add(newIndex);
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Loop FindOrAddLoop(List<Loop> loops, int basePlaneIndex, CSGTreeBrush brush, bool isConvex = true)
-        {
-            Loop loop = null;
-            for (int l = 0; l < loops.Count; l++)
-            {
-                if (loops[l].info.basePlaneIndex == basePlaneIndex)
-                {
-                    loop = loops[l];
-                    break;
-                }
-            }
-
-            if (loop == null)
-            {
-                loop = new Loop() { info = new LoopInfo() { basePlaneIndex = basePlaneIndex, brush = brush }, convex = isConvex };
-                loops.Add(loop);
-            }
-            return loop;
         }
 
 
@@ -104,6 +109,7 @@ namespace Chisel.Core
         {
             if (indices.Count == 0)
                 return;
+
             s_UniqueEdges.Clear();
             if (edges.Capacity < edges.Count + indices.Count)
                 edges.Capacity = edges.Count + indices.Count;
@@ -150,7 +156,6 @@ namespace Chisel.Core
                 }
             }
 
-            var removeEdges = new List<int>();
             foreach (var addEdge in s_UniqueEdges)
             {
                 var index = IndexOf(addEdge, out bool inverted);
