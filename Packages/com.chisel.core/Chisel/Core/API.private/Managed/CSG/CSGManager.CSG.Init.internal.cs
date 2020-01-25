@@ -62,7 +62,7 @@ namespace Chisel.Core
         }
         
 
-#region GenerateBasePolygons
+        #region GenerateBasePolygons
 
         static readonly List<ushort> s_Indices = new List<ushort>(32);
         public static Bounds GenerateBasePolygons(BrushLoops outputLoops)
@@ -171,8 +171,7 @@ namespace Chisel.Core
                 bounds.SetMinMax(min, max);
             return bounds;
         }
-
-#endregion
+        #endregion
     }
 #endif
-                }
+}

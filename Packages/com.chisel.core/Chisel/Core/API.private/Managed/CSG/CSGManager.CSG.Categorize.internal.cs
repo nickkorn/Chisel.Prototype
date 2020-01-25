@@ -338,7 +338,12 @@ namespace Chisel.Core
                     } else
                     { 
                         overlappingLoop.interiorCategory = newHoleCategory;
-                        overlappingLoop.holes.AddRange(surfaceLoop.holes);
+                        for (int h = 0; h < surfaceLoop.holes.Count; h++)
+                        {
+                            // Need to make a copy so we can edit it without causing side effects
+                            overlappingLoop.holes.Add(new Loop(surfaceLoop.holes[h]));
+                        }
+
                         var newPolygon = new Loop(overlappingLoop) { interiorCategory = newHoleCategory };
                         surfaceLoop.holes.Add(newPolygon);              // but it is also a hole for our polygon
                         loopsOnBrushSurface.Add(overlappingLoop);       // this loop is a polygon on its own

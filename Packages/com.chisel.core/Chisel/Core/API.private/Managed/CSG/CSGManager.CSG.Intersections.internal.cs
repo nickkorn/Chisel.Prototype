@@ -447,8 +447,11 @@ namespace Chisel.Core
                 foundVertices.BeginForEachIndex(index);
                 var plane2 = intersectingPlanes1[index];
 
-                if ((math.abs(plane0.w - plane2.w) >= kPlaneDistanceEpsilon || math.dot(plane0.xyz, plane2.xyz) <= kNormalEpsilon) &&
-                    (math.abs(plane1.w - plane2.w) >= kPlaneDistanceEpsilon || math.dot(plane1.xyz, plane2.xyz) <= kNormalEpsilon))
+                if (!(math.abs(plane0.w - plane2.w) < kPlaneDistanceEpsilon && math.dot(plane0.xyz, plane2.xyz) > kNormalEpsilon) &&
+                    !(math.abs(plane1.w - plane2.w) < kPlaneDistanceEpsilon && math.dot(plane1.xyz, plane2.xyz) > kNormalEpsilon) &&
+
+                    !(math.abs(plane0.w + plane2.w) < kPlaneDistanceEpsilon && math.dot(plane0.xyz, plane2.xyz) < -kNormalEpsilon) &&
+                    !(math.abs(plane1.w + plane2.w) < kPlaneDistanceEpsilon && math.dot(plane1.xyz, plane2.xyz) < -kNormalEpsilon))
                 {
                     var localVertex = new float4(PlaneExtensions.Intersection(plane2, plane0, plane1), 1);
 

@@ -597,7 +597,7 @@ namespace Chisel.Core
 
 
         internal static void GenerateSurfaceRenderBuffers(int                   brushNodeID, 
-                                                          //SurfaceLoops          loopList, 
+                                                          //SurfaceLoops        loopList, 
                                                           MeshQuery[]           meshQueries,
                                                           VertexChannelFlags    vertexChannelMask)
         {
