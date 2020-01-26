@@ -202,7 +202,7 @@ namespace Chisel.Core
 	            //             	    inside          aligned     aligned		    reverse-aligned  reverse-aligned  outside        |     left-node       
 	            //-----------------------------------------------------------------------------------------------------------------------------------------
 	            new CategoryRoutingRow( CategoryIndex.Outside,        CategoryIndex.ReverseAligned, CategoryIndex.SelfReverseAligned,   CategoryIndex.SelfAligned,          CategoryIndex.Aligned,          CategoryIndex.Inside            ), // inside
-	            new CategoryRoutingRow( CategoryIndex.Outside,        CategoryIndex.Inside,         CategoryIndex.Inside,               CategoryIndex.SelfAligned,          CategoryIndex.Aligned,          CategoryIndex.Aligned           ), // other-aligned
+	            new CategoryRoutingRow( CategoryIndex.Outside,        CategoryIndex.Aligned,        CategoryIndex.Inside,               CategoryIndex.SelfAligned,          CategoryIndex.Aligned,          CategoryIndex.Aligned           ), // other-aligned
 	            new CategoryRoutingRow( CategoryIndex.Outside,        CategoryIndex.Inside,         CategoryIndex.Inside,               CategoryIndex.SelfAligned,          CategoryIndex.Aligned,          CategoryIndex.SelfAligned       ), // self-aligned
 	            new CategoryRoutingRow( CategoryIndex.Outside,        CategoryIndex.ReverseAligned, CategoryIndex.SelfReverseAligned,   CategoryIndex.Inside,               CategoryIndex.Inside,           CategoryIndex.SelfReverseAligned), // self-reverse-aligned
 	            new CategoryRoutingRow( CategoryIndex.Outside,        CategoryIndex.ReverseAligned, CategoryIndex.SelfReverseAligned,   CategoryIndex.Inside,               CategoryIndex.Inside,           CategoryIndex.ReverseAligned    ), // other-reverse-aligned
@@ -687,4 +687,4 @@ namespace Chisel.Core
 #endif
     }
 #endif
-                }
+}

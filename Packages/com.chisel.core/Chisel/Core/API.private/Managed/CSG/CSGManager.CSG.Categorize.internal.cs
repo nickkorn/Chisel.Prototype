@@ -212,7 +212,7 @@ namespace Chisel.Core
 
 
         //*
-        static void Dump(System.Text.StringBuilder builder, Loop categorized_loop, VertexSoup soup, Quaternion rotation)
+        internal static void Dump(System.Text.StringBuilder builder, Loop categorized_loop, VertexSoup soup, Quaternion rotation)
         {
             //builder.AppendLine($"loop ({categorized_loop.indices.Count}):");
             //builder.AppendLine($"loop {categorized_loop.loopIndex}:");
@@ -240,6 +240,19 @@ namespace Chisel.Core
                 builder.Append($"({Convert.ToString((Decimal)vertex.x, CultureInfo.InvariantCulture)}, {Convert.ToString((Decimal)vertex.y, CultureInfo.InvariantCulture)})");
             }
             builder.AppendLine("             ");
+
+
+            for (int i = 0; i < categorized_loop.edges.Count; i++)
+            {
+                var edge = categorized_loop.edges[i];
+                var index1 = edge.index1;
+                var index2 = edge.index2;
+                var vertex1 = ((float3)(rotation * soup.vertices[index1])).xy;
+                var vertex2 = ((float3)(rotation * soup.vertices[index2])).xy;
+
+                builder.Append($"({Convert.ToString((Decimal)vertex1.x, CultureInfo.InvariantCulture)}, {Convert.ToString((Decimal)vertex1.y, CultureInfo.InvariantCulture)}), ");
+                builder.AppendLine($"({Convert.ToString((Decimal)vertex2.x, CultureInfo.InvariantCulture)}, {Convert.ToString((Decimal)vertex2.y, CultureInfo.InvariantCulture)})");
+            }
         }
         //*/
 
@@ -338,10 +351,12 @@ namespace Chisel.Core
                     } else
                     { 
                         overlappingLoop.interiorCategory = newHoleCategory;
+
                         for (int h = 0; h < surfaceLoop.holes.Count; h++)
                         {
                             // Need to make a copy so we can edit it without causing side effects
-                            overlappingLoop.holes.Add(new Loop(surfaceLoop.holes[h]));
+                            var copyPolygon = new Loop(surfaceLoop.holes[h]);
+                            overlappingLoop.holes.Add(copyPolygon);
                         }
 
                         var newPolygon = new Loop(overlappingLoop) { interiorCategory = newHoleCategory };
@@ -363,7 +378,7 @@ namespace Chisel.Core
                 CleanUp(soup, surfaceLoops[surfaceIndex], surfaceIndex);
         }
 
-        internal static void CleanUp(VertexSoup soup, List<Loop> baseloops, int surfaceIndex)
+        internal static void CleanUp(VertexSoup brushVertices, List<Loop> baseloops, int surfaceIndex)
         {
             for (int l = baseloops.Count - 1; l >= 0; l--)
             {
@@ -377,7 +392,7 @@ namespace Chisel.Core
                 var holes = baseloop.holes;
                 if (holes.Count == 0)
                     continue;
-
+                
                 for (int h = holes.Count - 1; h >= 0; h--)
                 {
                     var hole = holes[h];
@@ -393,9 +408,9 @@ namespace Chisel.Core
                 {
                     var hole1 = holes[h1];
                     hole1.destroyed = new bool[hole1.edges.Count];
-                    CSGManagerPerformCSG.Subtract(soup, baseloop, hole1);
+                    CSGManagerPerformCSG.Subtract(brushVertices, baseloop, hole1);
                 }
-                
+
                 // TODO: optimize, keep track which holes (potentially) intersect
                 for (int h1 = holes.Count - 1; h1 >= 0; h1--)
                 {
@@ -403,10 +418,9 @@ namespace Chisel.Core
                     for (int h2 = holes.Count - 1; h2 > h1; h2--)
                     {
                         var hole2 = holes[h2];
-                        CSGManagerPerformCSG.Merge(soup, hole1, hole2);
+                        CSGManagerPerformCSG.Merge(brushVertices, hole1, hole2);
                     }
                 }
-
                 for (int e = baseloop.destroyed.Length - 1; e >= 0; e--)
                 {
                     if (!baseloop.destroyed[e])
@@ -429,13 +443,10 @@ namespace Chisel.Core
 
                 for (int h = holes.Count - 1; h >= 0; h--)
                 {
-                    var edges = holes[h].edges;
-
                     // Note: can have duplicate edges when multiple holes share an edge
                     //          (only edges between holes and base-loop are guaranteed to not be duplciate)
-                    baseloop.AddEdges(edges, removeDuplicates: true);
+                    baseloop.AddEdges(holes[h].edges, removeDuplicates: true);
                 }
-
                 holes.Clear();
             }
 
@@ -497,7 +508,7 @@ namespace Chisel.Core
             {
                 if (categories1[e] == EdgeCategory.Outside
                     //|| categories1[e] == EdgeCategory.Aligned
-                    //|| categories1[e] == EdgeCategory.ReverseAligned
+                    || categories1[e] == EdgeCategory.ReverseAligned
                     )
                     continue;
                 loop1.destroyed[e] = true;
@@ -506,9 +517,9 @@ namespace Chisel.Core
             for (int e = loop2.edges.Count - 1; e >= 0; e--)
             {
                 if (categories2[e] == EdgeCategory.Inside
-                    //|| categories1[e] == EdgeCategory.Outside
-                    //|| categories1[e] == EdgeCategory.Aligned
-                    //|| categories1[e] == EdgeCategory.ReverseAligned
+                    //|| categories2[e] == EdgeCategory.Outside
+                    //|| categories2[e] == EdgeCategory.Aligned
+                    //|| categories2[e] == EdgeCategory.ReverseAligned
                     )
                     continue;
                 loop2.destroyed[e] = true;
@@ -527,12 +538,14 @@ namespace Chisel.Core
 
             for (int e = 0; e < loop1.edges.Count; e++)
             {
-                categories1[e] = loop2.CategorizeEdge(soup, loop1.edges[e]);
+                if (!loop1.destroyed[e])
+                    categories1[e] = loop2.CategorizeEdge(soup, loop1.edges[e]);
             }
 
             for (int e = 0; e < loop2.edges.Count; e++)
             {
-                categories2[e] = loop1.CategorizeEdge(soup, loop2.edges[e]);
+                if (!loop2.destroyed[e])
+                    categories2[e] = loop1.CategorizeEdge(soup, loop2.edges[e]);
             }
 
 
