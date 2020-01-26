@@ -778,9 +778,9 @@ namespace Chisel.Components
                     var parentTransform = topGameObject.transform;
                     for (int i = 0; i < sourceBrushMeshes.Length; i++)
                     {
-                        var brush = ChiselComponentFactory.Create<ChiselBrush>("Brush (" + (i + 1) + ")", parentTransform);
+                        var brush = ChiselComponentFactory.Create<ChiselBrush>("Brush (" + (i + 1) + ")", parentTransform, localTransformation);
                         brush.LocalTransformation       = localTransformation;
-                        brush.PivotOffset               = pivotOffset;
+                        brush.PivotOffset               = pivotOffset; 
                         brush.Operation                 = sourceOperations[i];
                         brush.definition = new ChiselBrushDefinition
                         {
