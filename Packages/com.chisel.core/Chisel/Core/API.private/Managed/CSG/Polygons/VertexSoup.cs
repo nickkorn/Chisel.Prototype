@@ -94,42 +94,63 @@ namespace Chisel.Core
                     {
                         var chainIndex = hashTable[GetHash(x, y, mz - 1) % kHashTableSize];
                         {
+                            ushort closestIndex = ushort.MaxValue;
+                            float closestDistance = CSGManagerPerformCSG.kSqrMergeEpsilon;
                             while (chainIndex != -1)
                             {
                                 var vertexIndex = chainedIndices[chainIndex].vertexIndex;
                                 chainIndex = chainedIndices[chainIndex].nextChainIndex;
                                 var sqrDistance = math.lengthsq(vertices[vertexIndex] - vertex);
-                                if (sqrDistance < CSGManagerPerformCSG.kSqrMergeEpsilon)
-                                    return vertexIndex; 
+                                if (sqrDistance < closestDistance)
+                                {
+                                    closestIndex = vertexIndex;
+                                    closestDistance = sqrDistance;
+                                }
                             }
+                            if (closestIndex != ushort.MaxValue)
+                                return closestIndex;
                         }
                     }
 
                     {
                         var chainIndex = hashTable[GetHash(x, y, mz) % kHashTableSize];
                         {
+                            ushort closestIndex = ushort.MaxValue;
+                            float closestDistance = CSGManagerPerformCSG.kSqrMergeEpsilon;
                             while (chainIndex != -1)
                             {
                                 var vertexIndex = chainedIndices[chainIndex].vertexIndex;
                                 chainIndex = chainedIndices[chainIndex].nextChainIndex;
                                 var sqrDistance = math.lengthsq(vertices[vertexIndex] - vertex);
-                                if (sqrDistance < CSGManagerPerformCSG.kSqrMergeEpsilon)
-                                    return vertexIndex;
+                                if (sqrDistance < closestDistance)
+                                {
+                                    closestIndex = vertexIndex;
+                                    closestDistance = sqrDistance;
+                                }
                             }
+                            if (closestIndex != ushort.MaxValue)
+                                return closestIndex;
                         }
                     }
 
                     {
                         var chainIndex = hashTable[GetHash(x, y, mz + 1) % kHashTableSize];
                         {
+                            ushort closestIndex = ushort.MaxValue;
+                            float closestDistance = CSGManagerPerformCSG.kSqrMergeEpsilon;
                             while (chainIndex != -1)
                             {
                                 var vertexIndex = chainedIndices[chainIndex].vertexIndex;
                                 chainIndex = chainedIndices[chainIndex].nextChainIndex;
                                 var sqrDistance = math.lengthsq(vertices[vertexIndex] - vertex);
-                                if (sqrDistance < CSGManagerPerformCSG.kSqrMergeEpsilon)
-                                    return vertexIndex;
+                                if (sqrDistance < closestDistance)
+                                {
+                                    closestIndex = vertexIndex;
+                                    closestDistance = sqrDistance;
+                                }
                             }
+                            if (closestIndex != ushort.MaxValue)
+                                return closestIndex;
                         }
                     }
                 }

@@ -575,29 +575,9 @@ namespace Chisel.Core
         }
         
 
-
-        #region Triangulate
         static readonly Poly2Tri.DTSweep context = new Poly2Tri.DTSweep();
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal static unsafe bool TriangulateWithHoles(List<float3> vertices, List<Edge> edges, quaternion rotation, out Int32[] surfaceIndices)
-        {
-            surfaceIndices = null;
-            try
-            {
-                surfaceIndices = context.Triangulate(vertices, edges, rotation);
-            } 
-            catch (System.Exception e) 
-            {
-                Debug.LogException(e);
-            }
-            return true;
-        }
-        #endregion
-
-
         internal static void GenerateSurfaceRenderBuffers(int                   brushNodeID, 
-                                                          //SurfaceLoops          loopList, 
+                                                          //SurfaceLoops        loopList, 
                                                           MeshQuery[]           meshQueries,
                                                           VertexChannelFlags    vertexChannelMask)
         {
@@ -619,6 +599,7 @@ namespace Chisel.Core
             var meshPolygons	= mesh.polygons;
             var meshSurfaces	= mesh.surfaces;
 
+            var brushVertices   = output.brushOutputLoops.vertexSoup;
 
             CSGManager.GetTreeToNodeSpaceMatrix(brushNodeID, out Matrix4x4 worldToLocal);
 
@@ -637,16 +618,39 @@ namespace Chisel.Core
                     if (interiorCategory > CategoryIndex.LastCategory)
                         Debug.Assert(false, $"Invalid final category {interiorCategory}");
 
+                    //*
                     if (interiorCategory != CategoryIndex.SelfAligned && 
                         interiorCategory != CategoryIndex.SelfReverseAligned)
                         continue;
+                    /*/
+
+                    if (interiorCategory != CategoryIndex.SelfAligned &&
+                        interiorCategory != CategoryIndex.SelfReverseAligned)
+                        continue;
+
+                    if (brushNodeID != 1 || s != 0 || l == 2)
+                        continue;
+                    
+                    #if false
+                    if (interiorCategory == CategoryIndex.SelfReverseAligned)
+                        surfaceLoopList[l].interiorCategory = (CategoryGroupIndex)CategoryIndex.SelfAligned;
+                    if (interiorCategory == CategoryIndex.ReverseAligned)
+                        surfaceLoopList[l].interiorCategory = (CategoryGroupIndex)CategoryIndex.Aligned;
+                    #endif
+                    
+                    #if false 
+                    var builder = new System.Text.StringBuilder();
+                    builder.AppendLine($"{surfaceLoopList[l].loopIndex}: {s}/{l}/{surfaceLoopList[l].info.worldPlane}");
+                    CSGManagerPerformCSG.Dump(builder, surfaceLoopList[l], brushVertices, Quaternion.FromToRotation(surfaceLoopList[l].info.worldPlane.normal, Vector3.forward));
+                    Debug.Log(builder.ToString());
+                    #endif
+                    //*/
 
                     var loop = surfaceLoopList[l];
                     loops.Add(loop);
                 }
             }
 
-            var brushVertices = output.brushOutputLoops.vertexSoup;
 
             var outputSurfaces  = new List<ChiselSurfaceRenderBuffer>(loops.Count * meshQueries.Length); // TODO: should be same size as brush.surfaces.Length
             for (int l = 0; l < loops.Count; l++)
@@ -673,7 +677,7 @@ namespace Chisel.Core
                 var anySurfaceTargetHasUVs      = true; // TODO: actually determine this
 
                 
-                Int32[]     surfaceIndices;
+                Int32[] surfaceIndices = null;
 
                 UnityEngine.Profiling.Profiler.BeginSample("Triangulate");
                 try
@@ -686,8 +690,13 @@ namespace Chisel.Core
                         rotation = (quaternion)Quaternion.FromToRotation(info.worldPlane.normal, Vector3.forward);
 
                     // TODO: all separate loops on same surface should be put in same OutputSurfaceMesh!
-                    if (!TriangulateWithHoles(brushVertices.vertices, loop.edges, rotation, out surfaceIndices))
-                        continue;
+
+                    surfaceIndices = context.Triangulate(brushVertices.vertices, loop.edges, rotation);
+                }
+                catch (System.Exception e)
+                {
+                    Debug.LogException(e);
+                    Debug.Log($"BrushNodeID: {loop.info.brush.brushNodeID} / BasePlaneIndex: {loop.info.basePlaneIndex} / WorldPlane: {loop.info.worldPlane}");// / LoopIndex: {loop.loopIndex}");
                 }
                 finally
                 {
@@ -850,5 +859,5 @@ namespace Chisel.Core
             }
         }
 #endif
-                }
-            }
+    }
+}

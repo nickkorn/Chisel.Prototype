@@ -1,3 +1,4 @@
+//#define DebugInfo
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -27,13 +28,47 @@ namespace Chisel.Core
     }
 
     // TODO: rename
-    [Serializable] 
+    public sealed class LoopGroup
+    {
+        public Dictionary<int, Loop> loopLookup = new Dictionary<int, Loop>();
+        public List<Loop> loops = new List<Loop>();
+
+        public void Clear()
+        {
+            loopLookup.Clear();
+            loops.Clear();
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public Loop FindOrAddLoop(int basePlaneIndex, CSGTreeBrush brush, bool isConvex = true)
+        {
+            if (!loopLookup.TryGetValue(basePlaneIndex, out Loop loop))
+            {
+                loop = new Loop() { info = new LoopInfo() { basePlaneIndex = basePlaneIndex, brush = brush }, convex = isConvex };
+                loopLookup.Add(basePlaneIndex, loop);
+                loops.Add(loop);
+            }
+            return loop;
+        }
+    }
+
+    // TODO: rename
     public sealed class Loop
     {
-        public static bool debugMessage = false;
+#if DebugInfo
         public static int loopDebugCounter = 0;
         public int loopIndex = loopDebugCounter++;
+        public static void DebugInit()
+        {
+            loopDebugCounter = 0;
+        }
+#else
+        public static void DebugInit()
+        {
+        }
+#endif
 
+        public readonly HashSet<ushort>     indexUsed   = new HashSet<ushort>();
         public readonly List<ushort>        indices     = new List<ushort>();
         public List<Edge>                   edges       = new List<Edge>();
         public bool[]                       destroyed;
@@ -41,17 +76,45 @@ namespace Chisel.Core
         [NonSerialized] public List<Loop>   holes       = new List<Loop>();
         [NonSerialized] public LoopInfo     info;
 
-        [NonSerialized] public CategoryGroupIndex   interiorCategory    = CategoryGroupIndex.Invalid; // determine if the loop is inside another brush or aligned with another brush
         [NonSerialized] public bool                 convex              = false;
+#if DebugInfo
+        CategoryGroupIndex   _interiorCategory    = CategoryGroupIndex.Invalid; // determine if the loop is inside another brush or aligned with another brush
+        public CategoryGroupIndex   interiorCategory
+        {
+            get { return _interiorCategory; }
+            set
+            {
+                if (logLoopIndices.Contains(loopIndex))
+                    Debug.Log($"{loopIndex}: Set {(CategoryIndex)_interiorCategory} => {(CategoryIndex)value}");
+                _interiorCategory = value;
+            }
+        }
+        internal static HashSet<int> logLoopIndices = new HashSet<int>()
+        {
+            245,118
+        };
+#else
+        [NonSerialized] public CategoryGroupIndex   interiorCategory    = CategoryGroupIndex.Invalid; // determine if the loop is inside another brush or aligned with another brush
+#endif
 
         public bool Valid { [MethodImpl(MethodImplOptions.AggressiveInlining)] get { return indices.Count >= 3; } }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Loop() { }
+        public Loop()
+        {
+#if DebugInfo
+            if (logLoopIndices.Contains(loopIndex))
+                Debug.Log($"new => {loopIndex} {interiorCategory}");
+#endif
+        }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public Loop(Loop original)
         {
+#if DebugInfo
+            if (logLoopIndices.Contains(loopIndex))
+                Debug.Log($"copy {original.loopIndex} ({original.holes.Count}/{original.indices.Count}/{original.edges.Count}/{(CategoryIndex)original.interiorCategory}) => {loopIndex}");
+#endif
             this.edges  .AddRange(original.edges);
             this.indices.AddRange(original.indices);
             this.info               = original.info;
@@ -62,6 +125,7 @@ namespace Chisel.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ClearAllIndices()
         {
+            indexUsed.Clear();
             indices.Clear();
             edges.Clear();
         }
@@ -69,31 +133,10 @@ namespace Chisel.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void AddIndex(VertexSoup soup, ushort newIndex)
         {
-            if (indices.Contains(newIndex))
+            if (indexUsed.Contains(newIndex))
                 return;
-
+            indexUsed.Add(newIndex);
             indices.Add(newIndex);
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Loop FindOrAddLoop(List<Loop> loops, int basePlaneIndex, CSGTreeBrush brush, bool isConvex = true)
-        {
-            Loop loop = null;
-            for (int l = 0; l < loops.Count; l++)
-            {
-                if (loops[l].info.basePlaneIndex == basePlaneIndex)
-                {
-                    loop = loops[l];
-                    break;
-                }
-            }
-
-            if (loop == null)
-            {
-                loop = new Loop() { info = new LoopInfo() { basePlaneIndex = basePlaneIndex, brush = brush }, convex = isConvex };
-                loops.Add(loop);
-            }
-            return loop;
         }
 
 
@@ -104,6 +147,7 @@ namespace Chisel.Core
         {
             if (indices.Count == 0)
                 return;
+
             s_UniqueEdges.Clear();
             if (edges.Capacity < edges.Count + indices.Count)
                 edges.Capacity = edges.Count + indices.Count;
@@ -125,10 +169,10 @@ namespace Chisel.Core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void AddEdges(List<Edge> addEdges, bool removeDuplicates = false)
+        public bool AddEdges(List<Edge> addEdges, bool removeDuplicates = false)
         {
             if (addEdges.Count == 0)
-                return;
+                return false;
 
             s_UniqueEdges.Clear();
             for (int e = 0; e < addEdges.Count; e++)
@@ -150,17 +194,21 @@ namespace Chisel.Core
                 }
             }
 
-            var removeEdges = new List<int>();
+            bool duplicates = false;
+
             foreach (var addEdge in s_UniqueEdges)
             {
                 var index = IndexOf(addEdge, out bool inverted);
                 if (index != -1)
                 {
                     Debug.Log($"Duplicate edge {inverted}  {addEdge.index1}/{addEdge.index2} {edges[index].index1}/{edges[index].index2}");
+                    duplicates = true;
                     continue;
                 }
                 this.edges.Add(addEdge);
             }
+
+            return duplicates;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -192,4 +240,4 @@ namespace Chisel.Core
         }
     }
 #endif
-}
+    }

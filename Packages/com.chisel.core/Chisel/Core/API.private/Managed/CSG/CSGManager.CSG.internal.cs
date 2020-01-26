@@ -44,7 +44,7 @@ namespace Chisel.Core
 
             Reset(treeInfo);
 
-            Loop.loopDebugCounter = 0;
+            Loop.DebugInit();
 
             var treeBrushes = treeInfo.treeBrushes;
 
@@ -284,7 +284,7 @@ namespace Chisel.Core
                         // Lookup categorization lookup between original surface & other surface ...
                         if (overlap)
                         {
-                            // TODO: don't forget about reverse-aligned!
+                            // If we overlap don't bother with creating a new polygon + hole and reuse existing one
                             surfaceLoop.interiorCategory = routingRow[intersectionLoop.interiorCategory];
                             continue;
                         } else
@@ -316,7 +316,7 @@ namespace Chisel.Core
             return true;
         }
 
-#endregion
+        #endregion
 
         #region Reset/Rebuild
         static void Reset()
@@ -395,7 +395,7 @@ namespace Chisel.Core
             Reset();
             UpdateAllTreeMeshes();
         }
-                #endregion
+        #endregion
     }
 #endif
 }
