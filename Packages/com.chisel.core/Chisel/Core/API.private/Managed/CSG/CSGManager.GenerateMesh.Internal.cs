@@ -619,28 +619,26 @@ namespace Chisel.Core
                         Debug.Assert(false, $"Invalid final category {interiorCategory}");
 
                     //*
-                    if (interiorCategory != CategoryIndex.SelfAligned && 
-                        interiorCategory != CategoryIndex.SelfReverseAligned)
+                    if (interiorCategory != CategoryIndex.ValidAligned && 
+                        interiorCategory != CategoryIndex.ValidReverseAligned)
                         continue;
                     /*/
 
-                    if (interiorCategory != CategoryIndex.SelfAligned &&
-                        interiorCategory != CategoryIndex.SelfReverseAligned)
+                    if (brushNodeID != 1)// || s!=5)
                         continue;
 
-                    if (brushNodeID != 1 || s != 0 || l == 2)
-                        continue;
                     
-                    #if false
-                    if (interiorCategory == CategoryIndex.SelfReverseAligned)
-                        surfaceLoopList[l].interiorCategory = (CategoryGroupIndex)CategoryIndex.SelfAligned;
+                    #if true
+                    if (interiorCategory == CategoryIndex.ValidReverseAligned)
+                        surfaceLoopList[l].interiorCategory = (CategoryGroupIndex)CategoryIndex.ValidAligned;
                     if (interiorCategory == CategoryIndex.ReverseAligned)
                         surfaceLoopList[l].interiorCategory = (CategoryGroupIndex)CategoryIndex.Aligned;
                     #endif
                     
-                    #if false 
+                    #if false
                     var builder = new System.Text.StringBuilder();
-                    builder.AppendLine($"{surfaceLoopList[l].loopIndex}: {s}/{l}/{surfaceLoopList[l].info.worldPlane}");
+                    //builder.AppendLine($"{surfaceLoopList[l].loopIndex}: {s}/{l}/{surfaceLoopList[l].info.worldPlane}");
+                    builder.AppendLine($"{s}/{l}/{interiorCategory}/{surfaceLoopList[l].indices.Count}/{surfaceLoopList[l].edges.Count}");
                     CSGManagerPerformCSG.Dump(builder, surfaceLoopList[l], brushVertices, Quaternion.FromToRotation(surfaceLoopList[l].info.worldPlane.normal, Vector3.forward));
                     Debug.Log(builder.ToString());
                     #endif
@@ -692,6 +690,21 @@ namespace Chisel.Core
                     // TODO: all separate loops on same surface should be put in same OutputSurfaceMesh!
 
                     surfaceIndices = context.Triangulate(brushVertices.vertices, loop.edges, rotation);
+
+                    
+                    #if false
+                    var builder = new System.Text.StringBuilder();
+                    //builder.AppendLine($"{surfaceLoopList[l].loopIndex}: {s}/{l}/{surfaceLoopList[l].info.worldPlane}");
+                    builder.AppendLine($"{loop.info.basePlaneIndex}/{l}/{interiorCategory}/{loop.indices.Count}/{loop.edges.Count}");
+                    CSGManagerPerformCSG.Dump(builder, loop, brushVertices, Quaternion.FromToRotation(loop.info.worldPlane.normal, Vector3.forward));
+                    for (int i = 0; i < surfaceIndices.Length; i++)
+                    {
+                        builder.Append(i);
+                        builder.Append(", ");
+                    }
+                    builder.AppendLine();
+                    Debug.Log(builder.ToString());
+                    #endif
                 }
                 catch (System.Exception e)
                 {
@@ -707,7 +720,7 @@ namespace Chisel.Core
                     surfaceIndices.Length < 3)
                     continue;
 
-                if (interiorCategory == CategoryIndex.SelfReverseAligned ||
+                if (interiorCategory == CategoryIndex.ValidReverseAligned ||
                     interiorCategory == CategoryIndex.ReverseAligned)
                 {
                     var maxCount = surfaceIndices.Length - 1;
@@ -730,7 +743,7 @@ namespace Chisel.Core
                 Vector3[] surfaceNormals = null;
                 if (anySurfaceTargetHasNormals)
                 {
-                    var normal = (interiorCategory == CategoryIndex.SelfReverseAligned || interiorCategory == CategoryIndex.ReverseAligned) ? -info.worldPlane.normal : info.worldPlane.normal;
+                    var normal = (interiorCategory == CategoryIndex.ValidReverseAligned || interiorCategory == CategoryIndex.ReverseAligned) ? -info.worldPlane.normal : info.worldPlane.normal;
 
                     surfaceNormals = surfaceVertices == null ? null : new Vector3[surfaceVertices.Length];
                     if (surfaceVertices != null)

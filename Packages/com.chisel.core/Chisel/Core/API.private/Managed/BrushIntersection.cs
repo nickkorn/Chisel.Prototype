@@ -4,6 +4,7 @@ using System.Linq;
 using System.ComponentModel;
 using UnityEngine;
 using System.Runtime.CompilerServices;
+using Unity.Mathematics;
 
 namespace Chisel.Core
 {
@@ -35,7 +36,6 @@ namespace Chisel.Core
             {
                 var plane0 = transformedPlanes0[i];
                 int side = WhichSide(brushMesh1.vertices, plane0, epsilon);
-                //Debug.Log($"{i} {plane0} {side}");
                 if (side < 0) negativeSides1++;
                 if (side > 0) positiveSides1++;
                 if (side == 0) intersectingSides1++;
@@ -77,10 +77,10 @@ namespace Chisel.Core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        static int WhichSide(Vector3[] vertices, Plane plane, double epsilon)
+        static int WhichSide(Vector3[] vertices, float4 plane, double epsilon)
         {
             {
-                float t = plane.GetDistanceToPoint(vertices[0]);
+                float t = math.dot(plane, new float4(vertices[0], 1));
                 if (t >=  epsilon) goto HavePositive;
                 if (t <= -epsilon) goto HaveNegative;
                 return 0;
@@ -88,7 +88,7 @@ namespace Chisel.Core
         HaveNegative:
             for (var i = 1; i < vertices.Length; i++)
             {
-                float t = plane.GetDistanceToPoint(vertices[i]);
+                float t = math.dot(plane, new float4(vertices[i], 1));
                 if (t > -epsilon)
                     return 0;
             }
@@ -96,7 +96,7 @@ namespace Chisel.Core
         HavePositive:
             for (var i = 1; i < vertices.Length; i++)
             {
-                float t = plane.GetDistanceToPoint(vertices[i]);
+                float t = math.dot(plane, new float4(vertices[i], 1));
                 if (t < epsilon)
                     return 0;
             }
@@ -105,18 +105,18 @@ namespace Chisel.Core
 
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        static Plane[] TransformOtherIntoBrushSpace(CSGTreeBrush brush0, CSGTreeBrush brush1, BrushMesh.Surface[] srcPlanes1)
+        static float4[] TransformOtherIntoBrushSpace(CSGTreeBrush brush0, CSGTreeBrush brush1, BrushMesh.Surface[] srcPlanes1)
         {
             // inverse of (otherTransform.localToWorldSpace * this->worldToLocalSpace)
 
             var brush0ToTreeSpaceMatrix = brush0.NodeToTreeSpaceMatrix;
             var treeToBrush1SpaceMatrix = brush1.TreeToNodeSpaceMatrix;
-             
-            var brush1ToBrush0LocalLocalSpace = treeToBrush1SpaceMatrix * brush0ToTreeSpaceMatrix;
 
-            var dstPlanes = new Plane[srcPlanes1.Length];
+            var brush1ToBrush0LocalLocalSpace = (float4x4)((treeToBrush1SpaceMatrix * brush0ToTreeSpaceMatrix).inverse.transpose);
+            
+            var dstPlanes = new float4[srcPlanes1.Length];
             for (int plane_index = 0; plane_index < srcPlanes1.Length; plane_index++)
-                dstPlanes[plane_index] = brush1ToBrush0LocalLocalSpace.TransformPlane(srcPlanes1[plane_index].localPlane);
+                dstPlanes[plane_index] = math.mul(brush1ToBrush0LocalLocalSpace, srcPlanes1[plane_index].localPlane);;
 
             return dstPlanes;
         }
