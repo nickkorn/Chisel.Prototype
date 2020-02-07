@@ -165,7 +165,8 @@ namespace Chisel.Core
             public Surface(float4 localPlane) { this.localPlane = localPlane; }
             public float4 localPlane; // This is a Plane, but 'Plane' is not [Serializable]
 
-            public float3 Normal { [MethodImpl(MethodImplOptions.AggressiveInlining)] get { return localPlane.xyz; } }
+            public float3 Normal { [MethodImpl(MethodImplOptions.AggressiveInlining)] get { return localPlane.xyz; } set { localPlane = new float4(value, localPlane.w); } }
+
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static implicit operator Plane(Surface surface) { return new Plane(surface.localPlane.xyz, surface.localPlane.w); } 
         }

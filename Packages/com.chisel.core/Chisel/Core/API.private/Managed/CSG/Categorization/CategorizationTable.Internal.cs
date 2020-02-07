@@ -18,7 +18,7 @@ namespace Chisel.Core
         public CategoryGroupIndex input;
         public CategoryRoutingRow routingRow;
 
-        public override string ToString() { return $"'{node}': {input} -> {routingRow}"; }
+        public override string ToString() { return $"'{node}': {(CategoryIndex)input} -> {routingRow}"; }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal void SetInvalid() { routingRow = CategoryRoutingRow.invalid; }
@@ -175,56 +175,115 @@ namespace Chisel.Core
 
 
         #region Operation tables
-        static readonly CategoryRoutingRow[][] operationTables = new[]
+        static class Operation
         {
-            // Additive set operation on polygons: output = (left-node || right-node)
-            // Defines final output from combination of categorization of left and right node
-            new CategoryRoutingRow[] // Additive Operation
-            {
-	            //             	  right node                                                                                     |
-	            //                                  other       self            self             other                           |
-	            //                  inside          aligned     aligned		    reverse-aligned  reverse-aligned  outside        |     left-node       
-	            //-----------------------------------------------------------------------------------------------------------------------------------------
-	            new CategoryRoutingRow( CategoryIndex.Inside,         CategoryIndex.Inside,         CategoryIndex.Inside,               CategoryIndex.Inside,               CategoryIndex.Inside,           CategoryIndex.Inside            ), // inside
-	            new CategoryRoutingRow( CategoryIndex.Inside,         CategoryIndex.Aligned,        CategoryIndex.SelfAligned,          CategoryIndex.Inside,               CategoryIndex.Inside,           CategoryIndex.Aligned           ), // other-aligned
-	            new CategoryRoutingRow( CategoryIndex.Inside,         CategoryIndex.Aligned,        CategoryIndex.SelfAligned,          CategoryIndex.Inside,               CategoryIndex.Inside,           CategoryIndex.SelfAligned       ), // self-aligned
-	            new CategoryRoutingRow( CategoryIndex.Inside,         CategoryIndex.Inside,         CategoryIndex.Inside,               CategoryIndex.SelfReverseAligned,   CategoryIndex.ReverseAligned,   CategoryIndex.SelfReverseAligned), // self-reverse-aligned
-	            new CategoryRoutingRow( CategoryIndex.Inside,         CategoryIndex.Inside,         CategoryIndex.Inside,               CategoryIndex.SelfReverseAligned,   CategoryIndex.ReverseAligned,   CategoryIndex.ReverseAligned    ), // other-reverse-aligned
-	            new CategoryRoutingRow( CategoryIndex.Inside,         CategoryIndex.Aligned,        CategoryIndex.SelfAligned,          CategoryIndex.SelfReverseAligned,   CategoryIndex.ReverseAligned,   CategoryIndex.Outside           )  // outside
-            },
+#if HAVE_SELF_CATEGORIES
+            const CategoryGroupIndex Inside             = (CategoryGroupIndex)CategoryIndex.Inside;
+            const CategoryGroupIndex Aligned            = (CategoryGroupIndex)CategoryIndex.Aligned;
+            const CategoryGroupIndex SelfAligned        = (CategoryGroupIndex)CategoryIndex.SelfAligned;
+            const CategoryGroupIndex SelfReverseAligned = (CategoryGroupIndex)CategoryIndex.SelfReverseAligned;
+            const CategoryGroupIndex ReverseAligned     = (CategoryGroupIndex)CategoryIndex.ReverseAligned;
+            const CategoryGroupIndex Outside            = (CategoryGroupIndex)CategoryIndex.Outside;
 
-            // Subtractive set operation on polygons: output = !(!left-node || right-node)
-            // Defines final output from combination of categorization of left and right node
-            new CategoryRoutingRow[] // Subtractive Operation
+            public static readonly CategoryRoutingRow[][] Tables = new[]
             {
-	            //             	  right node                                                                                     |
-	            //                                  other       self            self             other                           |
-	            //             	    inside          aligned     aligned		    reverse-aligned  reverse-aligned  outside        |     left-node       
-	            //-----------------------------------------------------------------------------------------------------------------------------------------
-	            new CategoryRoutingRow( CategoryIndex.Outside,        CategoryIndex.ReverseAligned, CategoryIndex.SelfReverseAligned,   CategoryIndex.SelfAligned,          CategoryIndex.Aligned,          CategoryIndex.Inside            ), // inside
-	            new CategoryRoutingRow( CategoryIndex.Outside,        CategoryIndex.Aligned,        CategoryIndex.Inside,               CategoryIndex.SelfAligned,          CategoryIndex.Aligned,          CategoryIndex.Aligned           ), // other-aligned
-	            new CategoryRoutingRow( CategoryIndex.Outside,        CategoryIndex.Inside,         CategoryIndex.Inside,               CategoryIndex.SelfAligned,          CategoryIndex.Aligned,          CategoryIndex.SelfAligned       ), // self-aligned
-	            new CategoryRoutingRow( CategoryIndex.Outside,        CategoryIndex.ReverseAligned, CategoryIndex.SelfReverseAligned,   CategoryIndex.Inside,               CategoryIndex.Inside,           CategoryIndex.SelfReverseAligned), // self-reverse-aligned
-	            new CategoryRoutingRow( CategoryIndex.Outside,        CategoryIndex.ReverseAligned, CategoryIndex.SelfReverseAligned,   CategoryIndex.Inside,               CategoryIndex.Inside,           CategoryIndex.ReverseAligned    ), // other-reverse-aligned
-	            new CategoryRoutingRow( CategoryIndex.Outside,        CategoryIndex.Outside,        CategoryIndex.Outside,              CategoryIndex.Outside,              CategoryIndex.Outside,          CategoryIndex.Outside           )  // outside
-            },
+                // Additive set operation on polygons: output = (left-node || right-node)
+                // Defines final output from combination of categorization of left and right node
+                new CategoryRoutingRow[] // Additive Operation
+                {
+	                //             	        right node                                                                                                              |
+	                //                                                              self                  self                                                      |
+	                //                      inside                aligned           aligned               reverse-aligned       reverse-aligned   outside           |     left-node       
+	                //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+	                new CategoryRoutingRow( Inside,               Inside,           Inside,               Inside,               Inside,           Inside            ), // inside
+	                new CategoryRoutingRow( Inside,               Aligned,          SelfAligned,          Inside,               Inside,           Aligned           ), // other-aligned
+	                new CategoryRoutingRow( Inside,               Aligned,          SelfAligned,          Inside,               Inside,           SelfAligned       ), // self-aligned
+	                new CategoryRoutingRow( Inside,               Inside,           Inside,               SelfReverseAligned,   ReverseAligned,   SelfReverseAligned), // self-reverse-aligned
+	                new CategoryRoutingRow( Inside,               Inside,           Inside,               SelfReverseAligned,   ReverseAligned,   ReverseAligned    ), // other-reverse-aligned
+	                new CategoryRoutingRow( Inside,               Aligned,          SelfAligned,          SelfReverseAligned,   ReverseAligned,   Outside           )  // outside
+                },
 
-            // Common set operation on polygons: output = !(!left-node || !right-node)
-            // Defines final output from combination of categorization of left and right node
-            new CategoryRoutingRow[] // Intersection Operation
+                // Subtractive set operation on polygons: output = !(!left-node || right-node)
+                // Defines final output from combination of categorization of left and right node
+                new CategoryRoutingRow[] // Subtractive Operation
+                {
+	                //             	        right node                                                                                                              |
+	                //                                                              self                  self                                                      |
+	                //                      inside                aligned           aligned               reverse-aligned       reverse-aligned   outside           |     left-node       
+	                //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+	                new CategoryRoutingRow( Outside,              ReverseAligned,   SelfReverseAligned,   SelfAligned,          Aligned,          Inside            ), // inside
+	                new CategoryRoutingRow( Outside,              Aligned,          Inside,               SelfAligned,          Aligned,          Aligned           ), // other-aligned
+	                new CategoryRoutingRow( Outside,              Aligned,          Inside,               SelfAligned,          Aligned,          SelfAligned       ), // self-aligned
+	                new CategoryRoutingRow( Outside,              ReverseAligned,   SelfReverseAligned,   Outside,              Outside,          SelfReverseAligned), // self-reverse-aligned
+	                new CategoryRoutingRow( Outside,              ReverseAligned,   SelfReverseAligned,   Outside,              Outside,          ReverseAligned    ), // other-reverse-aligned
+	                new CategoryRoutingRow( Outside,              Outside,          Outside,              Outside,              Outside,          Outside           )  // outside
+                },
+
+                // Common set operation on polygons: output = !(!left-node || !right-node)
+                // Defines final output from combination of categorization of left and right node
+                new CategoryRoutingRow[] // Intersection Operation
+                {
+	                //             	        right node                                                                                                              |
+	                //                                                              self                  self                                                      |
+	                //                      inside                aligned           aligned               reverse-aligned       reverse-aligned   outside           |     left-node       
+	                //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+	                new CategoryRoutingRow( Inside,               Aligned,          SelfAligned,          SelfReverseAligned,   ReverseAligned,   Outside           ), // inside
+	                new CategoryRoutingRow( Aligned,              Aligned,          SelfAligned,          Outside,              Outside,          Outside           ), // other-aligned
+	                new CategoryRoutingRow( SelfAligned,          Aligned,          SelfAligned,          Outside,              Outside,          Outside           ), // self-aligned
+	                new CategoryRoutingRow( SelfReverseAligned,   Outside,          Outside,              SelfReverseAligned,   ReverseAligned,   Outside           ), // self-reverse-aligned
+	                new CategoryRoutingRow( ReverseAligned,       Outside,          Outside,              SelfReverseAligned,   ReverseAligned,   Outside           ), // other-reverse-aligned
+	                new CategoryRoutingRow( Outside,              Outside,          Outside,              Outside,              Outside,          Outside           )  // outside
+                }
+            };
+#else
+            const CategoryGroupIndex Inside             = (CategoryGroupIndex)CategoryIndex.Inside;
+            const CategoryGroupIndex Aligned            = (CategoryGroupIndex)CategoryIndex.Aligned;
+            const CategoryGroupIndex ReverseAligned     = (CategoryGroupIndex)CategoryIndex.ReverseAligned;
+            const CategoryGroupIndex Outside            = (CategoryGroupIndex)CategoryIndex.Outside;
+
+            public static readonly CategoryRoutingRow[][] Tables = new[]
             {
-	            //             	  right node                                                                                     |
-	            //             	                    other       self            self             other                           |
-	            //             	    inside          aligned     aligned		    reverse-aligned  reverse-aligned  outside        |     left-node       
-	            //----------------------------------------------------------------------------------------------------------------------------
-	            new CategoryRoutingRow( CategoryIndex.Inside,               CategoryIndex.Aligned,    CategoryIndex.SelfAligned,    CategoryIndex.SelfReverseAligned,   CategoryIndex.ReverseAligned,   CategoryIndex.Outside        ), // inside
-	            new CategoryRoutingRow( CategoryIndex.Aligned,              CategoryIndex.Aligned,    CategoryIndex.SelfAligned,    CategoryIndex.Outside,              CategoryIndex.Outside,          CategoryIndex.Outside        ), // other-aligned
-	            new CategoryRoutingRow( CategoryIndex.SelfAligned,          CategoryIndex.Aligned,    CategoryIndex.SelfAligned,    CategoryIndex.Outside,              CategoryIndex.Outside,          CategoryIndex.Outside        ), // self-aligned
-	            new CategoryRoutingRow( CategoryIndex.SelfReverseAligned,   CategoryIndex.Outside,    CategoryIndex.Outside,        CategoryIndex.SelfReverseAligned,   CategoryIndex.ReverseAligned,   CategoryIndex.Outside        ), // self-reverse-aligned
-	            new CategoryRoutingRow( CategoryIndex.ReverseAligned,       CategoryIndex.Outside,    CategoryIndex.Outside,        CategoryIndex.SelfReverseAligned,   CategoryIndex.ReverseAligned,   CategoryIndex.Outside        ), // other-reverse-aligned
-	            new CategoryRoutingRow( CategoryIndex.Outside,              CategoryIndex.Outside,    CategoryIndex.Outside,        CategoryIndex.Outside,              CategoryIndex.Outside,          CategoryIndex.Outside        )  // outside
-            }
-        };
+                // Additive set operation on polygons: output = (left-node || right-node)
+                // Defines final output from combination of categorization of left and right node
+                new CategoryRoutingRow[] // Additive Operation
+                {
+	                //             	        right node                                                              |
+	                //             	        inside            aligned           reverse-aligned   outside           |     left-node       
+	                //----------------------------------------------------------------------------------------------------------------------------
+	                new CategoryRoutingRow( Inside,           Inside,           Inside,           Inside            ), // inside
+	                new CategoryRoutingRow( Inside,           Aligned,          Inside,           Aligned           ), // aligned
+	                new CategoryRoutingRow( Inside,           Inside,           ReverseAligned,   ReverseAligned    ), // reverse-aligned
+	                new CategoryRoutingRow( Inside,           Aligned,          ReverseAligned,   Outside           )  // outside
+                },
+
+                // Subtractive set operation on polygons: output = !(!left-node || right-node)
+                // Defines final output from combination of categorization of left and right node
+                new CategoryRoutingRow[] // Subtractive Operation
+                {
+	                //             	        right node                                                              |
+	                //             	        inside            aligned           reverse-aligned   outside           |     left-node       
+	                //----------------------------------------------------------------------------------------------------------------------------
+	                new CategoryRoutingRow( Outside,          ReverseAligned,   Aligned,          Inside            ), // inside
+	                new CategoryRoutingRow( Outside,          Aligned,          Aligned,          Aligned           ), // aligned
+	                new CategoryRoutingRow( Outside,          ReverseAligned,   Outside,          ReverseAligned    ), // reverse-aligned
+	                new CategoryRoutingRow( Outside,          Outside,          Outside,          Outside           )  // outside
+                },
+
+                // Common set operation on polygons: output = !(!left-node || !right-node)
+                // Defines final output from combination of categorization of left and right node
+                new CategoryRoutingRow[] // Intersection Operation
+                {
+	                //             	        right node                                                              |
+	                //             	        inside            aligned           reverse-aligned   outside           |     left-node       
+	                //----------------------------------------------------------------------------------------------------------------------------
+	                new CategoryRoutingRow( Inside,           Aligned,          ReverseAligned,   Outside           ), // inside
+	                new CategoryRoutingRow( Aligned,          Aligned,          Outside,          Outside           ), // aligned
+	                new CategoryRoutingRow( ReverseAligned,   Outside,          ReverseAligned,   Outside           ), // reverse-aligned
+	                new CategoryRoutingRow( Outside,          Outside,          Outside,          Outside           )  // outside
+                }
+            };
+#endif
+        }
         #endregion
 
 
@@ -255,7 +314,7 @@ namespace Chisel.Core
         static readonly HashSet<int>            sCombineUsedIndices = new HashSet<int>();
         static readonly Dictionary<int, int>    sCombineIndexRemap  = new Dictionary<int, int>();
 
-        static CategoryStackNode[] Combine(BrushIntersectionLookup intersectionTypeLookup, CSGTreeBrush processedNode, CategoryStackNode[] leftStack, CategoryStackNode[] rightStack, CSGOperationType operation, int depth)
+        static CategoryStackNode[] Combine(BrushIntersectionLookup treeIntersectionTypeLookup, CSGTreeBrush processedNode, CategoryStackNode[] leftStack, CategoryStackNode[] rightStack, CSGOperationType operation, int depth)
         {
             if (operation == CSGOperationType.Invalid)
                 operation = CSGOperationType.Additive;
@@ -280,7 +339,7 @@ namespace Chisel.Core
                 }
             }
 
-            var operationTable  = operationTables[(int)operation];
+            var operationTable  = Operation.Tables[(int)operation];
             int index           = 0;
             int vIndex          = 0;
             
@@ -553,9 +612,12 @@ namespace Chisel.Core
             if (intersectionType == IntersectionType.NoIntersection)
                 return sEmptyStack;// new CategoryStackNode[] { new CategoryStackNode() { node = node, routingRow = CategoryRoutingRow.outside } };
 
+
+            //Debug.Log($"{intersectionType} {node} {processedNode}");
+
             // TODO: use other intersection types
-            //if (intersectionType == IntersectionType.AInsideB) return all_inside;
-            //if (intersectionType == IntersectionType.BInsideA) return all_outside;
+            if (intersectionType == IntersectionType.AInsideB) return new CategoryStackNode[] { new CategoryStackNode() { node = node, routingRow = CategoryRoutingRow.inside } };
+            if (intersectionType == IntersectionType.BInsideA) return new CategoryStackNode[] { new CategoryStackNode() { node = node, routingRow = CategoryRoutingRow.outside } };
 
             switch (node.Type)
             {
@@ -608,6 +670,7 @@ namespace Chisel.Core
 #endif
                             var currentStack = GetStack(intersectionTypeLookup, processedNode, node[i], depth + 1);
 
+                            // TODO: somehow build intersection information into the tree when one brush is comple
                             previousStack =
                                 Combine(
                                         intersectionTypeLookup, processedNode,
@@ -627,7 +690,7 @@ namespace Chisel.Core
         }
 
 #if SHOW_DEBUG_MESSAGES
-        static int kDebugNode = 5;
+        static int kDebugNode = -1;
         static void Dump(CSGTreeNode processedNode, CategoryStackNode[] stack, int depth = 0)
         {
             var space = new String(' ', depth);

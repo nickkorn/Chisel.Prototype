@@ -234,6 +234,7 @@ namespace Chisel.Core
                 builder.Append($"({Convert.ToString((Decimal)vertex.x, CultureInfo.InvariantCulture)}, {Convert.ToString((Decimal)vertex.y, CultureInfo.InvariantCulture)})");
                 builder.Append(", ");
             }
+            if (categorized_loop.indices.Count > 0)
             { 
                 var index = categorized_loop.indices[0];
                 var vertex = ((float3)(rotation * soup.vertices[index])).xy;
@@ -251,7 +252,7 @@ namespace Chisel.Core
                 var vertex2 = ((float3)(rotation * soup.vertices[index2])).xy;
 
                 builder.Append($"({Convert.ToString((Decimal)vertex1.x, CultureInfo.InvariantCulture)}, {Convert.ToString((Decimal)vertex1.y, CultureInfo.InvariantCulture)}), ");
-                builder.AppendLine($"({Convert.ToString((Decimal)vertex2.x, CultureInfo.InvariantCulture)}, {Convert.ToString((Decimal)vertex2.y, CultureInfo.InvariantCulture)})");
+                builder.AppendLine($"({Convert.ToString((Decimal)vertex2.x, CultureInfo.InvariantCulture)}, {Convert.ToString((Decimal)vertex2.y, CultureInfo.InvariantCulture)})             ");
             }
         }
         //*/

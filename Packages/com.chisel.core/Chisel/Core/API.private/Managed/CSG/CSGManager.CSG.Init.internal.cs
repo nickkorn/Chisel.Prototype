@@ -153,18 +153,21 @@ namespace Chisel.Core
                         right           = right,
                         forward         = forward
                     },
-                    interiorCategory = (CategoryGroupIndex)(int)CategoryIndex.SelfAligned,
+                    interiorCategory = (CategoryGroupIndex)(int)CategoryIndex.ValidAligned,
                     convex           = true,
                     holes            = new List<Loop>()
                 };
 
-                //if (surfacePolygon.loopIndex == 6)
-                //    Debug.Log($"{surfacePolygon.info.brush} {surfacePolygon.info.basePlaneIndex}");
-                
-
                 surfacePolygon.indices.AddRange(s_Indices);
                 surfacePolygon.AddEdges(s_Indices);
                 outputLoops.basePolygons.Add(surfacePolygon);
+
+                #if false
+                var builder = new System.Text.StringBuilder();
+                builder.AppendLine($"{p}: {s_Indices.Count} {surfacePolygon.info.worldPlane}");
+                CSGManagerPerformCSG.Dump(builder, surfacePolygon, outputLoops.vertexSoup, Quaternion.FromToRotation(surfacePolygon.info.worldPlane.normal, Vector3.forward));
+                Debug.Log(builder.ToString());
+                #endif
             }
             var bounds = new Bounds();
             if (!float.IsInfinity(min.x)) 

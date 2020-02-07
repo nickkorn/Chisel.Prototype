@@ -176,42 +176,6 @@ namespace Chisel.Core
             var E = tx + ty + tz;
             return E.zwx / E.y;
         }
-
-
-
-
-        // Transforms a plane by this matrix.
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Plane TransformPlane(this Matrix4x4 matrix, Plane plane)
-        {
-            var ittrans = matrix.inverse;
-
-            float x = plane.normal.x, y = plane.normal.y, z = plane.normal.z, w = plane.distance;
-            // note: a transpose is part of this transformation
-            var a = ittrans.m00 * x + ittrans.m10 * y + ittrans.m20 * z + ittrans.m30 * w;
-            var b = ittrans.m01 * x + ittrans.m11 * y + ittrans.m21 * z + ittrans.m31 * w;
-            var c = ittrans.m02 * x + ittrans.m12 * y + ittrans.m22 * z + ittrans.m32 * w;
-            var d = ittrans.m03 * x + ittrans.m13 * y + ittrans.m23 * z + ittrans.m33 * w;
-
-            return new Plane(new Vector3(a, b, c), d);
-        }
-
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Plane TransformPlane(this Matrix4x4 matrix, Vector4 planeVector)
-        {
-            var ittrans = matrix.inverse;
-
-            float x = planeVector.x, y = planeVector.y, z = planeVector.z, w = planeVector.w;
-            // note: a transpose is part of this transformation
-            var a = ittrans.m00 * x + ittrans.m10 * y + ittrans.m20 * z + ittrans.m30 * w;
-            var b = ittrans.m01 * x + ittrans.m11 * y + ittrans.m21 * z + ittrans.m31 * w;
-            var c = ittrans.m02 * x + ittrans.m12 * y + ittrans.m22 * z + ittrans.m32 * w;
-            var d = ittrans.m03 * x + ittrans.m13 * y + ittrans.m23 * z + ittrans.m33 * w;
-
-            return new Plane(new Vector3(a, b, c), d);
-        }
     }
 
 }

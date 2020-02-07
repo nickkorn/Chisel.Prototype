@@ -21,10 +21,35 @@ namespace Chisel.Core
 
     internal unsafe struct CategoryRoutingRow
     {
-        public static readonly CategoryRoutingRow invalid       = new CategoryRoutingRow(CategoryGroupIndex.Invalid, CategoryGroupIndex.Invalid, CategoryGroupIndex.Invalid, CategoryGroupIndex.Invalid, CategoryGroupIndex.Invalid, CategoryGroupIndex.Invalid);
-        public static readonly CategoryRoutingRow identity      = new CategoryRoutingRow(CategoryIndex.Inside, CategoryIndex.Aligned, CategoryIndex.SelfAligned, CategoryIndex.SelfReverseAligned, CategoryIndex.ReverseAligned, CategoryIndex.Outside);
-        public readonly static CategoryRoutingRow selfAligned   = new CategoryRoutingRow(CategoryIndex.SelfAligned, CategoryIndex.SelfAligned, CategoryIndex.SelfAligned, CategoryIndex.SelfAligned, CategoryIndex.SelfAligned, CategoryIndex.SelfAligned);
-        public readonly static CategoryRoutingRow outside       = new CategoryRoutingRow(CategoryIndex.Outside, CategoryIndex.Outside, CategoryIndex.Outside, CategoryIndex.Outside, CategoryIndex.Outside, CategoryIndex.Outside);
+#if HAVE_SELF_CATEGORIES
+        const CategoryGroupIndex Invalid            = CategoryGroupIndex.Invalid;
+        const CategoryGroupIndex Inside             = (CategoryGroupIndex)CategoryIndex.Inside;
+        const CategoryGroupIndex Aligned            = (CategoryGroupIndex)CategoryIndex.Aligned;
+        const CategoryGroupIndex SelfAligned        = (CategoryGroupIndex)CategoryIndex.SelfAligned;
+        const CategoryGroupIndex SelfReverseAligned = (CategoryGroupIndex)CategoryIndex.SelfReverseAligned;
+        const CategoryGroupIndex ReverseAligned     = (CategoryGroupIndex)CategoryIndex.ReverseAligned;
+        const CategoryGroupIndex Outside            = (CategoryGroupIndex)CategoryIndex.Outside;
+
+        public static readonly CategoryRoutingRow invalid               = new CategoryRoutingRow(Invalid, Invalid, Invalid, Invalid, Invalid, Invalid);
+        public static readonly CategoryRoutingRow identity              = new CategoryRoutingRow(Inside, Aligned, SelfAligned, SelfReverseAligned, ReverseAligned, Outside);
+        public readonly static CategoryRoutingRow selfAligned           = new CategoryRoutingRow(SelfAligned, SelfAligned, SelfAligned, SelfAligned, SelfAligned, SelfAligned);
+        public readonly static CategoryRoutingRow selfReverseAligned    = new CategoryRoutingRow(SelfReverseAligned, SelfReverseAligned, SelfReverseAligned, SelfReverseAligned, SelfReverseAligned, SelfReverseAligned);
+        public readonly static CategoryRoutingRow outside               = new CategoryRoutingRow(Outside, Outside, Outside, Outside, Outside, Outside);
+        public readonly static CategoryRoutingRow inside                = new CategoryRoutingRow(Inside, Inside, Inside, Inside, Inside, Inside);
+#else
+        const CategoryGroupIndex Invalid            = CategoryGroupIndex.Invalid;
+        const CategoryGroupIndex Inside             = (CategoryGroupIndex)CategoryIndex.Inside;
+        const CategoryGroupIndex Aligned            = (CategoryGroupIndex)CategoryIndex.Aligned;
+        const CategoryGroupIndex ReverseAligned     = (CategoryGroupIndex)CategoryIndex.ReverseAligned;
+        const CategoryGroupIndex Outside            = (CategoryGroupIndex)CategoryIndex.Outside;
+
+        public static readonly CategoryRoutingRow invalid               = new CategoryRoutingRow(Invalid, Invalid, Invalid, Invalid);
+        public static readonly CategoryRoutingRow identity              = new CategoryRoutingRow(Inside, Aligned, ReverseAligned, Outside);
+        public readonly static CategoryRoutingRow selfAligned           = new CategoryRoutingRow(Aligned, Aligned, Aligned, Aligned);
+        public readonly static CategoryRoutingRow selfReverseAligned    = new CategoryRoutingRow(ReverseAligned, ReverseAligned, ReverseAligned, ReverseAligned);
+        public readonly static CategoryRoutingRow outside               = new CategoryRoutingRow(Outside, Outside, Outside, Outside);
+        public readonly static CategoryRoutingRow inside                = new CategoryRoutingRow(Inside, Inside, Inside, Inside);
+#endif
 
         public const int Length = (int)CategoryIndex.LastCategory + 1;
 
@@ -83,20 +108,7 @@ namespace Chisel.Core
             return newRow;
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public CategoryRoutingRow(CategoryIndex inside, CategoryIndex aligned, CategoryIndex selfAligned, CategoryIndex selfReverseAligned, CategoryIndex reverseAligned, CategoryIndex outside)
-        {
-#if DEBUG_CATEGORIES
-            destination = new Int4Array();
-#endif
-            destination[(int)CategoryIndex.Inside]              = (int)inside;
-            destination[(int)CategoryIndex.Aligned]             = (int)aligned;
-            destination[(int)CategoryIndex.SelfAligned]         = (int)selfAligned;
-            destination[(int)CategoryIndex.SelfReverseAligned]  = (int)selfReverseAligned;
-            destination[(int)CategoryIndex.ReverseAligned]      = (int)reverseAligned;
-            destination[(int)CategoryIndex.Outside]             = (int)outside;
-        }
-
+#if HAVE_SELF_CATEGORIES
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public CategoryRoutingRow(CategoryGroupIndex inside, CategoryGroupIndex aligned, CategoryGroupIndex selfAligned, CategoryGroupIndex selfReverseAligned, CategoryGroupIndex reverseAligned, CategoryGroupIndex outside)
         {
@@ -124,6 +136,31 @@ namespace Chisel.Core
             destination[(int)CategoryIndex.ReverseAligned]      = (int)value;
             destination[(int)CategoryIndex.Outside]             = (int)value;
         }
+#else
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public CategoryRoutingRow(CategoryGroupIndex inside, CategoryGroupIndex aligned, CategoryGroupIndex reverseAligned, CategoryGroupIndex outside)
+        {
+#if DEBUG_CATEGORIES
+            destination = new Int4Array();
+#endif
+            destination[(int)CategoryIndex.Inside]              = (int)inside;
+            destination[(int)CategoryIndex.Aligned]             = (int)aligned;
+            destination[(int)CategoryIndex.ReverseAligned]      = (int)reverseAligned;
+            destination[(int)CategoryIndex.Outside]             = (int)outside;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public CategoryRoutingRow(CategoryGroupIndex value)
+        {
+#if DEBUG_CATEGORIES
+            destination = new Int4Array();
+#endif
+            destination[(int)CategoryIndex.Inside]              = (int)value;
+            destination[(int)CategoryIndex.Aligned]             = (int)value;
+            destination[(int)CategoryIndex.ReverseAligned]      = (int)value;
+            destination[(int)CategoryIndex.Outside]             = (int)value;
+        }
+#endif
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool AreAllTheSame()
@@ -172,6 +209,7 @@ namespace Chisel.Core
 
         public override string ToString()
         {
+#if HAVE_SELF_CATEGORIES
             var inside              = (int)destination[(int)CategoryIndex.Inside];
             var aligned             = (int)destination[(int)CategoryIndex.Aligned];
             var selfAligned         = (int)destination[(int)CategoryIndex.SelfAligned];
@@ -179,8 +217,16 @@ namespace Chisel.Core
             var reverseAligned      = (int)destination[(int)CategoryIndex.ReverseAligned];
             var outside             = (int)destination[(int)CategoryIndex.Outside];
 
-            return $"({inside}, {aligned}, {selfAligned}, {selfReverseAligned}, {reverseAligned}, {outside})";
+            return $"({(CategoryIndex)inside}, {(CategoryIndex)aligned}, {(CategoryIndex)selfAligned}, {(CategoryIndex)selfReverseAligned}, {(CategoryIndex)reverseAligned}, {(CategoryIndex)outside})";
+#else
+            var inside              = (int)destination[(int)CategoryIndex.Inside];
+            var aligned             = (int)destination[(int)CategoryIndex.Aligned];
+            var reverseAligned      = (int)destination[(int)CategoryIndex.ReverseAligned];
+            var outside             = (int)destination[(int)CategoryIndex.Outside];
+
+            return $"({(CategoryIndex)inside}, {(CategoryIndex)aligned}, {(CategoryIndex)reverseAligned}, {(CategoryIndex)outside})";
+#endif
         }
     }
 #endif
-        }
+    }
