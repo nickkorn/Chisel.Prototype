@@ -27,18 +27,20 @@ namespace Chisel.Editors
     public abstract class ChiselGeneratorDetails<T> : ChiselNodeDetails<T>
         where T : ChiselGeneratorComponent
     {
-        const string AdditiveIconName		= "csg_addition";
-        const string SubtractiveIconName	= "csg_subtraction";
-        const string IntersectingIconName	= "csg_intersection";
+        const string kAdditiveIconName          = "csg_" + nameof(CSGOperationType.Additive);
+        const string kSubtractiveIconName       = "csg_" + nameof(CSGOperationType.Subtractive);
+        const string kIntersectingIconName      = "csg_" + nameof(CSGOperationType.Intersecting);
+        const string kCopyIconName              = "csg_" + nameof(CSGOperationType.Copy);
 
         public override GUIContent GetHierarchyIcon(T node)
         {
             switch (node.Operation)
             {
                 default:
-                case CSGOperationType.Additive:     return ChiselEditorResources.GetIconContent(AdditiveIconName,     $"Additive {node.NodeTypeName}")[0];
-                case CSGOperationType.Subtractive:  return ChiselEditorResources.GetIconContent(SubtractiveIconName,  $"Subtractive {node.NodeTypeName}")[0];
-                case CSGOperationType.Intersecting: return ChiselEditorResources.GetIconContent(IntersectingIconName, $"Intersecting {node.NodeTypeName}")[0];
+                case CSGOperationType.Additive:         return ChiselEditorResources.GetIconContent(kAdditiveIconName,     $"Additive {node.NodeTypeName}")[0];
+                case CSGOperationType.Subtractive:      return ChiselEditorResources.GetIconContent(kSubtractiveIconName,  $"Subtractive {node.NodeTypeName}")[0];
+                case CSGOperationType.Intersecting:     return ChiselEditorResources.GetIconContent(kIntersectingIconName, $"Intersecting {node.NodeTypeName}")[0];
+                case CSGOperationType.Copy:             return ChiselEditorResources.GetIconContent(kCopyIconName,         $"Copy {node.NodeTypeName}")[0];
             }
         }
     }

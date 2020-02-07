@@ -13,11 +13,12 @@ namespace Chisel.Editors
 {
     public sealed class ChiselModelDetails : ChiselNodeDetails<ChiselModel>
     {
-        const string ModelIconName = "csg_addition";
+        // TODO: create icon for model
+        const string kModelIconName = "csg_" + nameof(CSGOperationType.Additive);
 
         public override GUIContent GetHierarchyIcon(ChiselModel node)
         {
-            return ChiselEditorResources.GetIconContent(ModelIconName, node.NodeTypeName)[0];
+            return ChiselEditorResources.GetIconContent(kModelIconName, node.NodeTypeName)[0];
         }
     }
 
