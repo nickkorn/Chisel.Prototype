@@ -649,11 +649,12 @@ namespace Chisel.Core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        static unsafe void AllCreateLoopsFromIntersections(SurfaceLoops     outputLoops, 
-                                                           LoopGroup        holeLoops1,     int[] alignedPlaneLookup1,
-                                                           VertexSoup       brushVertices1, 
-                                                           BrushMesh        inputMesh1,
-                                                           float4x4         treeToNodeSpaceMatrix)
+        static unsafe void AllCreateLoopsFromIntersections(CategoryGroupIndex   defaultGroupIndex,
+                                                           SurfaceLoops         outputLoops, 
+                                                           LoopGroup            holeLoops1,     int[] alignedPlaneLookup1,
+                                                           VertexSoup           brushVertices1, 
+                                                           BrushMesh            inputMesh1,
+                                                           float4x4             treeToNodeSpaceMatrix)
         {
             outputLoops.EnsureSize(inputMesh1.surfaces.Length);
             var inverseNodeToTreeSpaceMatrix1 = math.transpose(treeToNodeSpaceMatrix);
@@ -667,8 +668,8 @@ namespace Chisel.Core
 
                 var basePlaneIndex = hole.info.basePlaneIndex;
 
+                hole.interiorCategory = defaultGroupIndex;
                 var alignedPlaneIndex = alignedPlaneLookup1[basePlaneIndex];
-                hole.interiorCategory = (CategoryGroupIndex)CategoryIndex.Inside;
                 if (alignedPlaneIndex != 0)
                     hole.interiorCategory = (CategoryGroupIndex)(alignedPlaneIndex < 0 ? CategoryIndex.ReverseAligned : CategoryIndex.Aligned);
 
@@ -1000,8 +1001,11 @@ namespace Chisel.Core
                 {
                     fixed (float4* intersectingPlanes2Ptr = &sharedPlaneData.intersectingPlanes2[0])
                     {
-                        AllCreateLoopsFromIntersections(loops12, holeLoops1, sharedPlaneData.alignedPlaneLookup1, sharedPlaneData.brushVertices1, mesh1, treeToNodeSpaceMatrix1);
-                        AllCreateLoopsFromIntersections(loops21, holeLoops2, sharedPlaneData.alignedPlaneLookup2, sharedPlaneData.brushVertices2, mesh2, treeToNodeSpaceMatrix2);
+                        var defaultGroupIndex2 = (CategoryGroupIndex)CategoryIndex.Inside;
+                        var defaultGroupIndex1 = (CategoryGroupIndex)CategoryIndex.Inside;
+
+                        AllCreateLoopsFromIntersections(defaultGroupIndex1, loops12, holeLoops1, sharedPlaneData.alignedPlaneLookup1, sharedPlaneData.brushVertices1, mesh1, treeToNodeSpaceMatrix1);
+                        AllCreateLoopsFromIntersections(defaultGroupIndex2, loops21, holeLoops2, sharedPlaneData.alignedPlaneLookup2, sharedPlaneData.brushVertices2, mesh2, treeToNodeSpaceMatrix2);
                     }
                 }
             }

@@ -51,9 +51,11 @@ namespace Chisel.Core
             UnityEngine.Profiling.Profiler.BeginSample("UpdateBrushTransformations");
             try { UpdateBrushTransformations(treeBrushes); } finally { UnityEngine.Profiling.Profiler.EndSample(); }
 
-            UnityEngine.Profiling.Profiler.BeginSample("GenerateBasePolygonLoops");
+            // TODO: should only do this once at creation time
+            UnityEngine.Profiling.Profiler.BeginSample("GenerateBasePolygonLoops"); 
             try { GenerateBasePolygonLoops(treeBrushes); } finally { UnityEngine.Profiling.Profiler.EndSample(); }
 
+            // TODO: should only do this at creation time + when moved
             UnityEngine.Profiling.Profiler.BeginSample("FindIntersectingBrushes");
             try { FindIntersectingBrushes(treeBrushes); } finally { UnityEngine.Profiling.Profiler.EndSample(); }
 

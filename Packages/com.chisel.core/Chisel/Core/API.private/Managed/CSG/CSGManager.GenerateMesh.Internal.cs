@@ -709,7 +709,7 @@ namespace Chisel.Core
                 catch (System.Exception e)
                 {
                     Debug.LogException(e);
-                    Debug.Log($"BrushNodeID: {loop.info.brush.brushNodeID} / BasePlaneIndex: {loop.info.basePlaneIndex} / WorldPlane: {loop.info.worldPlane}");// / LoopIndex: {loop.loopIndex}");
+                    //Debug.Log($"BrushNodeID: {loop.info.brush.brushNodeID} / BasePlaneIndex: {loop.info.basePlaneIndex} / WorldPlane: {loop.info.worldPlane}");// / LoopIndex: {loop.loopIndex}");
                 }
                 finally
                 {

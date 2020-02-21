@@ -1,5 +1,5 @@
 ﻿#if DEBUG
-#define DEBUG_CATEGORIES // visual studio debugging bug work around
+//#define DEBUG_CATEGORIES // visual studio debugging bug work around
 #endif
 using System;
 using System.Collections.Generic;
@@ -58,7 +58,7 @@ namespace Chisel.Core
         fixed int	destination[Length];
 #else
         // visual studio debugging bug work around
-        struct Int4Array
+        struct IntArray
         {
             int A; int B; int C; int D; int E; int F;
             public unsafe int this[int index]
@@ -82,14 +82,14 @@ namespace Chisel.Core
             }
 
         }
-        Int4Array   destination;
+        IntArray   destination;
 #endif
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public CategoryRoutingRow(CategoryRoutingRow[] operationTable, CategoryIndex left, in CategoryRoutingRow right)
         {
 #if DEBUG_CATEGORIES
-            destination = new Int4Array();
+            destination = new IntArray();
 #endif
             var operationRow = operationTable[(int)left];
             for (int i = 0; i < Length; i++)
@@ -100,7 +100,7 @@ namespace Chisel.Core
         {
             var newRow = new CategoryRoutingRow();
 #if DEBUG_CATEGORIES
-            newRow.destination = new Int4Array();
+            newRow.destination = new IntArray();
 #endif
             for (int i = 0; i < Length; i++)
                 newRow.destination[(int)i] = (int)a[i] + offset;
@@ -113,7 +113,7 @@ namespace Chisel.Core
         public CategoryRoutingRow(CategoryGroupIndex inside, CategoryGroupIndex aligned, CategoryGroupIndex selfAligned, CategoryGroupIndex selfReverseAligned, CategoryGroupIndex reverseAligned, CategoryGroupIndex outside)
         {
 #if DEBUG_CATEGORIES
-            destination = new Int4Array();
+            destination = new IntArray();
 #endif
             destination[(int)CategoryIndex.Inside]              = (int)inside;
             destination[(int)CategoryIndex.Aligned]             = (int)aligned;
@@ -127,7 +127,7 @@ namespace Chisel.Core
         public CategoryRoutingRow(CategoryGroupIndex value)
         {
 #if DEBUG_CATEGORIES
-            destination = new Int4Array();
+            destination = new IntArray();
 #endif
             destination[(int)CategoryIndex.Inside]              = (int)value;
             destination[(int)CategoryIndex.Aligned]             = (int)value;
@@ -229,4 +229,4 @@ namespace Chisel.Core
         }
     }
 #endif
-    }
+}

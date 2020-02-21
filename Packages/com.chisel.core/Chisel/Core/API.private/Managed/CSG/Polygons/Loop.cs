@@ -76,7 +76,7 @@ namespace Chisel.Core
         [NonSerialized] public List<Loop>   holes       = new List<Loop>();
         [NonSerialized] public LoopInfo     info;
 
-        [NonSerialized] public bool                 convex              = false;
+        [NonSerialized] public bool         convex      = false;
 #if DebugInfo
         CategoryGroupIndex   _interiorCategory    = CategoryGroupIndex.Invalid; // determine if the loop is inside another brush or aligned with another brush
         public CategoryGroupIndex   interiorCategory

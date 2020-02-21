@@ -105,7 +105,8 @@ namespace Chisel.Core
                 var firstEdge    = polygon.firstEdge;
                 var lastEdge     = firstEdge + polygon.edgeCount;
 
-                if (polygon.edgeCount < 3)
+                if (polygon.edgeCount < 3 ||
+                    surfaceIndex >= surfaces.Length)
                     continue;
 
                 var localPlane          = (Plane)surfaces[surfaceIndex];
