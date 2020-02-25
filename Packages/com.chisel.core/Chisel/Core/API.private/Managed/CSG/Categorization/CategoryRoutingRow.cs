@@ -141,7 +141,7 @@ namespace Chisel.Core
         public CategoryRoutingRow(CategoryGroupIndex inside, CategoryGroupIndex aligned, CategoryGroupIndex reverseAligned, CategoryGroupIndex outside)
         {
 #if DEBUG_CATEGORIES
-            destination = new Int4Array();
+            destination = new IntArray();
 #endif
             destination[(int)CategoryIndex.Inside]              = (int)inside;
             destination[(int)CategoryIndex.Aligned]             = (int)aligned;
@@ -153,7 +153,7 @@ namespace Chisel.Core
         public CategoryRoutingRow(CategoryGroupIndex value)
         {
 #if DEBUG_CATEGORIES
-            destination = new Int4Array();
+            destination = new IntArray();
 #endif
             destination[(int)CategoryIndex.Inside]              = (int)value;
             destination[(int)CategoryIndex.Aligned]             = (int)value;

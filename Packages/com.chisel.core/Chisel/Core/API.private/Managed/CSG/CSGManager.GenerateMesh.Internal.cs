@@ -644,6 +644,9 @@ namespace Chisel.Core
                     #endif
                     //*/
 
+                    //if (brushNodeID != 3)// || s!=5)
+                    //    continue;
+
                     var loop = surfaceLoopList[l];
                     loops.Add(loop);
                 }

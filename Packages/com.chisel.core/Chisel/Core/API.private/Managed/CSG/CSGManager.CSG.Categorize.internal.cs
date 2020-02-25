@@ -460,9 +460,6 @@ namespace Chisel.Core
                     baseloops.RemoveAt(l);
                     continue;
                 }
-
-                var interiorCategory = baseloop.interiorCategory - 1;
-                baseloop.interiorCategory = interiorCategory;
             }
         }
 

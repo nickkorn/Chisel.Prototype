@@ -1,5 +1,5 @@
 #define USE_OPTIMIZATIONS
-//#define SHOW_DEBUG_MESSAGES
+//#define SHOW_DEBUG_MESSAGES 
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -91,28 +91,6 @@ namespace Chisel.Core
             {
                 var stack = GetStack(intersectionTypeLookup, processedNode, rootNode);
                 
-                // TODO: remove the need for this
-                {
-                    int lastNodeIndex = stack.Length - 1;
-                    while (lastNodeIndex > 0)
-                    {
-                        if (lastNodeIndex <= 0 ||
-                            stack[lastNodeIndex - 1].node != stack[lastNodeIndex].node)
-                            break;
-                        lastNodeIndex--;
-                    }
-
-                    for (int n = lastNodeIndex; n < stack.Length; n++)
-                    {
-                        var stackNode = stack[n];
-                        var routingRow = stackNode.routingRow;
-                        for (int r = 0; r < CategoryRoutingRow.Length; r++)
-                            routingRow[r]++;
-                        stackNode.routingRow = routingRow;
-                        stack[n] = stackNode;
-                    }
-                }
-
 #if SHOW_DEBUG_MESSAGES
                 if (processedNode.NodeID == kDebugNode || kDebugNode == -1)
                     Dump(processedNode, stack);
@@ -160,7 +138,6 @@ namespace Chisel.Core
                 }
 
                 sIntersectionLoops.Add(cuttingNodeIntersectionLoops);
-
                 sRoutingLookups.Add(new RoutingLookup(start_index, end_index));
             }
 
@@ -254,7 +231,7 @@ namespace Chisel.Core
             const CategoryGroupIndex Aligned            = (CategoryGroupIndex)CategoryIndex.Aligned;
             const CategoryGroupIndex ReverseAligned     = (CategoryGroupIndex)CategoryIndex.ReverseAligned;
             const CategoryGroupIndex Outside            = (CategoryGroupIndex)CategoryIndex.Outside;
-
+                        
             public static readonly CategoryRoutingRow[][] RemoveOverlappingOperationTables = new[]
             {
                 // Additive set operation on polygons: output = (left-node || right-node)
@@ -265,9 +242,9 @@ namespace Chisel.Core
 	                //             	        inside            aligned           reverse-aligned   outside           |     left-node       
 	                //----------------------------------------------------------------------------------------------------------------------------
 	                new CategoryRoutingRow( Inside,           Inside,           Inside,           Inside            ), // inside
-	                new CategoryRoutingRow( Inside,           Outside,          Outside,          Inside            ), // aligned
-	                new CategoryRoutingRow( Inside,           Outside,          Outside,          Inside            ), // reverse-aligned
-	                new CategoryRoutingRow( Inside,           Inside,           Inside,           Outside           )  // outside
+	                new CategoryRoutingRow( Inside,           Outside,          Inside,           Aligned           ), // aligned
+	                new CategoryRoutingRow( Inside,           Inside,           Outside,          ReverseAligned    ), // reverse-aligned
+	                new CategoryRoutingRow( Inside,           Aligned,          ReverseAligned,   Outside           )  // outside
                 },
 
                 // Subtractive set operation on polygons: output = !(!left-node || right-node)
@@ -277,10 +254,10 @@ namespace Chisel.Core
 	                //             	        right node                                                              |
 	                //             	        inside            aligned           reverse-aligned   outside           |     left-node       
 	                //----------------------------------------------------------------------------------------------------------------------------
-                    new CategoryRoutingRow( Outside,          Inside,            Inside,          Inside            ), // inside
-	                new CategoryRoutingRow( Outside,          Outside,           Outside,         Inside            ), // aligned
-	                new CategoryRoutingRow( Outside,          Outside,           Outside,         Inside            ), // reverse-aligned
-	                new CategoryRoutingRow( Outside,          Outside,           Outside,         Outside           )  // outside
+                    new CategoryRoutingRow( Outside,          ReverseAligned,   Aligned,          Inside            ), // inside
+                    new CategoryRoutingRow( Outside,          Inside,           Outside,          Aligned           ), // aligned
+                    new CategoryRoutingRow( Outside,          Outside,          Inside,           ReverseAligned    ), // reverse-aligned
+                    new CategoryRoutingRow( Outside,          Outside,          Outside,          Outside           )  // outside
                 }, 
 
                 // Common set operation on polygons: output = !(!left-node || !right-node)
@@ -290,9 +267,9 @@ namespace Chisel.Core
 	                //             	        right node                                                              |
 	                //             	        inside            aligned           reverse-aligned   outside           |     left-node       
 	                //----------------------------------------------------------------------------------------------------------------------------
-	                new CategoryRoutingRow( Inside,           Outside,          Outside,          Outside           ), // inside
-	                new CategoryRoutingRow( Inside,           Outside,          Outside,          Outside           ), // aligned
-	                new CategoryRoutingRow( Inside,           Outside,          Outside,          Outside           ), // reverse-aligned
+	                new CategoryRoutingRow( Inside,           Aligned,          ReverseAligned,   Outside           ), // inside
+	                new CategoryRoutingRow( Aligned,          Outside,          Outside,          Outside           ), // aligned
+	                new CategoryRoutingRow( ReverseAligned,   Outside,          Outside,          Outside           ), // reverse-aligned
 	                new CategoryRoutingRow( Outside,          Outside,          Outside,          Outside           )  // outside
                 },
 
@@ -333,9 +310,9 @@ namespace Chisel.Core
 	                //             	        inside            aligned           reverse-aligned   outside           |     left-node       
 	                //----------------------------------------------------------------------------------------------------------------------------
                     new CategoryRoutingRow( Outside,          ReverseAligned,   Aligned,          Inside            ), // inside
-	                new CategoryRoutingRow( Outside,          Inside,           Aligned,          Aligned           ), // aligned
-	                new CategoryRoutingRow( Outside,          ReverseAligned,   Inside,           ReverseAligned    ), // reverse-aligned
-	                new CategoryRoutingRow( Outside,          Outside,          Outside,          Outside           )  // outside
+                    new CategoryRoutingRow( Outside,          Inside,           Aligned,          Aligned           ), // aligned
+                    new CategoryRoutingRow( Outside,          ReverseAligned,   Inside,           ReverseAligned    ), // reverse-aligned
+                    new CategoryRoutingRow( Outside,          Outside,          Outside,          Outside           )  // outside
                 },
 
                 // Common set operation on polygons: output = !(!left-node || !right-node)
@@ -396,7 +373,7 @@ namespace Chisel.Core
         static readonly HashSet<int>            sCombineUsedIndices = new HashSet<int>();
         static readonly Dictionary<int, int>    sCombineIndexRemap  = new Dictionary<int, int>();
 
-        static CategoryStackNode[] Combine(BrushIntersectionLookup treeIntersectionTypeLookup, CSGTreeBrush processedNode, CategoryStackNode[] leftStack, CategoryStackNode[] rightStack, CSGOperationType operation, int depth, int haveGonePastSelf, bool lastNode)
+        static CategoryStackNode[] Combine(BrushIntersectionLookup treeIntersectionTypeLookup, CSGTreeBrush processedNode, CategoryStackNode[] leftStack, int leftHaveGonePastSelf, CategoryStackNode[] rightStack, int rightHaveGonePastSelf, CSGOperationType operation, int depth, bool lastNode)
         {
             if (operation == CSGOperationType.Invalid)
                 operation = CSGOperationType.Additive;
@@ -426,11 +403,12 @@ namespace Chisel.Core
 #if HAVE_SELF_CATEGORIES
             var operationTable  = Operation.Tables[(int)operation];
 #else
-            var operationTable  = haveGonePastSelf != 1 ? Operation.RemoveOverlappingOperationTables[(int)operation] : Operation.RegularOperationTables[(int)operation];
+            var operationTable  = leftHaveGonePastSelf >= 1 ? Operation.RemoveOverlappingOperationTables[(int)operation] : 
+                                    Operation.RegularOperationTables[(int)operation];
 #endif
             int index           = 0;
             int vIndex          = 0;
-            
+
             var firstNode   = rightStack[0].node;
 
 
@@ -513,7 +491,6 @@ namespace Chisel.Core
 
                 var leftKeepContents = sCombineChildren[prevNodeIndex].operation == CSGOperationType.Copy;
                 var rightKeepContents = rightNode.Operation == CSGOperationType.Copy;// || operation == CSGOperationType.Copy;
-                //Debug.Log($"{processedNode.NodeID}: {sCombineChildren[prevNodeIndex].node.Type}:{sCombineChildren[prevNodeIndex].node.nodeID}:{sCombineChildren[prevNodeIndex].operation} <-> {rightNode.Type}:{rightNode.nodeID}:{rightNode.Operation} | {leftKeepContents}/{rightKeepContents}");
                 
                 CategoryRoutingRow routingRow;
                 int routingOffset = 0;
@@ -539,6 +516,7 @@ namespace Chisel.Core
                             routingRow = new CategoryRoutingRow(operationTable, leftIndex, rightInput); // applies operation
 
 #if USE_OPTIMIZATIONS
+                            // TODO: fix this
                             /*
                             if (lastNode)
                             {
@@ -664,7 +642,7 @@ namespace Chisel.Core
                 prevNodeIndex >= 0 && sCombineIndexRemap.Count > 0)
             {
                 RemapIndices(sCombineChildren, sCombineIndexRemap, prevNodeIndex, startNodeIndex);
-#if SHOW_DEBUG_MESSAGES
+#if SHOW_DEBUG_MESSAGES 
                 if (processedNode.NodeID == kDebugNode || kDebugNode == -1)
                     Dump(sCombineChildren.ToArray(), depth);
 #endif
@@ -682,7 +660,6 @@ namespace Chisel.Core
                 if (allEqual)
                 {
                     sCombineChildren.RemoveRange(startNodeIndex, sCombineChildren.Count - startNodeIndex);
-                    //Debug.Log($"[-/{rightStack.Length}] remove last");
                     RemapIndices(sCombineChildren, sCombineIndexRemap, prevNodeIndex, startNodeIndex);
 
 #if SHOW_DEBUG_MESSAGES
@@ -731,8 +708,6 @@ namespace Chisel.Core
                 return sEmptyStack;// new CategoryStackNode[] { new CategoryStackNode() { node = node, operation = node.Operation, routingRow = CategoryRoutingRow.outside } };
 
 
-            //Debug.Log($"{intersectionType} {node} {processedNode}");
-
             // TODO: use other intersection types
             if (intersectionType == IntersectionType.AInsideB) return new CategoryStackNode[] { new CategoryStackNode() { node = node, operation = node.Operation, routingRow = CategoryRoutingRow.inside } };
             if (intersectionType == IntersectionType.BInsideA) return new CategoryStackNode[] { new CategoryStackNode() { node = node, operation = node.Operation, routingRow = CategoryRoutingRow.outside } };
@@ -745,7 +720,6 @@ namespace Chisel.Core
                     if (processedNode == node)
                     {
                         haveGonePastSelf = 1;
-                        //Debug.Log($"{processedNode.NodeID}: BRUSH {node.Type}:{node.nodeID}:{node.Operation} {haveGonePastSelf}");
                         return new CategoryStackNode[] { new CategoryStackNode() { node = node, operation = node.Operation, routingRow = CategoryRoutingRow.selfAligned } };
                     }
 
@@ -777,7 +751,6 @@ namespace Chisel.Core
                         // Node operation is always Additive at this point, and operation would be performed against .. nothing ..
                         // Anything added with nothing is itself, so we don't need to apply an operation here.
 
-                        //Debug.Log($"{processedNode.NodeID}: STACK {node[firstIndex].Type}:{node[firstIndex].nodeID}:{node[firstIndex].Operation} {haveGonePastSelf}");
                         if (stack.Length > 0)
                             stack[stack.Length - 1].operation = node[firstIndex].Operation;
 
@@ -788,9 +761,7 @@ namespace Chisel.Core
                         return stack;
                     } else
                     {
-                        //Debug.Log($"{processedNode.NodeID}: LEFT-STACK");
-                        var originalHaveGonePastSelf = haveGonePastSelf;
-                        var leftHaveGonePastSelf = originalHaveGonePastSelf;
+                        var leftHaveGonePastSelf = 0;
                         var leftStack = GetStack(intersectionTypeLookup, processedNode, node[firstIndex], rootNode, depth + 1, ref leftHaveGonePastSelf);
                         haveGonePastSelf |= leftHaveGonePastSelf;
                         for (int i = firstIndex + 1; i < nodeCount; i++)
@@ -801,22 +772,22 @@ namespace Chisel.Core
                             if (processedNode.NodeID == kDebugNode || kDebugNode == -1)                           
                                 Dump(leftStack, depth, $"before '{node[i - 1]}' {node[i].Operation} '{node[i]}'");
 #endif
-                            //Debug.Log($"{processedNode.NodeID}: RIGHT-STACK");
-                            var rightHaveGonePastSelf = originalHaveGonePastSelf;
+                            var rightHaveGonePastSelf = leftHaveGonePastSelf >= 1 ? 2 : 0;
                             var rightStack = GetStack(intersectionTypeLookup, processedNode, node[i], rootNode, depth + 1, ref rightHaveGonePastSelf);
                             haveGonePastSelf |= rightHaveGonePastSelf;
 
                             leftStack =
                                 Combine(
                                         intersectionTypeLookup, processedNode,
-                                        leftStack, rightStack,
+                                        leftStack,
+                                        leftHaveGonePastSelf,
+                                        rightStack,
+                                        rightHaveGonePastSelf,
                                         node[i].Operation,
                                         depth + 1,
-                                        haveGonePastSelf,
                                         node == rootNode
                                 );
-
-                            //Debug.Log($"{processedNode.NodeID}: OPERATION {node[i].Type}:{node[i].nodeID}:{node[i].Operation} {haveGonePastSelf}");
+                            leftHaveGonePastSelf = rightHaveGonePastSelf;
 
                             //if (leftStack.Length > 0 && node.Operation == CSGOperationType.Copy)
                             //    leftStack[leftStack.Length - 1].operation = node.Operation;
@@ -833,7 +804,7 @@ namespace Chisel.Core
         }
 
 #if SHOW_DEBUG_MESSAGES
-        static int kDebugNode = 10; 
+        static int kDebugNode = -1; 
         static void Dump(CSGTreeNode processedNode, CategoryStackNode[] stack, int depth = 0)
         {
             var space = new String(' ', depth);
