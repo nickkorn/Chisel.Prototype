@@ -194,10 +194,10 @@ namespace Chisel.Core
 	                //                      inside                aligned           aligned               reverse-aligned       reverse-aligned   outside           |     left-node       
 	                //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 	                new CategoryRoutingRow( Inside,               Inside,           Inside,               Inside,               Inside,           Inside            ), // inside
-	                new CategoryRoutingRow( Inside,               Inside,           SelfAligned,          Inside,               Inside,           Aligned           ), // other-aligned
-	                new CategoryRoutingRow( Inside,               Inside,           SelfAligned,          Inside,               Inside,           SelfAligned       ), // self-aligned
-	                new CategoryRoutingRow( Inside,               Inside,           Inside,               SelfReverseAligned,   Inside,           SelfReverseAligned), // self-reverse-aligned
-	                new CategoryRoutingRow( Inside,               Inside,           Inside,               SelfReverseAligned,   Inside,           ReverseAligned    ), // other-reverse-aligned
+	                new CategoryRoutingRow( Inside,               Aligned,          SelfAligned,          Inside,               Inside,           Aligned           ), // other-aligned
+	                new CategoryRoutingRow( Inside,               Aligned,          SelfAligned,          Inside,               Inside,           SelfAligned       ), // self-aligned
+	                new CategoryRoutingRow( Inside,               Inside,           Inside,               SelfReverseAligned,   ReverseAligned,   SelfReverseAligned), // self-reverse-aligned
+	                new CategoryRoutingRow( Inside,               Inside,           Inside,               SelfReverseAligned,   ReverseAligned,   ReverseAligned    ), // other-reverse-aligned
 	                new CategoryRoutingRow( Inside,               Aligned,          SelfAligned,          SelfReverseAligned,   ReverseAligned,   Outside           )  // outside
                 },
 
@@ -210,10 +210,10 @@ namespace Chisel.Core
 	                //                      inside                aligned           aligned               reverse-aligned       reverse-aligned   outside           |     left-node       
 	                //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 	                new CategoryRoutingRow( Outside,              ReverseAligned,   SelfReverseAligned,   SelfAligned,          Aligned,          Inside            ), // inside
-	                new CategoryRoutingRow( Outside,              Outside,          Outside,              SelfAligned,          Outside,          Aligned           ), // other-aligned
-	                new CategoryRoutingRow( Outside,              Outside,          Outside,              SelfAligned,          Outside,          SelfAligned       ), // self-aligned
-	                new CategoryRoutingRow( Outside,              Outside,          SelfReverseAligned,   Outside,              Outside,          SelfReverseAligned), // self-reverse-aligned
-	                new CategoryRoutingRow( Outside,              Outside,          SelfReverseAligned,   Outside,              Outside,          ReverseAligned    ), // other-reverse-aligned
+	                new CategoryRoutingRow( Outside,              Aligned,          Inside,               SelfAligned,          Aligned,          Aligned           ), // other-aligned
+	                new CategoryRoutingRow( Outside,              Aligned,          Inside,               SelfAligned,          Aligned,          SelfAligned       ), // self-aligned
+	                new CategoryRoutingRow( Outside,              ReverseAligned,   SelfReverseAligned,   Outside,              Outside,          SelfReverseAligned), // self-reverse-aligned
+	                new CategoryRoutingRow( Outside,              ReverseAligned,   SelfReverseAligned,   Outside,              Outside,          ReverseAligned    ), // other-reverse-aligned
 	                new CategoryRoutingRow( Outside,              Outside,          Outside,              Outside,              Outside,          Outside           )  // outside
                 },
 
@@ -226,10 +226,10 @@ namespace Chisel.Core
 	                //                      inside                aligned           aligned               reverse-aligned       reverse-aligned   outside           |     left-node       
 	                //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 	                new CategoryRoutingRow( Inside,               Aligned,          SelfAligned,          SelfReverseAligned,   ReverseAligned,   Outside           ), // inside
-	                new CategoryRoutingRow( Aligned,              Outside,          SelfAligned,          Outside,              Outside,          Outside           ), // other-aligned
-	                new CategoryRoutingRow( SelfAligned,          Outside,          SelfAligned,          Outside,              Outside,          Outside           ), // self-aligned
-	                new CategoryRoutingRow( SelfReverseAligned,   Outside,          Outside,              SelfReverseAligned,   Outside,          Outside           ), // self-reverse-aligned
-	                new CategoryRoutingRow( ReverseAligned,       Outside,          Outside,              SelfReverseAligned,   Outside,          Outside           ), // other-reverse-aligned
+	                new CategoryRoutingRow( Aligned,              Aligned,          SelfAligned,          Outside,              Outside,          Outside           ), // other-aligned
+	                new CategoryRoutingRow( SelfAligned,          Aligned,          SelfAligned,          Outside,              Outside,          Outside           ), // self-aligned
+	                new CategoryRoutingRow( SelfReverseAligned,   Outside,          Outside,              SelfReverseAligned,   ReverseAligned,   Outside           ), // self-reverse-aligned
+	                new CategoryRoutingRow( ReverseAligned,       Outside,          Outside,              SelfReverseAligned,   ReverseAligned,   Outside           ), // other-reverse-aligned
 	                new CategoryRoutingRow( Outside,              Outside,          Outside,              Outside,              Outside,          Outside           )  // outside
                 },
 
@@ -242,10 +242,10 @@ namespace Chisel.Core
 	                //                      inside                aligned           aligned               reverse-aligned       reverse-aligned   outside           |     left-node       
 	                //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 	                new CategoryRoutingRow( Inside,               Inside,           Inside,               Inside,               Inside,           Inside            ), // inside
-	                new CategoryRoutingRow( Inside,               Inside,           SelfAligned,          Inside,               Inside,           Aligned           ), // other-aligned
-	                new CategoryRoutingRow( Inside,               Inside,           SelfAligned,          Inside,               Inside,           SelfAligned       ), // self-aligned
-	                new CategoryRoutingRow( Inside,               Inside,           Inside,               SelfReverseAligned,   Inside,           SelfReverseAligned), // self-reverse-aligned
-	                new CategoryRoutingRow( Inside,               Inside,           Inside,               SelfReverseAligned,   Inside,           ReverseAligned    ), // other-reverse-aligned
+	                new CategoryRoutingRow( Inside,               Aligned,          SelfAligned,          Inside,               Inside,           Aligned           ), // other-aligned
+	                new CategoryRoutingRow( Inside,               Aligned,          SelfAligned,          Inside,               Inside,           SelfAligned       ), // self-aligned
+	                new CategoryRoutingRow( Inside,               Inside,           Inside,               SelfReverseAligned,   ReverseAligned,   SelfReverseAligned), // self-reverse-aligned
+	                new CategoryRoutingRow( Inside,               Inside,           Inside,               SelfReverseAligned,   ReverseAligned,   ReverseAligned    ), // other-reverse-aligned
 	                new CategoryRoutingRow( Inside,               Aligned,          SelfAligned,          SelfReverseAligned,   ReverseAligned,   Outside           )  // outside
                 }
             };
@@ -539,6 +539,7 @@ namespace Chisel.Core
                             routingRow = new CategoryRoutingRow(operationTable, leftIndex, rightInput); // applies operation
 
 #if USE_OPTIMIZATIONS
+                            /*
                             if (lastNode)
                             {
                                 for (int i = 0; i < CategoryRoutingRow.Length; i++)
@@ -548,7 +549,7 @@ namespace Chisel.Core
                                         output != (CategoryGroupIndex)CategoryIndex.ValidReverseAligned)
                                         routingRow[i] = CategoryGroupIndex.First;
                                 }
-                            }
+                            }*/
 #endif
 
                             int foundIndex = -1;
