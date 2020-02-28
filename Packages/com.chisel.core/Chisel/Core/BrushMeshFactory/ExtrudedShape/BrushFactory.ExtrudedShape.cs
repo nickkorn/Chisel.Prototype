@@ -29,11 +29,18 @@ namespace Chisel.Core
 
             Vector2[][] polygonVerticesArray;
             int[][]     polygonIndicesArray;
+            if (shapeVertices.Count == 3)
+            {
+                polygonVerticesArray = new [] { shapeVertices.ToArray() };
+                polygonIndicesArray = new [] { shapeSegmentIndices.ToArray() };
 
-            if (!Decomposition.ConvexPartition(shapeVertices, shapeSegmentIndices,
-                                                out polygonVerticesArray,
-                                                out polygonIndicesArray))
-                return false;
+            } else
+            { 
+                if (!Decomposition.ConvexPartition(shapeVertices, shapeSegmentIndices,
+                                                    out polygonVerticesArray,
+                                                    out polygonIndicesArray))
+                    return false;
+            }
 
             ref readonly var path                = ref definition.path;
 
