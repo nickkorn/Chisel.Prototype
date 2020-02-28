@@ -145,7 +145,7 @@ namespace Chisel.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void AddEdges(List<ushort> indices)
         {
-            if (indices.Count == 0)
+            if (indices.Count < 3)
                 return;
 
             s_UniqueEdges.Clear();
@@ -153,10 +153,10 @@ namespace Chisel.Core
                 edges.Capacity = edges.Count + indices.Count;
             for (int i = 0; i < indices.Count - 1; i++)
             {
-                Debug.Assert(indices[i] != indices[i + 1]);
+                Debug.Assert(indices[i] != indices[i + 1], "indices[i] != indices[i + 1]");
                 s_UniqueEdges.Add(new Edge() { index1 = indices[i], index2 = indices[i + 1] });
             }
-            Debug.Assert(indices[indices.Count - 1] != indices[0]);
+            Debug.Assert(indices[indices.Count - 1] != indices[0], "indices[indices.Count - 1] != indices[0]");
             s_UniqueEdges.Add(new Edge() { index1 = indices[indices.Count - 1], index2 = indices[0] });
 
             for (int e = 0; e < edges.Count; e++)

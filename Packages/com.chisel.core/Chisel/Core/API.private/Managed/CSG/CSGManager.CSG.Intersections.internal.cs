@@ -73,10 +73,15 @@ namespace Chisel.Core
                 }
 
                 // if all vertices are 'inside' this plane, then we're not truly intersecting with it
-                if ((minDistance >= -kDistanceEpsilon ||
-                    maxDistance < -kDistanceEpsilon)
-                    && onCount < 3) // If we have a polygon intersecting with a plane, we use it
-                    continue;
+                //if ((
+                    //minDistance >= -kDistanceEpsilon        // TODO: sometimes this fails, find out why
+                    //||                                      
+                    //maxDistance < -kDistanceEpsilon       // TODO: sometimes this fails, find out why
+                    //) 
+                    //&& 
+                    //onCount < 3) // If we have a polygon intersecting with a plane, we use it
+                    //)
+                    //continue;
 
                 intersectingPlanes.Add(i);
             }
@@ -347,7 +352,6 @@ namespace Chisel.Core
             for (int n = 0; n < planes.Length; n++)
             {
                 var distance = math.dot(planes[n], localVertex);
-                //Debug.Log($"[{n}/{planes.Length}] {planes[n]} {distance} {localVertex}");
                 if (distance > CSGManagerPerformCSG.kDistanceEpsilon) 
                     return true;
             }
@@ -360,7 +364,6 @@ namespace Chisel.Core
             for (int n = 0; n < planes.Length; n++)
             {
                 var distance = math.dot(planes[n], localVertex);
-                //Debug.Log($"[{n}/{planes.Length}] {planes[n]} {distance} {localVertex}");
                 if (distance < -CSGManagerPerformCSG.kDistanceEpsilon)
                     return true;
             }

@@ -403,6 +403,29 @@ namespace Chisel.Core
                         continue;
                     }
                 }
+                if (holes.Count == 0)
+                    continue;
+
+                // TODO: why is not the same as worldPlane.normal?
+                var normal = CalculatePlane(baseloop, brushVertices);
+
+                for (int h = holes.Count - 1; h >= 0; h--)
+                {
+                    var holeEdges = holes[h].edges;
+                    if (math.dot(CalculatePlane(holes[h], brushVertices), normal) > 0)
+                    {
+                        for (int n = 0; n < holeEdges.Count; n++)
+                        {
+                            var holeEdge = holeEdges[n];
+                            var i1 = holeEdge.index1;
+                            var i2 = holeEdge.index2;
+                            holeEdge.index1 = i2;
+                            holeEdge.index2 = i1;
+                            holeEdges[n] = holeEdge;
+                        }
+                    }
+                }
+
 
                 baseloop.destroyed = new bool[baseloop.edges.Count];
                 for (int h1 = holes.Count - 1; h1 >= 0; h1--)
@@ -463,6 +486,26 @@ namespace Chisel.Core
             }
         }
 
+        
+        static float3 CalculatePlane(in Loop loop, in VertexSoup soup)
+        {        
+            // Newell's algorithm to create a plane for concave polygons.
+            // NOTE: doesn't work well for self-intersecting polygons
+            var normal		= Vector3.zero;
+            var prevVertex	= soup.vertices[loop.indices[loop.indices.Count - 1]];
+            for (int n = 0; n < loop.indices.Count; n++)
+            {
+                var currVertex = soup.vertices[loop.indices[n]];
+                normal.x = normal.x + ((prevVertex.y - currVertex.y) * (prevVertex.z + currVertex.z));
+                normal.y = normal.y + ((prevVertex.z - currVertex.z) * (prevVertex.x + currVertex.x));
+                normal.z = normal.z + ((prevVertex.x - currVertex.x) * (prevVertex.y + currVertex.y));
+                prevVertex = currVertex;
+            }
+            normal = normal.normalized;
+
+            return normal;
+        }
+
         static void Subtract(VertexSoup soup, Loop loop1, Loop loop2)
         {
             if (loop1.edges.Count == 0 ||
@@ -505,8 +548,8 @@ namespace Chisel.Core
             for (int e = loop1.edges.Count - 1; e >= 0; e--)
             {
                 if (categories1[e] == EdgeCategory.Outside
-                    //|| categories1[e] == EdgeCategory.Aligned
-                    || categories1[e] == EdgeCategory.ReverseAligned
+                    || categories1[e] == EdgeCategory.Aligned
+                    //|| categories1[e] == EdgeCategory.ReverseAligned
                     )
                     continue;
                 loop1.destroyed[e] = true;

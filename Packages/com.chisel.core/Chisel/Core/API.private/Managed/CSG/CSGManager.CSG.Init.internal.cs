@@ -19,7 +19,7 @@ namespace Chisel.Core
         // TODO: unify all epsilons
         public const float  kDistanceEpsilon	    = 0.0001f;//0.01f;
         public const float  kSqrDistanceEpsilon	    = kDistanceEpsilon * kDistanceEpsilon;
-        public const float  kMergeEpsilon	        = 0.00006f;
+        public const float  kMergeEpsilon	        = 0.0005f;
         public const float  kSqrMergeEpsilon	    = kMergeEpsilon * kMergeEpsilon;
         const float         kNormalEpsilon			= 0.9999f;
         const float         kPlaneDistanceEpsilon	= 0.0006f;

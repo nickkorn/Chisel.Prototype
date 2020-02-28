@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using UnityEngine;
 using System.Collections.Generic;
@@ -54,6 +54,10 @@ namespace Chisel.Core
                 surfaceDefinition = new ChiselSurfaceDefinition();
 
             surfaceDefinition.EnsureSize(brushOutline.polygons.Length);
+
+            // Temporary fix for misformed brushes
+            for (int i = 0; i < brushOutline.polygons.Length; i++)
+                brushOutline.polygons[i].surfaceID = i;
         }
 
         public bool Generate(ref ChiselBrushContainer brushContainer)

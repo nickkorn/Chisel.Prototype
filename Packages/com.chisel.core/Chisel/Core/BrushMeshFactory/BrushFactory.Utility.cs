@@ -567,6 +567,7 @@ namespace Chisel.Core
             brushMesh.polygons = polygons;
             brushMesh.halfEdges = halfEdges;
             brushMesh.vertices = vertices;
+            brushMesh.CalculatePlanes();
             if (!brushMesh.Validate(logErrors: true))
                 brushMesh.Clear();
             return true;

@@ -690,9 +690,9 @@ namespace Chisel.Core
                     else
                         rotation = (quaternion)Quaternion.FromToRotation(info.worldPlane.normal, Vector3.forward);
 
-                    // TODO: all separate loops on same surface should be put in same OutputSurfaceMesh!
+                    // TODO: all separate loops on same surface should be put in same OutputSurfaceMesh!                    
 
-                    surfaceIndices = context.Triangulate(brushVertices.vertices, loop.edges, rotation);
+                    surfaceIndices = context.TriangulateLoops(loop, brushVertices.vertices, loop.edges, rotation);
 
                     
                     #if false
