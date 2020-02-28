@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using Vector2 = UnityEngine.Vector2;
 using Vector3 = UnityEngine.Vector3;
@@ -16,6 +16,21 @@ namespace Chisel.Core
     // TODO: rename
     public sealed partial class BrushMeshFactory
     {
+        static float CalculateOrientation(Vector2[] vertices)
+        {        
+            // Newell's algorithm to create a plane for concave polygons.
+            // NOTE: doesn't work well for self-intersecting polygons
+            var direction = 0.0f;
+            var prevVertex	= vertices[vertices.Length - 1];
+            for (int n = 0; n < vertices.Length; n++)
+            {
+                var currVertex = vertices[n];
+                direction += ((prevVertex.x - currVertex.x) * (prevVertex.y + currVertex.y));
+                prevVertex = currVertex;
+            }
+            return direction;
+        }
+
         public static bool GenerateExtrudedShape(ref ChiselBrushContainer brushContainer, ref ChiselExtrudedShapeDefinition definition)
         {
             definition.Validate();
@@ -65,6 +80,13 @@ namespace Chisel.Core
                 var segmentIndices = polygonIndicesArray[p];
                 var shapeSegments = polygonVertices.Length;
 
+                if (CalculateOrientation(polygonVertices) < 0)
+                {
+                    Array.Reverse(segmentIndices);
+                    Array.Reverse(polygonVertices);
+                }
+
+
                 for (int s = 0; s < path.segments.Length - 1; s++)
                 {
                     var pathPointA = path.segments[s];
@@ -90,7 +112,7 @@ namespace Chisel.Core
 
                         // TODO: this doesn't work if top and bottom polygons intersect
                         //			=> need to split into two brushes then, invert one of the two brushes
-                        var invertDot = Vector3.Dot(matrix0.MultiplyVector(Vector3.forward).normalized, (matrix1.MultiplyPoint(shapeVertices[0]) - matrix0.MultiplyPoint(shapeVertices[0])).normalized);
+                        var invertDot = Vector3.Dot(matrix0.MultiplyVector(Vector3.forward).normalized, (matrix1.MultiplyPoint(polygonVertices[0]) - matrix0.MultiplyPoint(polygonVertices[0])).normalized);
 
                         if (invertDot == 0.0f)
                             continue;
