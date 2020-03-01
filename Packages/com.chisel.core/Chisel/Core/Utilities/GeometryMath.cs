@@ -55,6 +55,56 @@ namespace Chisel.Core
         }
 
 
+        // Finds the minimum 3D distance from a point to a line segment
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool IsPointOnLineSegment(float3 point, float3 lineVertexA, float3 lineVertexB)
+        {
+            const float kEpsilon = 0.00001f;
+            var b = (point.x - lineVertexA.x) * (lineVertexB.x - lineVertexA.x) +
+                    (point.y - lineVertexA.y) * (lineVertexB.y - lineVertexA.y) +
+                    (point.z - lineVertexA.z) * (lineVertexB.z - lineVertexA.z);
+
+            var dx = (lineVertexB.x - lineVertexA.x);
+            var dy = (lineVertexB.y - lineVertexA.y);
+            var dz = (lineVertexB.z - lineVertexA.z);
+            var c = dx * dx + dy * dy + dz * dz;
+            if (c == 0.0)
+            {
+                // Point1 and Point2 are the same
+                return true;
+            }
+
+            var d = b / c;
+            if (d <= 0.0 || d >= 1.0)
+            {
+                // Closest point to line is not on the segment, so it is one of the end points
+                dx = lineVertexA.x - point.x;
+                dy = lineVertexA.y - point.y;
+                dz = lineVertexA.z - point.z;
+
+                dx = lineVertexB.x - point.x;
+                dy = lineVertexB.y - point.y;
+                dz = lineVertexB.z - point.z;
+
+                var e = dx * dx + dy * dy + dz * dz;
+                var f = dx * dx + dy * dy + dz * dz;
+                if (e < f)
+                    return e < kEpsilon;
+                else
+                    return f < kEpsilon;
+            }
+
+            // Closest point to line is on the segment
+            var d1 = (lineVertexB.y - lineVertexA.y) * (point.z - lineVertexA.z) - (point.y - lineVertexA.y) * (lineVertexB.z - lineVertexA.z);
+            var d2 = (lineVertexB.x - lineVertexA.x) * (point.z - lineVertexA.z) - (point.x - lineVertexA.x) * (lineVertexB.z - lineVertexA.z);
+            var d3 = (lineVertexB.x - lineVertexA.x) * (point.y - lineVertexA.y) - (point.x - lineVertexA.x) * (lineVertexB.y - lineVertexA.y);
+            var a = math.sqrt(d1 * d1 + d2 * d2 + d3 * d3);
+            var csqrt = math.sqrt(c);
+            a /= csqrt;
+            return (a * a) < kEpsilon;
+        }
+
 
         // Finds the minimum 3D distance from a point to a line segment
 

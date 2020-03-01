@@ -19,10 +19,10 @@ namespace Chisel.Core
     {
         public const int kMaxVertexCount = short.MaxValue;
 
-        [ReadOnly] public NativeArray<float3>   verticesSrc;
+        [ReadOnly] public NativeArray<float3>   verticesInput;
         [ReadOnly] public NativeArray<float4>   otherPlanesNative;
         [ReadOnly] public NativeArray<float4>   selfPlanesNative;
-        [WriteOnly] public NativeArray<float3>  verticesDst;
+        [WriteOnly] public NativeArray<float3>  verticesOutput;
         public int vertexCount;
 
         // TODO: find a way to share found intersections between loops, to avoid accuracy issues
@@ -34,19 +34,19 @@ namespace Chisel.Core
             var tempVertices = stackalloc float3[] { float3.zero, float3.zero };
             var innerVertexCount = 0;
 
-            var verticesSrcPtr       = (float3*)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(verticesSrc);
+            var verticesSrcPtr       = (float3*)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(verticesInput);
             var otherPlanesNativePtr = (float4*)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(otherPlanesNative);
             var selfPlanesNativePtr  = (float4*)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(selfPlanesNative);
-            var verticesDstPtr       = (float3*)NativeArrayUnsafeUtility.GetUnsafePtr(verticesDst);
+            var verticesDstPtr       = (float3*)NativeArrayUnsafeUtility.GetUnsafePtr(verticesOutput);
 
             var otherPlaneCount = otherPlanesNative.Length;
             var selfPlaneCount  = selfPlanesNative.Length;
 
             // TODO: Optimize the hell out of this
-            var vertex0 = verticesSrcPtr[vertexCount - 1];
             float3 vertex1;
-            float4 vertex0w = new float4(vertex0, 1);
             float4 vertex1w;
+            var vertex0 = verticesSrcPtr[vertexCount - 1];
+            float4 vertex0w = new float4(vertex0, 1);
             for (int v0 = 0; v0 < vertexCount; v0++)
             {
                 vertex1 = vertex0;

@@ -1031,38 +1031,40 @@ namespace Chisel.Core
         static readonly Dictionary<int, NativeArray<float4>>    s_BrushPlanes           = new Dictionary<int, NativeArray<float4>>();
         static List<IntersectionLoop>[]                         s_IntersectionSurfaces  = new List<IntersectionLoop>[0];
         static FindLoopIntersectionVerticesJob                  s_IntersectionJob       = new FindLoopIntersectionVerticesJob();
+        static FindLoopIntersectionVerticesJob2                 s_IntersectionJob2      = new FindLoopIntersectionVerticesJob2();
 
         static unsafe void FindLoopOverlapIntersections(BrushLoops outputLoops)
         {
             if (outputLoops.intersectionSurfaceLoops.Count == 0)
                 return;
 
-            var mesh1 = BrushMeshManager.GetBrushMesh(outputLoops.brush.BrushMesh.BrushMeshID);
-            Debug.Assert(mesh1 != null);
+            var mesh = BrushMeshManager.GetBrushMesh(outputLoops.brush.BrushMesh.BrushMeshID);
+            Debug.Assert(mesh != null);
 
-            if (mesh1.surfaces.Length == 0)
+            if (mesh.surfaces.Length == 0)
                 return;
 
-            using (var worldSpacePlanesS = new NativeArray<float4>(mesh1.surfaces.Length, Allocator.Persistent, NativeArrayOptions.UninitializedMemory))
+            using (var worldSpacePlanesS = new NativeArray<float4>(mesh.surfaces.Length, Allocator.Persistent, NativeArrayOptions.UninitializedMemory))
             {
                 var treeToNodeSpaceTransposed = math.transpose(outputLoops.brush.TreeToNodeSpaceMatrix);
-                fixed (BrushMesh.Surface* mesh1Surfaces = &mesh1.surfaces[0])
+                fixed (BrushMesh.Surface* meshSurfaces = &mesh.surfaces[0])
                 {
-                    float4* mesh1Planes = (float4*)mesh1Surfaces;
+                    float4* meshPlanes = (float4*)meshSurfaces;
                     var worldSpacePlanesPtr = (float4*)worldSpacePlanesS.GetUnsafePtr();
-                    CSGManagerPerformCSG.TransformByTransposedInversedMatrix(worldSpacePlanesPtr, mesh1Planes, mesh1.surfaces.Length, treeToNodeSpaceTransposed);
+                    CSGManagerPerformCSG.TransformByTransposedInversedMatrix(worldSpacePlanesPtr, meshPlanes, mesh.surfaces.Length, treeToNodeSpaceTransposed);
                 }
 
                 s_BrushPlanes.Clear();
                 s_AllIntersectionLoops.Clear();
-                if (s_IntersectionSurfaces.Length < mesh1.surfaces.Length)
+                var s_IntersectionSurfaceCount = mesh.surfaces.Length;
+                if (s_IntersectionSurfaces.Length < s_IntersectionSurfaceCount)
                 {
-                    s_IntersectionSurfaces = new List<IntersectionLoop>[mesh1.surfaces.Length];
-                    for (int i = 0; i < mesh1.surfaces.Length; i++)
+                    s_IntersectionSurfaces = new List<IntersectionLoop>[s_IntersectionSurfaceCount];
+                    for (int i = 0; i < s_IntersectionSurfaceCount; i++)
                         s_IntersectionSurfaces[i] = new List<IntersectionLoop>(16);
                 } else
                 {
-                    for (int i = 0; i < mesh1.surfaces.Length; i++)
+                    for (int i = 0; i < s_IntersectionSurfaceCount; i++)
                         s_IntersectionSurfaces[i].Clear();
                 }
 
@@ -1117,8 +1119,12 @@ namespace Chisel.Core
 
 
 
-                s_IntersectionJob.verticesSrc = new NativeArray<float3>(FindLoopIntersectionVerticesJob.kMaxVertexCount, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
-                s_IntersectionJob.verticesDst = new NativeArray<float3>(FindLoopIntersectionVerticesJob.kMaxVertexCount, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
+                s_IntersectionJob.verticesInput     = new NativeArray<float3>(FindLoopIntersectionVerticesJob.kMaxVertexCount, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
+                s_IntersectionJob.verticesOutput    = new NativeArray<float3>(FindLoopIntersectionVerticesJob.kMaxVertexCount, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
+                
+                s_IntersectionJob2.verticesInput    = new NativeArray<float3>(FindLoopIntersectionVerticesJob2.kMaxVertexCount, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
+                s_IntersectionJob2.otherVertices    = new NativeArray<float3>(FindLoopIntersectionVerticesJob2.kMaxVertexCount, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
+                s_IntersectionJob2.verticesOutput   = new NativeArray<float3>(FindLoopIntersectionVerticesJob2.kMaxVertexCount, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
                 try
                 {
                     var srcVertices = outputLoops.vertexSoup.vertices;
@@ -1128,7 +1134,7 @@ namespace Chisel.Core
                         // TODO: only use planes that intersect with bounding box?
                         //          -> reuse this info from GetIntersectionLoops
                         //          -> should this be part of GetIntersectionLoops instead?
-                        for (int s = 0; s < mesh1.surfaces.Length; s++)
+                        for (int s = 0; s < s_IntersectionSurfaceCount; s++)
                         {
                             var intersectionSurface = s_IntersectionSurfaces[s];
                             for (int l0 = 0; l0 < intersectionSurface.Count; l0++)
@@ -1138,7 +1144,7 @@ namespace Chisel.Core
 
                                 s_IntersectionJob.vertexCount = indices.Count;
                                 for (int v = 0; v < indices.Count; v++)
-                                    s_IntersectionJob.verticesDst[v] = srcVertices[indices[v]];
+                                    s_IntersectionJob.verticesOutput[v] = srcVertices[indices[v]];
 
                                 //var first = true;
                                 //JobHandle lastHandle = new JobHandle();
@@ -1148,9 +1154,9 @@ namespace Chisel.Core
                                     if (l0 == l1)
                                         continue;
 
-                                    var t = s_IntersectionJob.verticesSrc;
-                                    s_IntersectionJob.verticesSrc = s_IntersectionJob.verticesDst;
-                                    s_IntersectionJob.verticesDst = t;
+                                    var t = s_IntersectionJob.verticesInput;
+                                    s_IntersectionJob.verticesInput = s_IntersectionJob.verticesOutput;
+                                    s_IntersectionJob.verticesOutput = t;
 
                                     var planes1 = intersectionSurface[l1].selfPlanes;
 
@@ -1181,7 +1187,7 @@ namespace Chisel.Core
                                         indices.Capacity = s_IntersectionJob.vertexCount;
                                     for (int n = 0; n < s_IntersectionJob.vertexCount; n++)
                                     {
-                                        var worldVertex = s_IntersectionJob.verticesDst[n];
+                                        var worldVertex = s_IntersectionJob.verticesOutput[n];
                                         var vertexIndex = outputLoops.vertexSoup.Add(worldVertex);
 
                                         if (indices.Contains(vertexIndex))
@@ -1209,15 +1215,15 @@ namespace Chisel.Core
                             {
                                 s_IntersectionJob.vertexCount = indices.Count;
                                 for (int v = 0; v < indices.Count; v++)
-                                    s_IntersectionJob.verticesDst[v] = srcVertices[indices[v]];
+                                    s_IntersectionJob.verticesOutput[v] = srcVertices[indices[v]];
 
                                 //JobHandle lastHandle = new JobHandle();
                                 //bool first = true;
                                 foreach (var pair in s_BrushPlanes)
                                 {
-                                    var t = s_IntersectionJob.verticesSrc;
-                                    s_IntersectionJob.verticesSrc = s_IntersectionJob.verticesDst;
-                                    s_IntersectionJob.verticesDst = t;
+                                    var t = s_IntersectionJob.verticesInput;
+                                    s_IntersectionJob.verticesInput = s_IntersectionJob.verticesOutput;
+                                    s_IntersectionJob.verticesOutput = t;
 
 
                                     s_IntersectionJob.otherPlanesNative = pair.Value;
@@ -1241,7 +1247,7 @@ namespace Chisel.Core
                                         indices.Capacity = s_IntersectionJob.vertexCount;
                                     for (int n = 0; n < s_IntersectionJob.vertexCount; n++)
                                     {
-                                        var worldVertex = s_IntersectionJob.verticesDst[n];
+                                        var worldVertex = s_IntersectionJob.verticesOutput[n];
                                         var vertexIndex = outputLoops.vertexSoup.Add(worldVertex);
                                     
                                         if (indices.Contains(vertexIndex))
@@ -1254,11 +1260,33 @@ namespace Chisel.Core
                         }
                     }
                     finally { UnityEngine.Profiling.Profiler.EndSample(); }
+                    UnityEngine.Profiling.Profiler.BeginSample("Find intersection-loop/base-loop intersections");
+                    try
+                    {
+                        for (int s = 0; s < s_IntersectionSurfaceCount; s++)
+                        {
+                            var intersectionSurface = s_IntersectionSurfaces[s];
+                            if (intersectionSurface.Count > 0)
+                            {
+                                var basePolygon = outputLoops.basePolygons[s];
+                                for (int l0 = 0; l0 < intersectionSurface.Count; l0++)
+                                {
+                                    s_IntersectionJob2.FindIntersections(outputLoops.vertexSoup, intersectionSurface[l0].indices, basePolygon.indices, intersectionSurface[l0].selfPlanes);
+                                    s_IntersectionJob2.GetOutput(outputLoops.vertexSoup, intersectionSurface[l0].indices);
+                                }
+                            }
+                        }
+                    }
+                    finally { UnityEngine.Profiling.Profiler.EndSample(); }
                 }
                 finally
                 {
-                    s_IntersectionJob.verticesSrc.Dispose();
-                    s_IntersectionJob.verticesDst.Dispose();
+                    s_IntersectionJob.verticesInput.Dispose();
+                    s_IntersectionJob.verticesOutput.Dispose();
+
+                    s_IntersectionJob2.verticesInput.Dispose();
+                    s_IntersectionJob2.otherVertices.Dispose();
+                    s_IntersectionJob2.verticesOutput.Dispose();
                 }
 
                 var removeIdenticalIndicesJob = new RemoveIdenticalIndicesJob
