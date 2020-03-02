@@ -41,7 +41,7 @@ namespace Chisel.Core
                 if (side == 0) intersectingSides1++;
             }
 
-            //Debug.Log($"A {positiveSides1} {negativeSides1} {intersectingSides1} /{transformedPlanes0.Length}");
+            //Debug.Log($"A positive: {positiveSides1} negative: {negativeSides1} intersecting: {intersectingSides1} / {transformedPlanes0.Length}");
 
             //if (intersectingSides1 != transformedPlanes0.Length) return IntersectionType.Intersection;
             //if (intersectingSides > 0) return IntersectionType.Intersection;
@@ -65,10 +65,10 @@ namespace Chisel.Core
                 if (side == 0) intersectingSides2++;
             }
 
-            //Debug.Log($"B {positiveSides2} {negativeSides2} {intersectingSides2} /{transformedPlanes1.Length}");
+            //Debug.Log($"B positive: {positiveSides2} negative: {negativeSides2} intersecting: {intersectingSides2} / {transformedPlanes1.Length}");
 
-            if (intersectingSides2 > 0) return IntersectionType.Intersection;
             if (positiveSides2 > 0) return IntersectionType.NoIntersection;
+            if (intersectingSides2 > 0) return IntersectionType.Intersection;
             //if (negativeSides > 0 && positiveSides > 0) return IntersectionType.Intersection;
             if (negativeSides2 == transformedPlanes1.Length)
                 return IntersectionType.AInsideB;

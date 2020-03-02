@@ -341,7 +341,7 @@ namespace Poly2Tri
         // SweepContext
         //
 
-        List<float3>                        vertices;
+        NativeList<float3>                  vertices;
         float2[]                            points;
         ushort[]                            edges;
         List<DirectedEdge>                  allEdges                = new List<DirectedEdge>();
@@ -378,7 +378,7 @@ namespace Poly2Tri
         
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal unsafe static bool IsPointInPolygon(float3 right, float3 forward, List<Chisel.Core.Edge> indices1, List<Chisel.Core.Edge> indices2, List<float3> vertices)
+        internal unsafe static bool IsPointInPolygon(float3 right, float3 forward, List<Chisel.Core.Edge> indices1, List<Chisel.Core.Edge> indices2, NativeList<float3> vertices)
         {
             int index = 0;
             while (index < indices2.Count &&
@@ -423,7 +423,7 @@ namespace Poly2Tri
 
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public int[] TriangulateLoops(Chisel.Core.Loop loop, List<float3> vertices, List<Chisel.Core.Edge> inputEdges, quaternion rotation)
+        public int[] TriangulateLoops(Chisel.Core.Loop loop, NativeList<float3> vertices, List<Chisel.Core.Edge> inputEdges, quaternion rotation)
         {
             if (inputEdges.Count < 4)
             {
@@ -580,7 +580,7 @@ namespace Poly2Tri
         /// Triangulate simple polygon with holes
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public List<int> Triangulate(List<float3> vertices, List<Chisel.Core.Edge> inputEdges, quaternion rotation)
+        public List<int> Triangulate(NativeList<float3> vertices, List<Chisel.Core.Edge> inputEdges, quaternion rotation)
         {
             this.vertices = vertices;
             this.rotation = rotation;
@@ -588,7 +588,7 @@ namespace Poly2Tri
             triangleIndices.Clear();
             int prevEdgeCount = inputEdges.Count;
             AddMoreTriangles:
-            Clear(vertices.Count);
+            Clear(vertices.Length);
             PrepareTriangulation(inputEdges);
             CreateAdvancingFront(0);
             Sweep();
@@ -802,9 +802,9 @@ namespace Poly2Tri
             var index0 = triangle.indices[0];
             var index1 = triangle.indices[1];
             var index2 = triangle.indices[2];
-            if (index0 < vertices.Count &&
-                index1 < vertices.Count &&
-                index2 < vertices.Count)
+            if (index0 < vertices.Length &&
+                index1 < vertices.Length &&
+                index2 < vertices.Length)
             {
                 triangleIndices.Add(index0);
                 triangleIndices.Add(index1);
@@ -907,10 +907,10 @@ namespace Poly2Tri
             var max = new float2(float.NegativeInfinity, float.NegativeInfinity);
 
             if (s_KnownVertices == null ||
-                s_KnownVertices.Length < vertices.Count)
-                s_KnownVertices = new bool[vertices.Count];
+                s_KnownVertices.Length < vertices.Length)
+                s_KnownVertices = new bool[vertices.Length];
             else
-                Array.Clear(s_KnownVertices, 0, vertices.Count);
+                Array.Clear(s_KnownVertices, 0, vertices.Length);
             for (int e = 0; e < inputEdges.Count; e++)
             {
                 var edge = inputEdges[e];
@@ -959,8 +959,8 @@ namespace Poly2Tri
             // Sort the points along y-axis
             sortedPoints.Sort(PointComparerMethod);
 
-            headPointIndex = (ushort)(vertices.Count);
-            tailPointIndex = (ushort)(vertices.Count + 1);
+            headPointIndex = (ushort)(vertices.Length);
+            tailPointIndex = (ushort)(vertices.Length + 1);
 
             var delta = ALPHA * (max - min);
             points[headPointIndex] = new float2(max.x + delta.x, min.y - delta.y);

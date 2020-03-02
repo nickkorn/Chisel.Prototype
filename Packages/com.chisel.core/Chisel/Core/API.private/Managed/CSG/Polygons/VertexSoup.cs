@@ -14,7 +14,7 @@ using ReadOnlyAttribute = Unity.Collections.ReadOnlyAttribute;
 namespace Chisel.Core
 {
 #if USE_MANAGED_CSG_IMPLEMENTATION
-    public sealed class VertexSoup
+    public struct VertexSoup
     {
         public const int    kMaxVertexCount = 65000;
         const uint          kHashTableSize  = 6529u;
@@ -25,11 +25,10 @@ namespace Chisel.Core
             public int      nextChainIndex;
         }
 
-        public List<float3> vertices = new List<float3>();
-        public NativeArray<float3> vertexArray;
-        public int vertexCount;
-        List<ChainedIndex> chainedIndices = new List<ChainedIndex>();
-        int[] hashTable = new int[(int)kHashTableSize];
+        public NativeList<float3> vertices;
+
+        NativeList<ChainedIndex> chainedIndices;
+        NativeArray<int> hashTable;
 
         // TODO: measure the hash function and see how well it works
         const long  kHashMagicValue = (long)1099511628211ul;
@@ -38,48 +37,51 @@ namespace Chisel.Core
 
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        static uint GetHash(int x, int y, int z) 
+        static int GetHash(int x, int y, int z) 
         {
-            return (uint)((y ^ ((x ^ z) * kHashMagicValue)) * kHashMagicValue); 
+            var hashCode = //math.hash(new int3(x, y, z));// 
+                            (uint)((y ^ ((x ^ z) * kHashMagicValue)) * kHashMagicValue);
+            var hashIndex = ((int)(hashCode % kHashTableSize)) + 1;
+            return hashIndex;
         }
 
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Initialize(int minCapacity)
         {
-            if (vertices.Capacity < minCapacity)
-                vertices.Capacity = minCapacity;
-            if (chainedIndices.Capacity < minCapacity)
-                chainedIndices.Capacity = minCapacity;
-            vertices.Clear();
-            chainedIndices.Clear();
-            for (int i = 0; i < kHashTableSize; i++)
-                hashTable[i] = -1;
-            if (vertexArray.IsCreated)
-                vertexArray.Dispose();
+            if (hashTable.IsCreated) hashTable.Dispose();
+            hashTable = new NativeArray<int>((int)(kHashTableSize + 1), Allocator.Persistent, NativeArrayOptions.ClearMemory);
 
-            vertexArray = new NativeArray<float3>(VertexSoup.kMaxVertexCount, Allocator.Persistent, options: NativeArrayOptions.UninitializedMemory);
+            if (chainedIndices.IsCreated) chainedIndices.Dispose();
+            chainedIndices = new NativeList<ChainedIndex>(minCapacity, Allocator.Persistent);
+
+            if (vertices.IsCreated) vertices.Dispose();
+            vertices = new NativeList<float3>(minCapacity, Allocator.Persistent);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal void Clear()
         {
-            if (vertexArray.IsCreated)
-                vertexArray.Dispose();
+            if (chainedIndices.IsCreated)
+                chainedIndices.Dispose();
+            if (vertices.IsCreated)
+                vertices.Dispose();
+            if (hashTable.IsCreated)
+                hashTable.Dispose();
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         ushort AddUnique(float3 vertex, int mx, int my, int mz)
         {
-            var vertexIndex = (ushort)vertices.Count;
+            var vertexIndex = (ushort)vertices.Length;
             vertices.Add(vertex);
             {
-                var hashCode = GetHash(mx, my, mz) % kHashTableSize;
+                var hashCode = GetHash(mx, my, mz);
                 var prevChainIndex = hashTable[hashCode];
-                var newChainIndex = chainedIndices.Count;
+                var newChainIndex = chainedIndices.Length;
                 var newChainedIndex = new ChainedIndex() { vertexIndex = vertexIndex, nextChainIndex = prevChainIndex };
                 chainedIndices.Add(newChainedIndex);
-                hashTable[hashCode] = newChainIndex;
+                hashTable[(int)hashCode] = newChainIndex;
             }
 
             return vertexIndex;
@@ -97,11 +99,11 @@ namespace Chisel.Core
                 for (var y = my - 1; y <= my + 1; y++)
                 {
                     {
-                        var chainIndex = hashTable[GetHash(x, y, mz - 1) % kHashTableSize];
+                        var chainIndex = hashTable[GetHash(x, y, mz - 1)];
                         {
                             ushort closestIndex = ushort.MaxValue;
                             float closestDistance = CSGManagerPerformCSG.kSqrMergeEpsilon;
-                            while (chainIndex != -1)
+                            while (chainIndex != 0)
                             {
                                 var vertexIndex = chainedIndices[chainIndex].vertexIndex;
                                 chainIndex = chainedIndices[chainIndex].nextChainIndex;
@@ -118,11 +120,11 @@ namespace Chisel.Core
                     }
 
                     {
-                        var chainIndex = hashTable[GetHash(x, y, mz) % kHashTableSize];
+                        var chainIndex = hashTable[GetHash(x, y, mz)];
                         {
                             ushort closestIndex = ushort.MaxValue;
                             float closestDistance = CSGManagerPerformCSG.kSqrMergeEpsilon;
-                            while (chainIndex != -1)
+                            while (chainIndex != 0)
                             {
                                 var vertexIndex = chainedIndices[chainIndex].vertexIndex;
                                 chainIndex = chainedIndices[chainIndex].nextChainIndex;
@@ -139,11 +141,11 @@ namespace Chisel.Core
                     }
 
                     {
-                        var chainIndex = hashTable[GetHash(x, y, mz + 1) % kHashTableSize];
+                        var chainIndex = hashTable[GetHash(x, y, mz + 1)];
                         {
                             ushort closestIndex = ushort.MaxValue;
                             float closestDistance = CSGManagerPerformCSG.kSqrMergeEpsilon;
-                            while (chainIndex != -1)
+                            while (chainIndex != 0)
                             {
                                 var vertexIndex = chainedIndices[chainIndex].vertexIndex;
                                 chainIndex = chainedIndices[chainIndex].nextChainIndex;

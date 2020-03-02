@@ -7,6 +7,35 @@ namespace Chisel.Core
     public static class PlaneExtensions
     {
         public static readonly Vector3 NanVector = new Vector3(float.NaN, float.NaN, float.NaN);
+        public static readonly float3 NanFloat3 = new float3(float.NaN, float.NaN, float.NaN);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static float3 Intersection(double4 inPlane1, double4 inPlane2, double4 inPlane3)
+        {
+#if false
+            var N0 = inPlane2.wzyx * inPlane3.yxwz - inPlane2.yxwz * inPlane3.wzyx;
+            var Nx = inPlane2.yyww * inPlane3.xzzx - inPlane2.xzzx * inPlane3.yyww;
+
+            var tx = inPlane1 * N0;
+            var ty = inPlane1.wxyz * Nx;
+            var tz = inPlane1.yzwx * -Nx.wxyz;
+
+            var E = tx + ty + tz;
+            return E.zwx / E.y;
+#else
+            var N0 = inPlane2.wzyx * inPlane3.yxwz - inPlane2.yxwz * inPlane3.wzyx;
+            var Nx = inPlane2.yyww * inPlane3.xzzx - inPlane2.xzzx * inPlane3.yyww;
+
+            var tx = inPlane1 * N0;
+            var ty = inPlane1.wxyz * Nx;
+            var tz = inPlane1.yzwx * -Nx.wxyz;
+
+            var E = tx + ty + tz;
+            if (math.isnan(E.y) || E.y > -CSGManagerPerformCSG.kEpsilon && E.y < CSGManagerPerformCSG.kEpsilon)
+                return NanFloat3;
+            return (float3)(E.zwx / E.y);
+#endif
+        }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector3 Intersection(Plane inPlane1,
@@ -146,35 +175,6 @@ namespace Chisel.Core
             var E = (tx.zwxy + ty.yzwx + tz.wxyz);*/
             return (float3)(E.xyz / E.w);
 #endif
-        }
-
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static float3 Intersection(double4 inPlane1, double4 inPlane2, double4 inPlane3)
-        {
-            var N0 = inPlane2.wzyx * inPlane3.yxwz - inPlane2.yxwz * inPlane3.wzyx;
-            var Nx = inPlane2.yyww * inPlane3.xzzx - inPlane2.xzzx * inPlane3.yyww;
-
-            var tx = inPlane1 * N0;
-            var ty = inPlane1.wxyz * Nx;
-            var tz = inPlane1.yzwx * -Nx.wxyz;
-
-            var E = tx + ty + tz;
-            return (float3)(E.zwx / E.y);
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static float3 Intersection(float4 inPlane1, float4 inPlane2, float4 inPlane3)
-        {
-            var N0 = inPlane2.wzyx * inPlane3.yxwz - inPlane2.yxwz * inPlane3.wzyx;
-            var Nx = inPlane2.yyww * inPlane3.xzzx - inPlane2.xzzx * inPlane3.yyww;
-
-            var tx = inPlane1 * N0;
-            var ty = inPlane1.wxyz * Nx;
-            var tz = inPlane1.yzwx * -Nx.wxyz;
-
-            var E = tx + ty + tz;
-            return E.zwx / E.y;
         }
     }
 

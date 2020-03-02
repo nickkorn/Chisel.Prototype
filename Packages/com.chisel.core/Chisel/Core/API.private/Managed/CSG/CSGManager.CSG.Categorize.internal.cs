@@ -92,10 +92,11 @@ namespace Chisel.Core
                     convex = true
                 };
 
+                var vertices = soup.vertices;
                 for (int i = 0; i < polygon2.indices.Count; i++)
                 {
                     var vertexIndex = polygon2.indices[i];
-                    var worldVertex = new float4(soup.vertices[vertexIndex], 1);
+                    var worldVertex = new float4(vertices[vertexIndex], 1);
                     if (IsOutsidePlanes(worldSpacePlanes1, worldSpacePlanes1Length, worldVertex))
                         continue;
                     if (!newPolygon.indices.Contains(vertexIndex)) 
@@ -122,7 +123,7 @@ namespace Chisel.Core
                 {
                     // polygon edges are not intersecting
                     var vertexIndex = polygon1.indices[0];
-                    var worldVertex = new float4(soup.vertices[vertexIndex], 1);
+                    var worldVertex = new float4(vertices[vertexIndex], 1);
                     if (IsOutsidePlanes(worldSpacePlanes2, worldSpacePlanes2Length, worldVertex))
                         // no vertex of polygon1 can be inside polygon2
                         return CSGManagerPerformCSG.OperationResult.Outside;
@@ -136,7 +137,7 @@ namespace Chisel.Core
                     for (int i = 0; i < polygon1.indices.Count; i++)
                     {
                         var vertexIndex = polygon1.indices[i];
-                        var worldVertex = new float4(soup.vertices[vertexIndex], 1);
+                        var worldVertex = new float4(vertices[vertexIndex], 1);
                         if (!IsOutsidePlanes(worldSpacePlanes2, worldSpacePlanes2Length, worldVertex))
                             continue;
                         haveOutsideVertices = true;
@@ -151,7 +152,7 @@ namespace Chisel.Core
                 for (int i = 0; i < polygon1.indices.Count; i++)
                 {
                     var vertexIndex = polygon1.indices[i];
-                    var worldVertex = new float4(soup.vertices[vertexIndex], 1);
+                    var worldVertex = new float4(vertices[vertexIndex], 1);
                     if (IsOutsidePlanes(worldSpacePlanes2, worldSpacePlanes2Length, worldVertex))
                         continue;
 
@@ -160,7 +161,7 @@ namespace Chisel.Core
                 }
                 // We need to resort the indices now
                 // TODO: find a way to not have to do this
-                SortIndices(newPolygon.indices, soup.vertices, newPolygon.info.worldPlane.normal);
+                SortIndices(newPolygon.indices, vertices, newPolygon.info.worldPlane.normal);
 
                 newPolygon.AddEdges(newPolygon.indices);
                 resultLoops.Add(newPolygon);
@@ -177,9 +178,7 @@ namespace Chisel.Core
 
             float ix, iy, jx, jy;
 
-            var verticesPtr = (float3*)NativeArrayUnsafeUtility.GetUnsafePtr(soup.vertexArray);
-
-            var vert = verticesPtr[indices[indices.Count - 1]];
+            var vert = soup.vertices[indices[indices.Count - 1]];
             ix = math.dot(right,   vert);
             iy = math.dot(forward, vert);
 
@@ -189,7 +188,7 @@ namespace Chisel.Core
                 jx = ix;
                 jy = iy;
 
-                vert = verticesPtr[indices[i]];
+                vert = soup.vertices[indices[i]];
                 ix = math.dot(right,   vert);
                 iy = math.dot(forward, vert);
 
@@ -226,10 +225,11 @@ namespace Chisel.Core
             }
             builder.AppendLine();
 
+            var vertices = soup.vertices;
             for (int i = 0; i < categorized_loop.indices.Count; i++)
             {
                 var index = categorized_loop.indices[i];
-                var vertex = ((float3)(rotation * soup.vertices[index])).xy;
+                var vertex = ((float3)(rotation * vertices[index])).xy;
 
                 builder.Append($"({Convert.ToString((Decimal)vertex.x, CultureInfo.InvariantCulture)}, {Convert.ToString((Decimal)vertex.y, CultureInfo.InvariantCulture)})");
                 builder.Append(", ");
@@ -237,7 +237,7 @@ namespace Chisel.Core
             if (categorized_loop.indices.Count > 0)
             { 
                 var index = categorized_loop.indices[0];
-                var vertex = ((float3)(rotation * soup.vertices[index])).xy;
+                var vertex = ((float3)(rotation * vertices[index])).xy;
                 builder.Append($"({Convert.ToString((Decimal)vertex.x, CultureInfo.InvariantCulture)}, {Convert.ToString((Decimal)vertex.y, CultureInfo.InvariantCulture)})");
             }
             builder.AppendLine("             ");
@@ -248,8 +248,8 @@ namespace Chisel.Core
                 var edge = categorized_loop.edges[i];
                 var index1 = edge.index1;
                 var index2 = edge.index2;
-                var vertex1 = ((float3)(rotation * soup.vertices[index1])).xy;
-                var vertex2 = ((float3)(rotation * soup.vertices[index2])).xy;
+                var vertex1 = ((float3)(rotation * vertices[index1])).xy;
+                var vertex2 = ((float3)(rotation * vertices[index2])).xy;
 
                 builder.Append($"({Convert.ToString((Decimal)vertex1.x, CultureInfo.InvariantCulture)}, {Convert.ToString((Decimal)vertex1.y, CultureInfo.InvariantCulture)}), ");
                 builder.AppendLine($"({Convert.ToString((Decimal)vertex2.x, CultureInfo.InvariantCulture)}, {Convert.ToString((Decimal)vertex2.y, CultureInfo.InvariantCulture)})             ");
@@ -492,10 +492,11 @@ namespace Chisel.Core
             // Newell's algorithm to create a plane for concave polygons.
             // NOTE: doesn't work well for self-intersecting polygons
             var normal		= Vector3.zero;
-            var prevVertex	= soup.vertices[loop.indices[loop.indices.Count - 1]];
+            var vertices    = soup.vertices;
+            var prevVertex	= vertices[loop.indices[loop.indices.Count - 1]];
             for (int n = 0; n < loop.indices.Count; n++)
             {
-                var currVertex = soup.vertices[loop.indices[n]];
+                var currVertex = vertices[loop.indices[n]];
                 normal.x = normal.x + ((prevVertex.y - currVertex.y) * (prevVertex.z + currVertex.z));
                 normal.y = normal.y + ((prevVertex.z - currVertex.z) * (prevVertex.x + currVertex.x));
                 normal.z = normal.z + ((prevVertex.x - currVertex.x) * (prevVertex.y + currVertex.y));
