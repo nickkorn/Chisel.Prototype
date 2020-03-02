@@ -131,7 +131,7 @@ namespace Chisel.Core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void AddIndex(VertexSoup soup, ushort newIndex)
+        public void AddIndex(ushort newIndex)
         {
             if (indexUsed.Contains(newIndex))
                 return;
@@ -227,7 +227,7 @@ namespace Chisel.Core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public EdgeCategory CategorizeEdge(VertexSoup soup, Edge edge)
+        public EdgeCategory CategorizeEdge(in VertexSoup soup, Edge edge)
         {
             if (IndexOf(edge, out bool inverted) != -1)
                 return (inverted) ? EdgeCategory.ReverseAligned : EdgeCategory.Aligned;

@@ -68,9 +68,10 @@ namespace Chisel.Editors
         [MenuItem("GameObject/Chisel/Operations/" + nameof(CSGOperationType.Subtractive), true)] static bool ValidateSubtractiveOperation(MenuCommand menuCommand) { return MenuValidateOperation(menuCommand); }
         [MenuItem("GameObject/Chisel/Operations/" + nameof(CSGOperationType.Intersecting), false, -1)] static void SetIntersectingOperation(MenuCommand menuCommand) { SetMenuOperation(menuCommand, CSGOperationType.Intersecting); }
         [MenuItem("GameObject/Chisel/Operations/" + nameof(CSGOperationType.Intersecting), true)] static bool ValidateIntersectingOperation(MenuCommand menuCommand) { return MenuValidateOperation(menuCommand); }
+#if USE_MANAGED_CSG_IMPLEMENTATION
         [MenuItem("GameObject/Chisel/Operations/" + nameof(CSGOperationType.Copy), false, -1)] static void SetCopyOperation(MenuCommand menuCommand) { SetMenuOperation(menuCommand, CSGOperationType.Copy); }
         [MenuItem("GameObject/Chisel/Operations/" + nameof(CSGOperationType.Copy), true)] static bool ValidateCopyOperation(MenuCommand menuCommand) { return MenuValidateOperation(menuCommand); }
-
+#endif
 
 
         [MenuItem("GameObject/Group in Operation", false, -1)]
@@ -426,17 +427,23 @@ namespace Chisel.Editors
             const string kAdditiveIconName          = "csg_" + nameof(CSGOperationType.Additive);
             const string kSubtractiveIconName       = "csg_" + nameof(CSGOperationType.Subtractive);
             const string kIntersectingIconName      = "csg_" + nameof(CSGOperationType.Intersecting);
+#if USE_MANAGED_CSG_IMPLEMENTATION
             const string kCopyIconName              = "csg_" + nameof(CSGOperationType.Copy);
+#endif
 
             const string kAdditiveIconTooltip       = nameof(CSGOperationType.Additive) + " Boolean Operation";
             const string kSubtractiveIconTooltip    = nameof(CSGOperationType.Subtractive) + " Boolean Operation";
             const string kIntersectingIconTooltip   = nameof(CSGOperationType.Intersecting) + " Boolean Operation";
+#if USE_MANAGED_CSG_IMPLEMENTATION
             const string kCopyIconTooltip           = nameof(CSGOperationType.Copy) + " Boolean Operation";
+#endif
 
             var additiveIcon        = ChiselEditorResources.GetIconContent(kAdditiveIconName, kAdditiveIconTooltip);
             var subtractiveIcon     = ChiselEditorResources.GetIconContent(kSubtractiveIconName, kSubtractiveIconTooltip);
             var intersectingIcon    = ChiselEditorResources.GetIconContent(kIntersectingIconName, kIntersectingIconTooltip);
+#if USE_MANAGED_CSG_IMPLEMENTATION
             var copyIcon            = ChiselEditorResources.GetIconContent(kCopyIconName, kCopyIconTooltip);
+#endif
 
             using (new EditorGUIUtility.IconSizeScope(new Vector2(16, 16)))     // This ensures that the icons will be the same size on regular displays and HDPI displays
                                                                                 // Note that the loaded images are different sizes on different displays
@@ -448,8 +455,10 @@ namespace Chisel.Editors
                     operationProp.enumValueIndex = (int)CSGOperationType.Subtractive;
                 if (Toggle((operation == CSGOperationType.Intersecting), intersectingIcon, styles.rightButton))
                     operationProp.enumValueIndex = (int)CSGOperationType.Intersecting;
+#if USE_MANAGED_CSG_IMPLEMENTATION
                 if (Toggle((operation == CSGOperationType.Copy), copyIcon, styles.rightButton))
                     operationProp.enumValueIndex = (int)CSGOperationType.Copy;
+#endif
             }
         }
 
@@ -466,7 +475,9 @@ namespace Chisel.Editors
         const string kAdditiveIconName          = "csg_" + nameof(CSGOperationType.Additive);
         const string kSubtractiveIconName       = "csg_" + nameof(CSGOperationType.Subtractive);
         const string kIntersectingIconName      = "csg_" + nameof(CSGOperationType.Intersecting);
+#if USE_MANAGED_CSG_IMPLEMENTATION
         const string kCopyIconName              = "csg_" + nameof(CSGOperationType.Copy);
+#endif
         
         public GUIContent GetHierarchyIconForGenericNode(ChiselNode node)
         {
@@ -482,7 +493,9 @@ namespace Chisel.Editors
                 case CSGOperationType.Additive:         return ChiselEditorResources.GetIconContent(kAdditiveIconName,     $"Additive {node.NodeTypeName}")[0];
                 case CSGOperationType.Subtractive:      return ChiselEditorResources.GetIconContent(kSubtractiveIconName,  $"Subtractive {node.NodeTypeName}")[0];
                 case CSGOperationType.Intersecting:     return ChiselEditorResources.GetIconContent(kIntersectingIconName, $"Intersecting {node.NodeTypeName}")[0];
+#if USE_MANAGED_CSG_IMPLEMENTATION
                 case CSGOperationType.Copy:             return ChiselEditorResources.GetIconContent(kCopyIconName,         $"Copy {node.NodeTypeName}")[0];
+#endif
             }
         }
     }

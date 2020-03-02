@@ -68,19 +68,33 @@ namespace Chisel.Core
             UnityEngine.Profiling.Profiler.BeginSample("PerformAllCSG");
             try { PerformAllCSG(treeBrushes); } finally { UnityEngine.Profiling.Profiler.EndSample(); }
 
-            for (int b0 = 0; b0 < treeBrushes.Count; b0++)
-            {
-                var brush0NodeID = treeBrushes[b0];
-                var output = CSGManager.GetBrushInfo(brush0NodeID);
-                var outputLoops = output.brushOutputLoops;
-                outputLoops.vertexSoup.CleanUp();
-            } 
 
             {
                 var flags = nodeFlags[treeNodeIndex];
                 flags.UnSetNodeFlag(NodeStatusFlags.TreeNeedsUpdate);
                 flags.SetNodeFlag(NodeStatusFlags.TreeMeshNeedsUpdate);
                 nodeFlags[treeNodeIndex] = flags;
+            }
+            return true;
+        }
+
+        internal static bool CleanTree(int treeNodeID)
+        {
+            if (!IsValidNodeID(treeNodeID) || !AssertNodeType(treeNodeID, CSGNodeType.Tree))
+                return false;
+
+            var treeNodeIndex = treeNodeID - 1;
+            var treeInfo = CSGManager.nodeHierarchies[treeNodeIndex].treeInfo;
+            if (treeInfo == null)
+                return false;
+
+            var treeBrushes = treeInfo.treeBrushes;
+            for (int b0 = 0; b0 < treeBrushes.Count; b0++)
+            {
+                var brush0NodeID = treeBrushes[b0];
+                var output = CSGManager.GetBrushInfo(brush0NodeID);
+                var outputLoops = output.brushOutputLoops;
+                outputLoops.vertexSoup.Clear();
             }
             return true;
         }

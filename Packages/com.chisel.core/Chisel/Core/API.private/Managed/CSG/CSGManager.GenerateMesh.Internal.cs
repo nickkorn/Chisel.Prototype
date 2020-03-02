@@ -434,6 +434,17 @@ namespace Chisel.Core
                 UnityEngine.Profiling.Profiler.EndSample();
             }
 
+            UnityEngine.Profiling.Profiler.BeginSample("Clean");
+            try
+            {
+                CleanTree(treeNodeID);
+            }
+            finally
+            {
+                UnityEngine.Profiling.Profiler.EndSample();
+            }
+
+
             {
                 var flags = nodeFlags[treeNodeIndex];
                 flags.UnSetNodeFlag(NodeStatusFlags.TreeMeshNeedsUpdate);
@@ -841,6 +852,8 @@ namespace Chisel.Core
                 }
             }
 
+            // TODO: implement
+            /*
             var foundOperations = new List<int>();
             for (var i = 0; i < branches.Count; i++)
             {
@@ -854,9 +867,9 @@ namespace Chisel.Core
 
             for (int i = 0; i < foundOperations.Count; i++)
             {
-                // TODO: implement
                 //UpdateChildOperationTouching(foundOperations[i]);
             }
+            */
 
             for (var i = 0; i < branches.Count; i++)
             {

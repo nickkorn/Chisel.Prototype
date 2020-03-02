@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
@@ -1301,23 +1301,37 @@ namespace Chisel.Core
 
         internal static void NotifyBrushMeshRemoved(int brushMeshID)
         {
-            for (int i = 0; i < brushes.Count; i++)
+            // TODO: have some way to lookup this directly instead of going through list
+            for (int i = 0; i < nodeHierarchies.Count; i++)
             {
-                var brush = new CSGTreeBrush() { brushNodeID = brushes[i] };
-                if (brush.BrushMesh.brushMeshID != brushMeshID)
+                var nodeHierarchy = nodeHierarchies[i];
+                if (nodeHierarchy.brushInfo == null ||
+                    nodeHierarchy.treeNodeID == CSGTreeNode.InvalidNodeID)
                     continue;
-                brush.BrushMesh = BrushMeshInstance.InvalidInstance;
+
+                if (nodeHierarchy.brushInfo.brushMeshInstanceID != brushMeshID)
+                    continue;
+
+                if (CSGTreeNode.IsNodeIDValid(nodeHierarchy.treeNodeID))
+                    CSGManager.SetBrushMeshID(nodeHierarchy.treeNodeID, BrushMeshInstance.InvalidInstance.BrushMeshID);
             }
         }
 
         internal static void NotifyBrushMeshModified(int brushMeshID)
         {
-            for (int i = 0; i < brushes.Count; i++)
+            // TODO: have some way to lookup this directly instead of going through list
+            for (int i = 0; i < nodeHierarchies.Count; i++)
             {
-                var brush = new CSGTreeBrush() { brushNodeID = brushes[i] };
-                if (brush.BrushMesh.brushMeshID != brushMeshID)
+                var nodeHierarchy = nodeHierarchies[i];
+                if (nodeHierarchy.brushInfo == null ||
+                    nodeHierarchy.treeNodeID == CSGTreeNode.InvalidNodeID)
                     continue;
-                brush.SetDirty();
+
+                if (nodeHierarchy.brushInfo.brushMeshInstanceID != brushMeshID)
+                    continue;
+
+                if (CSGTreeNode.IsNodeIDValid(nodeHierarchy.treeNodeID))
+                    CSGTreeNode.SetDirty(nodeHierarchy.treeNodeID);
             }
         }
 

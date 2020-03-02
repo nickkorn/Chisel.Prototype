@@ -21,12 +21,12 @@ namespace Chisel.Core
         public const float  kSqrDistanceEpsilon	    = kDistanceEpsilon * kDistanceEpsilon;
         public const float  kMergeEpsilon	        = 0.0005f;
         public const float  kSqrMergeEpsilon	    = kMergeEpsilon * kMergeEpsilon;
-        const float         kNormalEpsilon			= 0.9999f;
-        const float         kPlaneDistanceEpsilon	= 0.0006f;
+        public const float  kNormalEpsilon			= 0.9999f;
+        public const float  kPlaneDistanceEpsilon	= 0.0006f;
 
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal static bool IsDegenerate(VertexSoup soup, List<ushort> indices)
+        internal static bool IsDegenerate(in VertexSoup soup, List<ushort> indices)
         {
             if (indices.Count < 3)
                 return true;
@@ -87,7 +87,7 @@ namespace Chisel.Core
             if (outputLoops.basePolygons.Capacity < polygons.Length)
                 outputLoops.basePolygons.Capacity = polygons.Length;
 
-            outputLoops.vertexSoup.Clear(vertices.Length);
+            outputLoops.vertexSoup.Initialize(vertices.Length);
 
 
             var removeIdenticalIndicesJob = new RemoveIdenticalIndicesJob

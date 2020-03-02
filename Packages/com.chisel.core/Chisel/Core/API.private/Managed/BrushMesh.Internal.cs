@@ -15,13 +15,16 @@ namespace Chisel.Core
                           BrushMesh.HalfEdge[] inHalfEdges, 
                           BrushMesh.Polygon[]  inPolygons)
         {
-            this.vertices = new Vector3[inVertices.Length];
+            if (this.vertices == null || this.vertices.Length != inVertices.Length)
+                this.vertices = new Vector3[inVertices.Length];
             Array.Copy(inVertices, this.vertices, inVertices.Length);
 
-            this.halfEdges = new HalfEdge[inHalfEdges.Length];
+            if (this.halfEdges == null || this.halfEdges.Length != inHalfEdges.Length)
+                this.halfEdges = new HalfEdge[inHalfEdges.Length];
             Array.Copy(inHalfEdges, this.halfEdges, inHalfEdges.Length);
 
-            this.polygons = new Polygon[inPolygons.Length];
+            if (this.polygons == null || this.polygons.Length != inPolygons.Length)
+                this.polygons = new Polygon[inPolygons.Length];
             Array.Copy(inPolygons, this.polygons, inPolygons.Length);
 
             UpdateHalfEdgePolygonIndices();

@@ -26,7 +26,7 @@ namespace Chisel.Core
         public int otherVertexCount;
 
 
-        public void FindIntersections(VertexSoup vertexSoup, List<ushort> indices, List<ushort> otherIndices, NativeArray<float4> selfPlanes)
+        public void FindIntersections(in VertexSoup vertexSoup, List<ushort> indices, List<ushort> otherIndices, NativeArray<float4> selfPlanes)
         {
             var vertices = vertexSoup.vertices;
 
@@ -58,7 +58,7 @@ namespace Chisel.Core
             Execute();
         }
 
-        public void GetOutput(VertexSoup vertexSoup, List<ushort> indices)
+        public void GetOutput(in VertexSoup vertexSoup, List<ushort> indices)
         {
             if (vertexCount <= indices.Count)
                 return;

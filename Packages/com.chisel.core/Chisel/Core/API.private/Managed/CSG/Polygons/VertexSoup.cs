@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
@@ -16,20 +16,23 @@ namespace Chisel.Core
 #if USE_MANAGED_CSG_IMPLEMENTATION
     public sealed class VertexSoup
     {
+        public const int    kMaxVertexCount = 65000;
+        const uint          kHashTableSize  = 6529u;
+
         struct ChainedIndex
         {
-            public ushort vertexIndex;
-            public int nextChainIndex;
+            public ushort   vertexIndex;
+            public int      nextChainIndex;
         }
 
         public List<float3> vertices = new List<float3>();
         public NativeArray<float3> vertexArray;
+        public int vertexCount;
         List<ChainedIndex> chainedIndices = new List<ChainedIndex>();
         int[] hashTable = new int[(int)kHashTableSize];
 
         // TODO: measure the hash function and see how well it works
         const long  kHashMagicValue = (long)1099511628211ul;
-        const uint  kHashTableSize  = 6529u;
 
         const float kCellSize       = CSGManagerPerformCSG.kDistanceEpsilon * 2;
 
@@ -42,7 +45,7 @@ namespace Chisel.Core
 
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void Clear(int minCapacity)
+        public void Initialize(int minCapacity)
         {
             if (vertices.Capacity < minCapacity)
                 vertices.Capacity = minCapacity;
@@ -54,10 +57,12 @@ namespace Chisel.Core
                 hashTable[i] = -1;
             if (vertexArray.IsCreated)
                 vertexArray.Dispose();
+
+            vertexArray = new NativeArray<float3>(VertexSoup.kMaxVertexCount, Allocator.Persistent, options: NativeArrayOptions.UninitializedMemory);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal void CleanUp()
+        internal void Clear()
         {
             if (vertexArray.IsCreated)
                 vertexArray.Dispose();

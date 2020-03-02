@@ -60,7 +60,7 @@ namespace Chisel.Core
             return true;
         }
 
-        public unsafe static OperationResult PerformBooleanIntersection(VertexSoup soup, Loop polygon1, Loop polygon2, List<Loop> resultLoops)
+        public unsafe static OperationResult PerformBooleanIntersection(in VertexSoup soup, Loop polygon1, Loop polygon2, List<Loop> resultLoops)
         {
             UnityEngine.Profiling.Profiler.BeginSample("PerformBooleanOperation");
             try
@@ -170,7 +170,7 @@ namespace Chisel.Core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal unsafe static bool IsPointInPolygon(float3 right, float3 forward, List<ushort> indices, VertexSoup soup, float3 point)
+        internal unsafe static bool IsPointInPolygon(float3 right, float3 forward, List<ushort> indices, in VertexSoup soup, float3 point)
         {
             var px = math.dot(right, point);
             var py = math.dot(forward, point);
@@ -212,7 +212,7 @@ namespace Chisel.Core
 
 
         //*
-        internal static void Dump(System.Text.StringBuilder builder, Loop categorized_loop, VertexSoup soup, Quaternion rotation)
+        internal static void Dump(System.Text.StringBuilder builder, Loop categorized_loop, in VertexSoup soup, Quaternion rotation)
         {
             //builder.AppendLine($"loop ({categorized_loop.indices.Count}):");
             //builder.AppendLine($"loop {categorized_loop.loopIndex}:");
@@ -282,7 +282,7 @@ namespace Chisel.Core
         }
 
         static readonly List<Loop> s_OverlappingArea = new List<Loop>();
-        internal static void Intersect(VertexSoup brushVertices, List<Loop> loopsOnBrushSurface, Loop surfaceLoop, Loop intersectionLoop, CategoryGroupIndex newHoleCategory)
+        internal static void Intersect(in VertexSoup brushVertices, List<Loop> loopsOnBrushSurface, Loop surfaceLoop, Loop intersectionLoop, CategoryGroupIndex newHoleCategory)
         {
             // It might look like we could just set the interiorCategory of brush_intersection here, and let all other cut loops copy from it below,
             // but the same brush_intersection might be used by another categorized_loop and then we'd try to reroute it again, which wouldn't work
@@ -373,13 +373,13 @@ namespace Chisel.Core
 
         // Clean up, after performing CSG
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal static void CleanUp(VertexSoup soup, List<Loop>[] surfaceLoops)
+        internal static void CleanUp(in VertexSoup soup, List<Loop>[] surfaceLoops)
         {
             for (int surfaceIndex = 0; surfaceIndex < surfaceLoops.Length; surfaceIndex++)
                 CleanUp(soup, surfaceLoops[surfaceIndex], surfaceIndex);
         }
 
-        internal static void CleanUp(VertexSoup brushVertices, List<Loop> baseloops, int surfaceIndex)
+        internal static void CleanUp(in VertexSoup brushVertices, List<Loop> baseloops, int surfaceIndex)
         {
             for (int l = baseloops.Count - 1; l >= 0; l--)
             {
@@ -506,7 +506,7 @@ namespace Chisel.Core
             return normal;
         }
 
-        static void Subtract(VertexSoup soup, Loop loop1, Loop loop2)
+        static void Subtract(in VertexSoup soup, Loop loop1, Loop loop2)
         {
             if (loop1.edges.Count == 0 ||
                 loop2.edges.Count == 0)
@@ -567,7 +567,7 @@ namespace Chisel.Core
             }
         }
 
-        static void Merge(VertexSoup soup, Loop loop1, Loop loop2)
+        static void Merge(in VertexSoup soup, Loop loop1, Loop loop2)
         {
             if (loop1.edges.Count == 0 ||
                 loop2.edges.Count == 0)

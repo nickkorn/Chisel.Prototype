@@ -515,11 +515,11 @@ namespace Chisel.Core
 
                             // TODO: should be having a Loop for each plane that intersects this vertex, and add that vertex
                             var vertexIndex1 = brushVertices1.Add(worldVertex);
-                            holeLoops1.FindOrAddLoop(intersectingPlaneIndices1[index - 1], brush2).AddIndex(brushVertices1, vertexIndex1);
+                            holeLoops1.FindOrAddLoop(intersectingPlaneIndices1[index - 1], brush2).AddIndex(vertexIndex1);
 
                             var vertexIndex2 = brushVertices2.Add(worldVertex);
-                            holeLoops2.FindOrAddLoop(planePair2.P0, brush1).AddIndex(brushVertices2, vertexIndex2);
-                            holeLoops2.FindOrAddLoop(planePair2.P1, brush1).AddIndex(brushVertices2, vertexIndex2);
+                            holeLoops2.FindOrAddLoop(planePair2.P0, brush1).AddIndex(vertexIndex2);
+                            holeLoops2.FindOrAddLoop(planePair2.P1, brush1).AddIndex(vertexIndex2);
 
                             while (vertexReader.RemainingItemCount == 0 && index < maxIndex)
                                 vertexReader.BeginForEachIndex(index++);
@@ -559,11 +559,11 @@ namespace Chisel.Core
 
                             // TODO: should be having a Loop for each plane that intersects this vertex, and add that vertex
                             var vertexIndex1 = brushVertices1.Add(worldVertex);
-                            holeLoops1.FindOrAddLoop(intersectingPlaneIndices1[a], brush2).AddIndex(brushVertices1, vertexIndex1);
+                            holeLoops1.FindOrAddLoop(intersectingPlaneIndices1[a], brush2).AddIndex(vertexIndex1);
 
                             var vertexIndex2 = brushVertices2.Add(worldVertex);
-                            holeLoops2.FindOrAddLoop(planePair2.P0, brush1).AddIndex(brushVertices2, vertexIndex2);
-                            holeLoops2.FindOrAddLoop(planePair2.P1, brush1).AddIndex(brushVertices2, vertexIndex2);
+                            holeLoops2.FindOrAddLoop(planePair2.P0, brush1).AddIndex(vertexIndex2);
+                            holeLoops2.FindOrAddLoop(planePair2.P1, brush1).AddIndex(vertexIndex2);
                         }
                     }
                 }
@@ -645,7 +645,7 @@ namespace Chisel.Core
                             worldVertexIndex = brushVertices1.Add(worldVertex);
 
                         var planeLoop = holeLoops1.FindOrAddLoop(planeIndex, brush2);
-                        planeLoop.AddIndex(brushVertices1, (ushort)worldVertexIndex);
+                        planeLoop.AddIndex((ushort)worldVertexIndex);
                     }
                 }
             }
