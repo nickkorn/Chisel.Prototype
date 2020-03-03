@@ -91,7 +91,7 @@ namespace Chisel.Core
             version = other.version;
             if (other.vertices != null)
             {
-                vertices = new Vector3[other.vertices.Length];
+                vertices = new float3[other.vertices.Length];
                 Array.Copy(other.vertices, this.vertices, other.vertices.Length);
             }
             if (other.halfEdges != null)
@@ -182,7 +182,7 @@ namespace Chisel.Core
 #endif
 
         /// <value>The vertices of this <see cref="Chisel.Core.BrushMesh"/>.</value> 
-        public Vector3[]	vertices;
+        public float3[]	    vertices;
 
         /// <value>An array of <see cref="Chisel.Core.BrushMesh.HalfEdge"/> that define the edges of a <see cref="Chisel.Core.BrushMesh"/>.
         /// This array must be equal in length to <see cref="halfEdgePolygonIndices"/>s.</value>

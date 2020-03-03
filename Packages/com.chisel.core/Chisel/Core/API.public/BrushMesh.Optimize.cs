@@ -4,6 +4,7 @@ using Chisel.Core;
 using System.Collections.Generic;
 using System;
 using System.Runtime.CompilerServices;
+using Unity.Mathematics;
 
 namespace Chisel.Core
 {
@@ -279,7 +280,7 @@ namespace Chisel.Core
             return null;
         }
 
-        private static float GetEdgeHeuristic(TrianglePathCache cache, BrushMesh.Surface[] surfaces, Vector3[] vertices, int vi0, int vi1, int vi2)
+        private static float GetEdgeHeuristic(TrianglePathCache cache, BrushMesh.Surface[] surfaces, float3[] vertices, int vi0, int vi1, int vi2)
         {
             int polygonIndex;
             if (!cache.HardEdges.TryGetValue(VertPair.Create(vi0, vi1), out polygonIndex))
@@ -288,11 +289,11 @@ namespace Chisel.Core
             if (polygonIndex < 0 || polygonIndex >= surfaces.Length)
                 return float.PositiveInfinity;
             var localPlane = surfaces[polygonIndex].localPlane;
-            var error = Vector3.Dot(new Vector3(localPlane.x, localPlane.y, localPlane.z), vertices[vi2] - vertices[vi1]) - 1;
+            var error = math.dot(new float3(localPlane.x, localPlane.y, localPlane.z), vertices[vi2] - vertices[vi1]) - 1;
             return (error * error);
         }
         
-        private static float GetTriangleHeuristic(TrianglePathCache cache, BrushMesh.Surface[] surfaces, Vector3[] vertices, int vi0, int vi1, int vi2)
+        private static float GetTriangleHeuristic(TrianglePathCache cache, BrushMesh.Surface[] surfaces, float3[] vertices, int vi0, int vi1, int vi2)
         {
             var pair0 = VertPair.Create(vi0, vi1);
             var pair1 = VertPair.Create(vi1, vi2);
@@ -303,7 +304,7 @@ namespace Chisel.Core
                    GetEdgeHeuristic(cache, surfaces, vertices, vi2, vi0, vi1);
         }
 
-        private static float SplitAtEdge(out int[] triangles, TrianglePathCache cache, int[] vertexIndices, int vertexIndicesLength, Vector3[] vertices, BrushMesh.Surface[] surfaces)
+        private static float SplitAtEdge(out int[] triangles, TrianglePathCache cache, int[] vertexIndices, int vertexIndicesLength, float3[] vertices, BrushMesh.Surface[] surfaces)
         {
             if (vertexIndicesLength == 3)
             {
@@ -867,7 +868,7 @@ namespace Chisel.Core
                         continue;
 
                     var vertexV1 = vertices[v1];
-                    if ((vertexV0 - vertexV1).sqrMagnitude >= kDistanceEpsilon)
+                    if (math.lengthsq(vertexV0 - vertexV1) >= kDistanceEpsilon)
                         continue;
 
                     if (vertexRemapping == null)
@@ -1026,7 +1027,7 @@ namespace Chisel.Core
                 usedVertices[halfEdges[e].vertexIndex] = true;
 
             var vertexLookup = new int[vertices.Length];
-            var newVertices = new List<Vector3>(vertices.Length);
+            var newVertices = new List<float3>(vertices.Length);
             for (int v = 0; v < vertices.Length; v++)
             {
                 if (usedVertices[v])

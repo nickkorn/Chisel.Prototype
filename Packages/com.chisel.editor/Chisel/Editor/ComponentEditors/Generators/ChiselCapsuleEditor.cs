@@ -2,6 +2,7 @@
 using Chisel.Components;
 using UnityEditor;
 using UnityEngine;
+using Unity.Mathematics;
 
 namespace Chisel.Editors
 {
@@ -18,11 +19,8 @@ namespace Chisel.Editors
         const float kCapLineThickness			= 2.0f;
         const float kCapLineThicknessSelected   = 2.5f;
 
-        static void DrawOutline(ChiselCapsuleDefinition definition, Vector3[] vertices, LineMode lineMode)
+        static void DrawOutline(ChiselCapsuleDefinition definition, float3[] vertices, LineMode lineMode)
         {
-            //var baseColor		= UnityEditor.Handles.yAxisColor;
-            //var isDisabled	= UnitySceneExtensions.Handles.disabled;
-            //var normal		= Vector3.up;
             var sides			= definition.sides;
             
             // TODO: share this logic with GenerateCapsuleVertices
@@ -75,14 +73,14 @@ namespace Chisel.Editors
         internal static int s_TopLoopHash       = "TopLoopHash".GetHashCode();
         internal static int s_BottomLoopHash    = "BottomLoopHash".GetHashCode();
 
-        static Vector3[] vertices = null; // TODO: store this per instance? or just allocate every frame?
+        static float3[] vertices = null; // TODO: store this per instance? or just allocate every frame?
 
         protected override void OnScene(SceneView sceneView, ChiselCapsule generator)
         {
             var baseColor		= UnityEditor.Handles.yAxisColor;
             var isDisabled		= UnitySceneExtensions.SceneHandles.disabled;
             var focusControl	= UnitySceneExtensions.SceneHandleUtility.focusControl;
-            var normal			= Vector3.up;
+            var normal			= new float3(0,1,0);
 
             if (!BrushMeshFactory.GenerateCapsuleVertices(ref generator.definition, ref vertices))
                 return;

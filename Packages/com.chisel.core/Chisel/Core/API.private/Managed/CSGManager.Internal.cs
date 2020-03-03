@@ -416,10 +416,10 @@ namespace Chisel.Core
         }
 
 
-        internal static Dictionary<CSGTreeBrush, IntersectionType> GetTouchingBrushes(CSGTreeNode brush)
+        internal static List<BrushBrushIntersection> GetTouchingBrushes(CSGTreeNode brush)
         {
             var brushInfo = GetBrushInfo(brush.nodeID);
-            return brushInfo.brushTouch;
+            return brushInfo.brushBrushIntersections;
         }
 
         internal static bool		IsValidNodeID					(Int32 nodeID)	{ return (nodeID > 0 && nodeID <= nodeHierarchies.Count) && nodeFlags[nodeID - 1].nodeType != CSGNodeType.None; }

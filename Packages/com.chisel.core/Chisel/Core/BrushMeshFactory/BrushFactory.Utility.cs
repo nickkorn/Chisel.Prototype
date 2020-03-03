@@ -11,6 +11,7 @@ using Plane = UnityEngine.Plane;
 using Debug = UnityEngine.Debug;
 using UnitySceneExtensions;
 using System.Collections.Generic;
+using Unity.Mathematics;
 
 namespace Chisel.Core
 {
@@ -18,7 +19,7 @@ namespace Chisel.Core
     public sealed partial class BrushMeshFactory
     {
         // TODO: clean up
-        public static bool GenerateSegmentedSubMesh(ref BrushMesh brushMesh, int horzSegments, int vertSegments, Vector3[] segmentVertices, bool topCap, bool bottomCap, int topVertex, int bottomVertex, in ChiselSurfaceDefinition surfaceDefinition)
+        public static bool GenerateSegmentedSubMesh(ref BrushMesh brushMesh, int horzSegments, int vertSegments, float3[] segmentVertices, bool topCap, bool bottomCap, int topVertex, int bottomVertex, in ChiselSurfaceDefinition surfaceDefinition)
         {
             // FIXME: hack, to fix math below .. 
             vertSegments++;
@@ -185,7 +186,7 @@ namespace Chisel.Core
             None = 3
         }
 
-        public static bool CreateExtrudedSubMesh(ref BrushMesh brushMesh, int segments, int[] segmentDescriptionIndices, int segmentTopIndex, int segmentBottomIndex, Vector3[] vertices, in ChiselSurfaceDefinition surfaceDefinition)
+        public static bool CreateExtrudedSubMesh(ref BrushMesh brushMesh, int segments, int[] segmentDescriptionIndices, int segmentTopIndex, int segmentBottomIndex, float3[] vertices, in ChiselSurfaceDefinition surfaceDefinition)
         {
             if (vertices.Length < 3)
                 return false;
@@ -219,8 +220,8 @@ namespace Chisel.Core
                 var v2 = vertices[e + segments];
                 var v3 = vertices[p + segments];
 
-                var equals03 = (v0 - v3).sqrMagnitude < 0.0001f;
-                var equals12 = (v1 - v2).sqrMagnitude < 0.0001f;
+                var equals03 = math.lengthsq(v0 - v3) < 0.0001f;
+                var equals12 = math.lengthsq(v1 - v2) < 0.0001f;
                 if (equals03)
                 {
                     if (equals12)
@@ -573,13 +574,13 @@ namespace Chisel.Core
             return true;
         }
 
-        public static void CreateExtrudedSubMesh(ref BrushMesh brushMesh, Vector3[] sideVertices, Vector3 extrusion, int[] segmentDescriptionIndices, in ChiselSurfaceDefinition surfaceDefinition)
+        public static void CreateExtrudedSubMesh(ref BrushMesh brushMesh, float3[] sideVertices, float3 extrusion, int[] segmentDescriptionIndices, in ChiselSurfaceDefinition surfaceDefinition)
         {
             const float distanceEpsilon = 0.0000001f;
             for (int i = sideVertices.Length - 1; i >= 0; i--)
             {
                 var j = (i - 1 + sideVertices.Length) % sideVertices.Length;
-                var magnitude = (sideVertices[j] - sideVertices[i]).sqrMagnitude;
+                var magnitude = math.lengthsq(sideVertices[j] - sideVertices[i]);
                 if (magnitude < distanceEpsilon)
                 {
                     // TODO: improve on this
@@ -592,7 +593,7 @@ namespace Chisel.Core
             var segments		= sideVertices.Length;
             var isSegmentConvex = new sbyte[segments];
             var edgeIndices		= new int[segments * 2];
-            var vertices		= new Vector3[segments * 2];
+            var vertices		= new float3[segments * 2];
 
             var polygonCount	= 2;
             var edgeOffset		= segments + segments;

@@ -8,6 +8,7 @@ using Chisel;
 using Chisel.Core;
 using Chisel.Components;
 using UnitySceneExtensions;
+using Unity.Mathematics;
 
 namespace Chisel.Editors
 {
@@ -24,11 +25,8 @@ namespace Chisel.Editors
         const float kCapLineThickness			= 2.0f;
         const float kCapLineThicknessSelected   = 2.5f;
 
-        static void DrawOutline(ChiselHemisphereDefinition definition, Vector3[] vertices, LineMode lineMode)
+        static void DrawOutline(ChiselHemisphereDefinition definition, float3[] vertices, LineMode lineMode)
         {
-            //var baseColor		= UnityEditor.Handles.yAxisColor;
-            //var isDisabled		= UnitySceneExtensions.Handles.disabled;
-            //var normal			= Vector3.up;
             var sides			= definition.horizontalSegments;
 
             var topSegments		= Mathf.Max(definition.verticalSegments,    0);
@@ -65,14 +63,14 @@ namespace Chisel.Editors
         internal static int s_TopHash		= "TopHemisphereHash".GetHashCode();
 
 
-        static Vector3[] vertices = null; // TODO: store this per instance? or just allocate every frame?
+        static float3[] vertices = null; // TODO: store this per instance? or just allocate every frame?
         
         protected override void OnScene(SceneView sceneView, ChiselHemisphere generator)
         {
             var baseColor		= UnityEditor.Handles.yAxisColor;
             var isDisabled		= UnitySceneExtensions.SceneHandles.disabled;
             var focusControl	= UnitySceneExtensions.SceneHandleUtility.focusControl;
-            var normal			= Vector3.up;
+            var normal			= new float3(0,1,0);
 
             if (!BrushMeshFactory.GenerateHemisphereVertices(ref generator.definition, ref vertices))
                 return;

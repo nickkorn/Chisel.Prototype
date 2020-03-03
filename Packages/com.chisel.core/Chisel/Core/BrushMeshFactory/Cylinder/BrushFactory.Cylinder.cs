@@ -10,6 +10,7 @@ using Plane = UnityEngine.Plane;
 using Debug = UnityEngine.Debug;
 using UnitySceneExtensions;
 using System.Collections.Generic;
+using Unity.Mathematics;
 
 namespace Chisel.Core
 {
@@ -154,7 +155,7 @@ namespace Chisel.Core
         }
         
         // TODO: could probably figure out "inverse" from direction of topY compared to bottomY
-        public static Vector3[] GetConeFrustumVertices(ChiselCircleDefinition  definition, float topHeight, float rotation, int segments, ref Vector3[] vertices, bool inverse = false)
+        public static float3[] GetConeFrustumVertices(ChiselCircleDefinition  definition, float topHeight, float rotation, int segments, ref float3[] vertices, bool inverse = false)
         {
             var rotate			= Quaternion.AngleAxis(rotation, Vector3.up);
             var bottomAxisX		= rotate * Vector3.right   * definition.diameterX * 0.5f;
@@ -164,7 +165,7 @@ namespace Chisel.Core
 
             if (vertices == null ||
                 vertices.Length != segments + 1)
-                vertices = new Vector3[segments + 1];
+                vertices = new float3[segments + 1];
 
             float angleOffset = ((segments & 1) == 1) ? 0.0f : ((360.0f / segments) * 0.5f);
             
@@ -185,7 +186,7 @@ namespace Chisel.Core
         }
 
 
-        public static Vector3[] GetConicalFrustumVertices(ChiselCircleDefinition  bottom, ChiselCircleDefinition  top, float rotation, int segments, ref Vector3[] vertices)
+        public static float3[] GetConicalFrustumVertices(ChiselCircleDefinition  bottom, ChiselCircleDefinition  top, float rotation, int segments, ref float3[] vertices)
         {
             if (top.height > bottom.height) { var temp = top; top = bottom; bottom = temp; }
 
@@ -201,7 +202,7 @@ namespace Chisel.Core
 
             if (vertices == null ||
                 vertices.Length != segments * 2)
-                vertices = new Vector3[segments * 2];
+                vertices = new float3[segments * 2];
 
             float angleOffset = ((segments & 1) == 1) ? 0.0f : ((360.0f / segments) * 0.5f);
 
@@ -242,7 +243,7 @@ namespace Chisel.Core
 
             if (top.diameterX == 0)
             {
-                var vertices = new Vector3[segments + 1];
+                var vertices = new float3[segments + 1];
                 GetConeFrustumVertices(bottom, top.height, rotation, segments, ref vertices, inverse: false);
             
                 // TODO: the polygon/half-edge part would be the same for any extruded shape and should be re-used
@@ -250,7 +251,7 @@ namespace Chisel.Core
             } else
             if (bottom.diameterX == 0)
             {
-                var vertices = new Vector3[segments + 1];
+                var vertices = new float3[segments + 1];
                 GetConeFrustumVertices(top, bottom.height, rotation, segments, ref vertices, inverse: true);
             
                 // TODO: the polygon/half-edge part would be the same for any extruded shape and should be re-used
@@ -261,7 +262,7 @@ namespace Chisel.Core
                 if (top.height > bottom.height)
                 { var temp = top; top = bottom; bottom = temp; }
 
-                var vertices = new Vector3[segments * 2];
+                var vertices = new float3[segments * 2];
                 GetConicalFrustumVertices(bottom, top, rotation, segments, ref vertices);
             
                 // TODO: the polygon/half-edge part would be the same for any extruded shape and should be re-used
@@ -271,7 +272,7 @@ namespace Chisel.Core
             return true;
         }
 
-        static void CreateConeSubMesh(ref BrushMesh brushMesh, int segments, int[] segmentDescriptionIndices, Vector3[] vertices, in ChiselSurfaceDefinition surfaceDefinition)
+        static void CreateConeSubMesh(ref BrushMesh brushMesh, int segments, int[] segmentDescriptionIndices, float3[] vertices, in ChiselSurfaceDefinition surfaceDefinition)
         {
             ref var chiselSurface0 = ref surfaceDefinition.surfaces[0];
 

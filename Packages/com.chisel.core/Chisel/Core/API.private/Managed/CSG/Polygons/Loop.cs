@@ -68,7 +68,6 @@ namespace Chisel.Core
         }
 #endif
 
-        public readonly HashSet<ushort>     indexUsed   = new HashSet<ushort>();
         public readonly List<ushort>        indices     = new List<ushort>();
         public List<Edge>                   edges       = new List<Edge>();
         public bool[]                       destroyed;
@@ -125,18 +124,18 @@ namespace Chisel.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ClearAllIndices()
         {
-            indexUsed.Clear();
             indices.Clear();
             edges.Clear();
         }
 
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void AddIndex(ushort newIndex)
+        internal void AddIndices(NativeList<PlaneVertexIndexPair> foundIndices, int offset, int length)
         {
-            if (indexUsed.Contains(newIndex))
-                return;
-            indexUsed.Add(newIndex);
-            indices.Add(newIndex);
+            for (int j = 0; j < length; j++, offset++)
+            {
+                indices.Add(foundIndices[offset].vertexIndex);
+            }
         }
 
 

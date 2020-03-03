@@ -8,6 +8,7 @@ using Chisel;
 using Chisel.Core;
 using Chisel.Components;
 using UnitySceneExtensions;
+using Unity.Mathematics;
 
 namespace Chisel.Editors
 {
@@ -42,7 +43,7 @@ namespace Chisel.Editors
             }
             */
             
-            var shapeVertices		= new List<Vector2>();
+            var shapeVertices		= new List<float2>();
             var shapeSegmentIndices = new List<int>();
             BrushMeshFactory.GetPathVertices(generator.definition.shape, generator.definition.curveSegments, shapeVertices, shapeSegmentIndices);
 

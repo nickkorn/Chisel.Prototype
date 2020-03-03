@@ -49,17 +49,69 @@ namespace Chisel.Core
     {
         public Outline      brushOutline   = new Outline();
         public Outline[]    surfaceOutlines;
-        public Vector3[]    vertices;
+        public float3[]     vertices;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Reset()
         {
             brushOutline.Reset();
             surfaceOutlines = new Outline[0];
-            vertices = new Vector3[0];
+            vertices = new float3[0];
         }
     };
 #endif
+    public enum IntersectionType
+    {
+        NoIntersection,
+        Intersection,
+        AInsideB,
+        BInsideA,
+
+        InvalidValue
+    };
+
+    public struct BrushBrushIntersection : IEqualityComparer<BrushBrushIntersection>, IEquatable<BrushBrushIntersection>
+    {
+        public int brushNodeID0;
+        public int brushNodeID1;
+        public IntersectionType type;
+
+        #region Equals
+        public override bool Equals(object obj)
+        {
+            if (obj == null || !(obj is BrushBrushIntersection))
+                return false;
+
+            var other = (BrushBrushIntersection)obj;
+            return  (brushNodeID0 == other.brushNodeID0) || (brushNodeID1 == other.brushNodeID1);
+        }
+
+        public bool Equals(BrushBrushIntersection x, BrushBrushIntersection y)
+        {
+            return (x.brushNodeID0 == y.brushNodeID0) || (x.brushNodeID1 == y.brushNodeID1);
+        }
+
+        public bool Equals(BrushBrushIntersection other)
+        {
+            return (brushNodeID0 == other.brushNodeID0) || (brushNodeID1 == other.brushNodeID1);
+        }
+        #endregion
+
+        #region GetHashCode
+        public override int GetHashCode()
+        {
+            return GetHashCode(this);
+        }
+
+        public int GetHashCode(BrushBrushIntersection obj)
+        {
+            if (obj.brushNodeID0 < obj.brushNodeID1)
+                return ((ulong)obj.brushNodeID0 + ((ulong)obj.brushNodeID1 << 32)).GetHashCode();
+            else
+                return ((ulong)obj.brushNodeID1 + ((ulong)obj.brushNodeID0 << 32)).GetHashCode();
+        }
+        #endregion
+    }
 
     static partial class CSGManager
     {
@@ -102,7 +154,7 @@ namespace Chisel.Core
             public override int GetHashCode() { return surfaceParameter.GetHashCode() ^ meshQuery.GetHashCode(); }
         };
 
-        internal sealed class BrushInfo
+        internal sealed class BrushInfo : IDisposable
         {
             public int					    brushMeshInstanceID;
             public UInt64                   brushOutlineGeneration;
@@ -114,10 +166,13 @@ namespace Chisel.Core
             public BrushOutline             brushOutline        = new BrushOutline();
 
 
-            // TODO: rename
-            public readonly Dictionary<CSGTreeBrush, IntersectionType> brushTouch = new Dictionary<CSGTreeBrush, IntersectionType>();
+            public readonly List<BrushBrushIntersection> brushBrushIntersections = new List<BrushBrushIntersection>();
 
             public readonly RoutingTable    routingTable        = new RoutingTable();
+
+            public void Dispose()
+            {
+            }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void Reset()
@@ -128,7 +183,7 @@ namespace Chisel.Core
                     brushSurfaceLoops.Clear();
                 brushOutputLoops.Clear();
                 renderBuffers.surfaceRenderBuffers.Clear();
-                brushTouch.Clear();
+                brushBrushIntersections.Clear();
                 routingTable.Clear();
             }
         }

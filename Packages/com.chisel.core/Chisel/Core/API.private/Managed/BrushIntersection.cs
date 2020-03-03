@@ -77,7 +77,7 @@ namespace Chisel.Core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        static int WhichSide(Vector3[] vertices, float4 plane, double epsilon)
+        static int WhichSide(float3[] vertices, float4 plane, double epsilon)
         {
             {
                 float t = math.dot(plane, new float4(vertices[0], 1));

@@ -8,6 +8,7 @@ using Chisel;
 using Chisel.Core;
 using Chisel.Components;
 using UnitySceneExtensions;
+using Unity.Mathematics;
 
 namespace Chisel.Editors
 {
@@ -78,7 +79,7 @@ namespace Chisel.Editors
                 topPoint	= topHeight;
                 bottomPoint = bottomHeight;
 
-                vertices = new Vector3[generator.Sides * 2];
+                vertices = new float3[generator.Sides * 2];
             }
 
             ChiselCylinder generator;
@@ -106,8 +107,8 @@ namespace Chisel.Editors
             Vector3 topPoint;
             Vector3 bottomPoint;
 
-            Vector3[] vertices;
-            Vector3[] dottedVertices;
+            float3[] vertices;
+            float3[] dottedVertices;
             
             internal static int s_TopHash				= "TopCylinderHash".GetHashCode();
             internal static int s_BottomHash			= "BottomCylinderHash".GetHashCode();

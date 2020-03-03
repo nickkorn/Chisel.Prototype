@@ -41,11 +41,11 @@ namespace Chisel.Core
             var touchingBrushes = CSGManager.GetTouchingBrushes(brush);
             foreach (var touch in touchingBrushes)
             {
-                var touchingBrush = touch.Key;
+                var touchingBrush = new CSGTreeBrush() { brushNodeID = touch.brushNodeID1 };
                 if (!touchingBrush.Valid)
                     continue;
 
-                var touchingType = touch.Value;
+                var touchingType = touch.type;
                 var touchingBrushIndex = touchingBrush.NodeID - 1;
                 bitset.Set(touchingBrushIndex, touchingType);
 

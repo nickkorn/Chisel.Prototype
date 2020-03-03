@@ -170,26 +170,22 @@ namespace Chisel.Core
 
                     var output1 = CSGManager.GetBrushInfo(brush1NodeID);
                     if (intersectionType == IntersectionType.NoIntersection)
-                    {
-                        output0.brushTouch[brush1] = IntersectionType.NoIntersection;
-                        output1.brushTouch[brush0] = IntersectionType.NoIntersection;
                         continue;
-                    }
 
                     if (intersectionType == IntersectionType.Intersection)
                     {
-                        output0.brushTouch[brush1] = IntersectionType.Intersection;
-                        output1.brushTouch[brush0] = IntersectionType.Intersection;
+                        output0.brushBrushIntersections.Add(new BrushBrushIntersection() { brushNodeID0 = brush0.brushNodeID, brushNodeID1 = brush1.brushNodeID, type = IntersectionType.Intersection });
+                        output1.brushBrushIntersections.Add(new BrushBrushIntersection() { brushNodeID0 = brush1.brushNodeID, brushNodeID1 = brush0.brushNodeID, type = IntersectionType.Intersection });
                     } else
                     if (intersectionType == IntersectionType.AInsideB)
                     {
-                        output0.brushTouch[brush1] = IntersectionType.AInsideB;
-                        output1.brushTouch[brush0] = IntersectionType.BInsideA;
+                        output0.brushBrushIntersections.Add(new BrushBrushIntersection() { brushNodeID0 = brush0.brushNodeID, brushNodeID1 = brush1.brushNodeID, type = IntersectionType.AInsideB });
+                        output1.brushBrushIntersections.Add(new BrushBrushIntersection() { brushNodeID0 = brush1.brushNodeID, brushNodeID1 = brush0.brushNodeID, type = IntersectionType.BInsideA });
                     } else
-                    if (intersectionType == IntersectionType.BInsideA)
+                    //if (intersectionType == IntersectionType.BInsideA)
                     {
-                        output0.brushTouch[brush1] = IntersectionType.BInsideA;
-                        output1.brushTouch[brush0] = IntersectionType.AInsideB;
+                        output0.brushBrushIntersections.Add(new BrushBrushIntersection() { brushNodeID0 = brush0.brushNodeID, brushNodeID1 = brush1.brushNodeID, type = IntersectionType.BInsideA });
+                        output1.brushBrushIntersections.Add(new BrushBrushIntersection() { brushNodeID0 = brush1.brushNodeID, brushNodeID1 = brush0.brushNodeID, type = IntersectionType.AInsideB });
                     }
                 }
             }

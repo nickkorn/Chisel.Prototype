@@ -411,15 +411,15 @@ namespace Chisel.Editors
             ClearSelection();
         }
 
-        void MoveSelectedVertices(Vector3 offset)
+        void MoveSelectedVertices(float3 offset)
         {
-            if (offset.sqrMagnitude == 0)
+            if (math.lengthsq(offset) == 0)
                 return;
 
             var vertices = brushMesh.vertices;
             Undo.RecordObject(brush, "Changed shape of Brush");
             foreach (var v in selection.selectedVertices)
-                vertices[v] += offset;
+                vertices[v] = vertices[v] + offset;
             brushMesh.CalculatePlanes();
         }
 
@@ -1193,12 +1193,12 @@ namespace Chisel.Editors
 
         // Snap a point on an edge where it intersects with the grid. 
         // Note that we're never allowed to snap to a point outside the edge
-        void SnapToGridOnEdge(Vector3 point, int edgeIndex, ref Vector3 snappedPoint, ref float bestDist)
+        void SnapToGridOnEdge(float3 point, int edgeIndex, ref Vector3 snappedPoint, ref float bestDist)
         {
-            var vertices = brushMesh.vertices;
-            var halfEdges = brushMesh.halfEdges;
-            var surfaces = brushMesh.surfaces;
-            var halfEdgePolygonIndices = brushMesh.halfEdgePolygonIndices;
+            var vertices                = brushMesh.vertices;
+            var halfEdges               = brushMesh.halfEdges;
+            var surfaces                = brushMesh.surfaces;
+            var halfEdgePolygonIndices  = brushMesh.halfEdgePolygonIndices;
             var twinIndex           = halfEdges[edgeIndex].twinIndex;
             var edgePolygonIndex    = halfEdgePolygonIndices[edgeIndex];
             var twinPolygonIndex    = halfEdgePolygonIndices[twinIndex];
@@ -1210,14 +1210,14 @@ namespace Chisel.Editors
             var vertex1 = vertices[halfEdges[edgeIndex].vertexIndex];
             var vertex2 = vertices[halfEdges[twinIndex].vertexIndex];
 
-            var grid = UnitySceneExtensions.Grid.defaultGrid;
-            var xAxis = worldToLocalMatrix.MultiplyVector(grid.Right);
-            var yAxis = worldToLocalMatrix.MultiplyVector(grid.Up);
-            var zAxis = worldToLocalMatrix.MultiplyVector(grid.Forward);
-            var center = worldToLocalMatrix.MultiplyPoint(grid.Center);
+            var grid    = UnitySceneExtensions.Grid.defaultGrid;
+            var xAxis   = (float3)worldToLocalMatrix.MultiplyVector(grid.Right);
+            var yAxis   = (float3)worldToLocalMatrix.MultiplyVector(grid.Up);
+            var zAxis   = (float3)worldToLocalMatrix.MultiplyVector(grid.Forward);
+            var center  = (float3)worldToLocalMatrix.MultiplyPoint(grid.Center);
             var spacing = grid.Spacing;
 
-            var edgeRay = new Ray(vertex1, (vertex2 - vertex1).normalized);
+            var edgeRay = new Ray(vertex1, math.normalize(vertex2 - vertex1));
 
             var snapAxis = Axis.X | Axis.Y | Axis.Z;
             if (Mathf.Abs(Vector3.Dot(xAxis, edgeLocalPlane.normal)) >= kAlignmentEpsilon) snapAxis &= ~Axis.X;
@@ -1250,8 +1250,8 @@ namespace Chisel.Editors
                     var axisPlane = new Plane(axis, (floor * axis) + offset);
                     if (axisPlane.Raycast(edgeRay, out float rayDistance))
                     {
-                        var snapPoint = edgeRay.GetPoint(rayDistance);
-                        var magnitude = (snapPoint - point).magnitude;
+                        var snapPoint = (float3)edgeRay.GetPoint(rayDistance);
+                        var magnitude = math.length(snapPoint - point);
                         if (magnitude < bestDist)
                         {
                             bestDist = magnitude;
@@ -1266,8 +1266,8 @@ namespace Chisel.Editors
                     var axisPlane = new Plane(axis, (ceil * axis) + offset);
                     if (axisPlane.Raycast(edgeRay, out float rayDistance))
                     {
-                        var snapPoint = edgeRay.GetPoint(rayDistance);
-                        var magnitude = (snapPoint - point).magnitude;
+                        var snapPoint = (float3)edgeRay.GetPoint(rayDistance);
+                        var magnitude = math.length(snapPoint - point);
                         if (magnitude < bestDist)
                         {
                             bestDist = magnitude;
@@ -1294,8 +1294,8 @@ namespace Chisel.Editors
                     var axisPlane = new Plane(axis, (floor * axis) + offset);
                     if (axisPlane.Raycast(edgeRay, out float rayDistance))
                     {
-                        var snapPoint = edgeRay.GetPoint(rayDistance);
-                        var magnitude = (snapPoint - point).magnitude;
+                        var snapPoint = (float3)edgeRay.GetPoint(rayDistance);
+                        var magnitude = math.length(snapPoint - point);
                         if (magnitude < bestDist)
                         {
                             bestDist = magnitude;
@@ -1310,8 +1310,8 @@ namespace Chisel.Editors
                     var axisPlane = new Plane(axis, (ceil * axis) + offset);
                     if (axisPlane.Raycast(edgeRay, out float rayDistance))
                     {
-                        var snapPoint = edgeRay.GetPoint(rayDistance);
-                        var magnitude = (snapPoint - point).magnitude;
+                        var snapPoint = (float3)edgeRay.GetPoint(rayDistance);
+                        var magnitude = math.length(snapPoint - point);
                         if (magnitude < bestDist)
                         {
                             bestDist = magnitude;
@@ -1338,8 +1338,8 @@ namespace Chisel.Editors
                     var axisPlane = new Plane(axis, (floor * axis) + offset);
                     if (axisPlane.Raycast(edgeRay, out float rayDistance))
                     {
-                        var snapPoint = edgeRay.GetPoint(rayDistance);
-                        var magnitude = (snapPoint - point).magnitude;
+                        var snapPoint = (float3)edgeRay.GetPoint(rayDistance);
+                        var magnitude = math.length(snapPoint - point);
                         if (magnitude < bestDist)
                         {
                             bestDist = magnitude;
@@ -1354,8 +1354,8 @@ namespace Chisel.Editors
                     var axisPlane = new Plane(axis, (ceil * axis) + offset);
                     if (axisPlane.Raycast(edgeRay, out float rayDistance))
                     {
-                        var snapPoint = edgeRay.GetPoint(rayDistance);
-                        var magnitude = (snapPoint - point).magnitude;
+                        var snapPoint = (float3)edgeRay.GetPoint(rayDistance);
+                        var magnitude = math.length(snapPoint - point);
                         if (magnitude < bestDist)
                         {
                             bestDist = magnitude;
@@ -1459,7 +1459,7 @@ namespace Chisel.Editors
         {
             var vertices = brushMesh.vertices;
             var newVertex = vertices[vertexIndex];
-            if ((prevNewVertex - newVertex).sqrMagnitude <= kEqualitySqrDistance)
+            if (math.lengthsq((float3)prevNewVertex - newVertex) <= kEqualitySqrDistance)
                 return;
 
             prevEdgeIndex = brushMesh.FindAnyHalfEdgeWithVertexIndex(vertexIndex);
@@ -2119,7 +2119,7 @@ namespace Chisel.Editors
                 // Render a dotted line along the current edge (but do not overlap it)
                 if ((s_TempEdgesState[e] & (ItemState.Hovering | ItemState.Active)) != ItemState.None)
                 {
-                    var direction = (vertex1 - vertex2).normalized * 1000.0f;
+                    var direction = math.length(vertex1 - vertex2) * 1000.0f;
                     // TODO: make this line go into infinity
                     SceneHandles.DrawDottedLine(vertex1 + direction, vertex1, 2.0f);
                     SceneHandles.DrawDottedLine(vertex2, vertex2 - direction, 2.0f);

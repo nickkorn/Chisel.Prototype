@@ -8,6 +8,7 @@ using Chisel;
 using Chisel.Core;
 using Chisel.Components;
 using UnitySceneExtensions;
+using Unity.Mathematics;
 
 namespace Chisel.Editors
 {
@@ -24,11 +25,11 @@ namespace Chisel.Editors
         const float kCapLineThickness			= 2.0f;
         const float kCapLineThicknessSelected   = 2.5f;
 
-        static void DrawOutline(ChiselStadiumDefinition definition, Vector3[] vertices, LineMode lineMode)
+        static void DrawOutline(ChiselStadiumDefinition definition, float3[] vertices, LineMode lineMode)
         {
             var sides				= definition.sides;
-            var topSides			= Mathf.Max(definition.topSides, 1) + 1;
-            var bottomSides			= Mathf.Max(definition.bottomSides, 1) + 1;
+            var topSides			= math.max(definition.topSides, 1) + 1;
+            var bottomSides			= math.max(definition.bottomSides, 1) + 1;
 
             var haveRoundedTop		= definition.haveRoundedTop;
             var haveRoundedBottom	= definition.haveRoundedBottom;
@@ -76,7 +77,7 @@ namespace Chisel.Editors
             var rightVector		= Vector3.right;
             var forwardVector	= Vector3.forward;
 
-            Vector3[] vertices = null;
+            float3[] vertices = null;
             if (!BrushMeshFactory.GenerateStadiumVertices(generator.definition, ref vertices))
                 return;
 

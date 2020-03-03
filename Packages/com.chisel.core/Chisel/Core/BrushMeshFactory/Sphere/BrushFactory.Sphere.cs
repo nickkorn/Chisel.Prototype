@@ -10,6 +10,7 @@ using Mathf = UnityEngine.Mathf;
 using Plane = UnityEngine.Plane;
 using Debug = UnityEngine.Debug;
 using static Chisel.Core.BrushMesh;
+using Unity.Mathematics;
 
 namespace Chisel.Core
 {
@@ -21,18 +22,18 @@ namespace Chisel.Core
 
             brushContainer.EnsureSize(1);
 
-            var transform = Matrix4x4.TRS(Vector3.zero, Quaternion.AngleAxis(definition.rotation, Vector3.up), Vector3.one);
+            var transform = float4x4.TRS(float3.zero, quaternion.AxisAngle(new float3(0, 1, 0), definition.rotation), new float3(1));
             return BrushMeshFactory.GenerateSphere(ref brushContainer.brushMeshes[0], definition.diameterXYZ, definition.offsetY, definition.generateFromCenter, transform, definition.horizontalSegments, definition.verticalSegments, definition.surfaceDefinition);
         }
 
         public static bool GenerateSphere(ref BrushMesh brushMesh, ref ChiselSphereDefinition definition)
         {
             definition.Validate();
-            var transform = Matrix4x4.TRS(Vector3.zero, Quaternion.AngleAxis(definition.rotation, Vector3.up), Vector3.one);
+            var transform = float4x4.TRS(float3.zero, quaternion.AxisAngle(new float3(0, 1, 0), definition.rotation), new float3(1));
             return BrushMeshFactory.GenerateSphere(ref brushMesh, definition.diameterXYZ, definition.offsetY, definition.generateFromCenter, transform, definition.horizontalSegments, definition.verticalSegments, definition.surfaceDefinition);
         }
 
-        public static bool GenerateSphere(ref BrushMesh brushMesh, Vector3 diameterXYZ, float offsetY, bool generateFromCenter, Matrix4x4 transform, int horzSegments, int vertSegments, in ChiselSurfaceDefinition surfaceDefinition)
+        public static bool GenerateSphere(ref BrushMesh brushMesh, float3 diameterXYZ, float offsetY, bool generateFromCenter, float4x4 transform, int horzSegments, int vertSegments, in ChiselSurfaceDefinition surfaceDefinition)
         {
             if (!BrushMeshFactory.CreateSphere(ref brushMesh, diameterXYZ, offsetY, generateFromCenter, horzSegments, vertSegments, in surfaceDefinition))
             {
@@ -49,7 +50,7 @@ namespace Chisel.Core
             return true;
         }
 
-        public static bool CreateSphere(ref BrushMesh brushMesh, Vector3 diameterXYZ, float offsetY, bool generateFromCenter, int horzSegments, int vertSegments, in ChiselSurfaceDefinition surfaceDefinition)
+        public static bool CreateSphere(ref BrushMesh brushMesh, float3 diameterXYZ, float offsetY, bool generateFromCenter, int horzSegments, int vertSegments, in ChiselSurfaceDefinition surfaceDefinition)
         {
             if (diameterXYZ.x == 0 ||
                 diameterXYZ.y == 0 ||
@@ -66,7 +67,7 @@ namespace Chisel.Core
             int polygonCount    = triangleCount + quadCount;
             int halfEdgeCount   = (triangleCount * 3) + (quadCount * 4);
 
-            Vector3[] vertices = null;
+            float3[] vertices = null;
             CreateSphereVertices(diameterXYZ, offsetY, generateFromCenter, horzSegments, vertSegments, ref vertices);
 
             var polygons    = new Polygon[polygonCount];
@@ -159,28 +160,28 @@ namespace Chisel.Core
             return true;
         }
 
-        public static bool GenerateSphereVertices(ChiselSphereDefinition definition, ref Vector3[] vertices)
+        public static bool GenerateSphereVertices(ChiselSphereDefinition definition, ref float3[] vertices)
         {
             definition.Validate();
-            //var transform = Matrix4x4.TRS(Vector3.zero, Quaternion.AngleAxis(definition.rotation, Vector3.up), Vector3.one);
+            //var transform = float4x4.TRS(float3.zero, quaternion.AxisAngle(new float3(0, 1, 0), definition.rotation), new float3(1));
             BrushMeshFactory.CreateSphereVertices(definition.diameterXYZ, definition.offsetY, definition.generateFromCenter, definition.horizontalSegments, definition.verticalSegments, ref vertices);
             return true;
         }
 
-        public static void CreateSphereVertices(Vector3 diameterXYZ, float offsetY, bool generateFromCenter, int horzSegments, int vertSegments, ref Vector3[] vertices)
+        public static void CreateSphereVertices(float3 diameterXYZ, float offsetY, bool generateFromCenter, int horzSegments, int vertSegments, ref float3[] vertices)
         {
             //var lastVertSegment	= vertSegments - 1;
             int vertexCount = (horzSegments * (vertSegments - 1)) + 2;
 
             if (vertices == null ||
                 vertices.Length != vertexCount)
-                vertices = new Vector3[vertexCount];
+                vertices = new float3[vertexCount];
 
             var radius = 0.5f * diameterXYZ;
 
             var offset = generateFromCenter ? offsetY : radius.y + offsetY;
-            vertices[0] = Vector3.down * radius.y;
-            vertices[1] = Vector3.up   * radius.y;
+            vertices[0] = new float3(0, 1, 0) * -radius.y;
+            vertices[1] = new float3(0, 1, 0) * radius.y;
 
             vertices[0].y += offset;
             vertices[1].y += offset;
@@ -193,8 +194,8 @@ namespace Chisel.Core
             {
                 var segmentFactor   = ((v - (vertSegments / 2.0f)) / vertSegments); // [-0.5f ... 0.5f]
                 var segmentDegree   = (segmentFactor * 180);                        // [-90 .. 90]
-                var segmentHeight   = Mathf.Sin(segmentDegree * Mathf.Deg2Rad);
-                var segmentRadius   = Mathf.Cos(segmentDegree * Mathf.Deg2Rad);     // [0 .. 0.707 .. 1 .. 0.707 .. 0]
+                var segmentHeight   = math.sin(segmentDegree * Mathf.Deg2Rad);
+                var segmentRadius   = math.cos(segmentDegree * Mathf.Deg2Rad);     // [0 .. 0.707 .. 1 .. 0.707 .. 0]
 
                 var yRingPos        = (segmentHeight * radius.y) + offset;
                 var xRingRadius     = segmentRadius * radius.x;
@@ -205,18 +206,18 @@ namespace Chisel.Core
                     for (int h = horzSegments - 1; h >= 0; h--, vertexIndex++)
                     {
                         var hRad = (h * degreePerSegment) + angleOffset;
-                        vertices[vertexIndex] = new Vector3(Mathf.Cos(hRad) * segmentRadius * radius.x,
-                                                            yRingPos,
-                                                            Mathf.Sin(hRad) * segmentRadius * radius.z);
+                        vertices[vertexIndex] = new float3(math.cos(hRad) * segmentRadius * radius.x,
+                                                           yRingPos,
+                                                           math.sin(hRad) * segmentRadius * radius.z);
                     }
                 } else
                 {
                     for (int h = 0; h < horzSegments; h++, vertexIndex++)
                     {
                         var hRad = (h * degreePerSegment) + angleOffset;
-                        vertices[vertexIndex] = new Vector3(Mathf.Cos(hRad) * segmentRadius * radius.x,
-                                                            yRingPos,
-                                                            Mathf.Sin(hRad) * segmentRadius * radius.z);
+                        vertices[vertexIndex] = new float3(math.cos(hRad) * segmentRadius * radius.x,
+                                                           yRingPos,
+                                                           math.sin(hRad) * segmentRadius * radius.z);
                     }
                 }
             }

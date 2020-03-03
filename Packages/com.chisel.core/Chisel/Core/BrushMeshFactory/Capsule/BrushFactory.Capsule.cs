@@ -9,6 +9,7 @@ using Matrix4x4 = UnityEngine.Matrix4x4;
 using Mathf = UnityEngine.Mathf;
 using Plane = UnityEngine.Plane;
 using Debug = UnityEngine.Debug;
+using Unity.Mathematics;
 
 namespace Chisel.Core
 {
@@ -18,7 +19,7 @@ namespace Chisel.Core
         public static bool GenerateCapsule(ref ChiselBrushContainer brushContainer, ref ChiselCapsuleDefinition definition)
         {
             definition.Validate();
-            Vector3[] vertices = null;
+            float3[] vertices = null;
             if (!BrushMeshFactory.GenerateCapsuleVertices(ref definition, ref vertices))
                 return false;
 
@@ -42,7 +43,7 @@ namespace Chisel.Core
 
         public static bool GenerateCapsule(ref BrushMesh brushMesh, ref ChiselCapsuleDefinition definition)
         {
-            Vector3[] vertices = null;
+            float3[] vertices = null;
             if (!BrushMeshFactory.GenerateCapsuleVertices(ref definition, ref vertices))
             {
                 brushMesh.Clear();
@@ -75,7 +76,7 @@ namespace Chisel.Core
         //	capsule with top OR bottom set to 0 height
         //	capsule with both top AND bottom set to 0 height
         //	capsule with height equal to top and bottom height
-        public static bool GenerateCapsuleVertices(ref ChiselCapsuleDefinition definition, ref Vector3[] vertices)
+        public static bool GenerateCapsuleVertices(ref ChiselCapsuleDefinition definition, ref float3[] vertices)
         {
             definition.Validate();
             var haveTopHemisphere		= definition.haveRoundedTop;
@@ -109,10 +110,10 @@ namespace Chisel.Core
             
             if (vertices == null ||
                 vertices.Length != vertexCount)
-                vertices = new Vector3[vertexCount];
+                vertices = new float3[vertexCount];
 
-            if (haveBottomHemisphere) vertices[bottomVertex] = Vector3.up * (bottomOffset - bottomHeight); // bottom
-            if (haveTopHemisphere   ) vertices[topVertex   ] = Vector3.up * (topOffset    + topHeight   ); // top
+            if (haveBottomHemisphere) vertices[bottomVertex] = new float3(0, 1, 0) * (bottomOffset - bottomHeight); // bottom
+            if (haveTopHemisphere   ) vertices[topVertex   ] = new float3(0, 1, 0) * (topOffset    + topHeight   ); // top
 
             var degreePerSegment	= (360.0f / sides) * Mathf.Deg2Rad;
             var angleOffset			= definition.rotation + (((sides & 1) == 1) ? 0.0f : 0.5f * degreePerSegment);
@@ -125,9 +126,9 @@ namespace Chisel.Core
                 for (int h = sides - 1; h >= 0; h--, vertexIndex++)
                 {
                     var hRad = (h * degreePerSegment) + angleOffset;
-                    vertices[vertexIndex] = new Vector3(Mathf.Cos(hRad) * radiusX,  
-                                                        0.0f, 
-                                                        Mathf.Sin(hRad) * radiusZ);
+                    vertices[vertexIndex] = new float3(math.cos(hRad) * radiusX,  
+                                                       0.0f, 
+                                                       math.sin(hRad) * radiusZ);
                 }
             }
             for (int v = 1; v < topRings; v++)
@@ -136,9 +137,9 @@ namespace Chisel.Core
                 var segmentFactor	= ((v - (topRings * 0.5f)) / topRings) + 0.5f;	// [0.0f ... 1.0f]
                 var segmentDegree	= (segmentFactor * 90);							// [0 .. 90]
                 var segmentHeight	= topOffset + 
-                                        (Mathf.Sin(segmentDegree * Mathf.Deg2Rad) * 
+                                        (math.sin(segmentDegree * Mathf.Deg2Rad) * 
                                             topHeight);
-                var segmentRadius	= Mathf.Cos(segmentDegree * Mathf.Deg2Rad);		// [0 .. 0.707 .. 1 .. 0.707 .. 0]
+                var segmentRadius	= math.cos(segmentDegree * Mathf.Deg2Rad);		// [0 .. 0.707 .. 1 .. 0.707 .. 0]
                 for (int h = 0; h < sides; h++, vertexIndex++)
                 {
                     vertices[vertexIndex].x = vertices[h + unitCircleOffset].x * segmentRadius;
@@ -150,9 +151,9 @@ namespace Chisel.Core
             {
                 for (int h = 0; h < sides; h++, vertexIndex++)
                 {
-                    vertices[vertexIndex] = new Vector3(vertices[h + unitCircleOffset].x,  
-                                                        bottomOffset, 
-                                                        vertices[h + unitCircleOffset].z);
+                    vertices[vertexIndex] = new float3(vertices[h + unitCircleOffset].x,  
+                                                       bottomOffset, 
+                                                       vertices[h + unitCircleOffset].z);
                 }
             }
             for (int v = 1; v < bottomRings; v++)
@@ -160,9 +161,9 @@ namespace Chisel.Core
                 var segmentFactor	= ((v - (bottomRings * 0.5f)) / bottomRings) + 0.5f;	// [0.0f ... 1.0f]
                 var segmentDegree	= (segmentFactor * 90);									// [0 .. 90]
                 var segmentHeight	= bottomOffset - bottomHeight + 
-                                        ((1-Mathf.Sin(segmentDegree * Mathf.Deg2Rad)) * 
+                                        ((1-math.sin(segmentDegree * Mathf.Deg2Rad)) * 
                                             bottomHeight);
-                var segmentRadius	= Mathf.Cos(segmentDegree * Mathf.Deg2Rad);				// [0 .. 0.707 .. 1 .. 0.707 .. 0]
+                var segmentRadius	= math.cos(segmentDegree * Mathf.Deg2Rad);				// [0 .. 0.707 .. 1 .. 0.707 .. 0]
                 for (int h = 0; h < sides; h++, vertexIndex++)
                 {
                     vertices[vertexIndex].x = vertices[h + unitCircleOffset].x * segmentRadius;

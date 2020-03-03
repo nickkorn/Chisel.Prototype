@@ -4,6 +4,7 @@ using UnityEngine;
 using System.Linq;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using Unity.Mathematics;
 
 namespace Chisel.Core
 {
@@ -86,7 +87,7 @@ namespace Chisel.Core
         }
 
         private static bool GetBrushOutlineValues(Int32             brushNodeID,
-                                                  ref Vector3[]     vertices,
+                                                  ref float3[]      vertices,
                                                   ref Int32[]       visibleOuterLines,
                                                   ref Int32[]       visibleInnerLines,
                                                   ref Int32[]       invisibleOuteLines,
@@ -115,7 +116,7 @@ namespace Chisel.Core
 
         private static bool GetSurfaceOutlineValues(Int32           brushNodeID,
                                                     Int32           surfaceID,
-                                                    ref Vector3[]   vertices,
+                                                    ref float3[]    vertices,
                                                     ref Int32[]     visibleOuterLines,
                                                     ref Int32[]     visibleInnerLines,
                                                     ref Int32[]     visibleTriangles,

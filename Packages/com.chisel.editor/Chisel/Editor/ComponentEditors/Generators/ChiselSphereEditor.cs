@@ -8,6 +8,7 @@ using Chisel;
 using Chisel.Core;
 using Chisel.Components;
 using UnitySceneExtensions;
+using Unity.Mathematics;
 
 namespace Chisel.Editors
 {
@@ -24,7 +25,7 @@ namespace Chisel.Editors
         const float kCapLineThickness			= 2.0f;
         const float kCapLineThicknessSelected   = 2.5f;
 
-        static void DrawOutline(ChiselSphereDefinition definition, Vector3[] vertices, LineMode lineMode)
+        static void DrawOutline(ChiselSphereDefinition definition, float3[] vertices, LineMode lineMode)
         {
             var sides			= definition.horizontalSegments;
             
@@ -58,14 +59,14 @@ namespace Chisel.Editors
         internal static int s_BottomHash	= "BottomSphereHash".GetHashCode();
 
 
-        static Vector3[] vertices = null; // TODO: store this per instance? or just allocate every frame?
+        static float3[] vertices = null; // TODO: store this per instance? or just allocate every frame?
         
         protected override void OnScene(SceneView sceneView, ChiselSphere generator)
         {
             var baseColor		= UnityEditor.Handles.yAxisColor;
             var isDisabled		= UnitySceneExtensions.SceneHandles.disabled;
             var focusControl	= UnitySceneExtensions.SceneHandleUtility.focusControl;
-            var normal			= Vector3.up;
+            var normal			= new float3(0,1,0);
 
             if (!BrushMeshFactory.GenerateSphereVertices(generator.definition, ref vertices))
                 return;
@@ -76,7 +77,7 @@ namespace Chisel.Editors
             UnityEditor.Handles.color = ChiselCylinderEditor.GetColorForState(baseColor, false, true, isDisabled);
             DrawOutline(generator.definition, vertices, lineMode: LineMode.NoZTest);
 
-            Vector3 center, topPoint, bottomPoint;
+            float3 center, topPoint, bottomPoint;
             if (!generator.GenerateFromCenter)
             {
                 center      = normal * (generator.definition.offsetY + (generator.DiameterXYZ.y * 0.5f));

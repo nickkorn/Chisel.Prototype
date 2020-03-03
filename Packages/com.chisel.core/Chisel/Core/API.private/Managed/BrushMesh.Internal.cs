@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using Unity.Mathematics;
 using UnityEngine;
 
 namespace Chisel.Core
@@ -11,12 +12,12 @@ namespace Chisel.Core
     public sealed partial class BrushMesh
     {
 #if USE_MANAGED_CSG_IMPLEMENTATION
-        internal bool Set(Vector3[]			   inVertices, 
+        internal bool Set(float3[]			   inVertices, 
                           BrushMesh.HalfEdge[] inHalfEdges, 
                           BrushMesh.Polygon[]  inPolygons)
         {
             if (this.vertices == null || this.vertices.Length != inVertices.Length)
-                this.vertices = new Vector3[inVertices.Length];
+                this.vertices = new float3[inVertices.Length];
             Array.Copy(inVertices, this.vertices, inVertices.Length);
 
             if (this.halfEdges == null || this.halfEdges.Length != inHalfEdges.Length)

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using Unity.Mathematics;
 using UnityEngine;
 
 namespace Chisel.Core
@@ -53,7 +54,7 @@ namespace Chisel.Core
         }
 
         public static Int32 CreateBrushMesh(Int32				 userID,
-                                            Vector3[]			 vertices,
+                                            float3[]			 vertices,
                                             BrushMesh.HalfEdge[] halfEdges,
                                             BrushMesh.Polygon[]	 polygons)
         {
@@ -78,7 +79,7 @@ namespace Chisel.Core
 
 
         public static bool UpdateBrushMesh(Int32				brushMeshInstanceID,
-                                           Vector3[]			vertices,
+                                           float3[]			    vertices,
                                            BrushMesh.HalfEdge[] halfEdges,
                                            BrushMesh.Polygon[]	polygons)
         {
