@@ -58,6 +58,7 @@ namespace Chisel.Core
             // Temporary fix for misformed brushes
             for (int i = 0; i < brushOutline.polygons.Length; i++)
                 brushOutline.polygons[i].surfaceID = i;
+            brushOutline.CalculatePlanes();
         }
 
         public bool Generate(ref ChiselBrushContainer brushContainer)

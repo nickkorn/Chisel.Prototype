@@ -51,13 +51,13 @@ namespace Chisel.Core
             UnityEngine.Profiling.Profiler.BeginSample("UpdateBrushTransformations");
             try { UpdateBrushTransformations(treeBrushes); } finally { UnityEngine.Profiling.Profiler.EndSample(); }
 
-            // TODO: should only do this once at creation time
-            UnityEngine.Profiling.Profiler.BeginSample("GenerateBasePolygonLoops"); 
-            try { GenerateBasePolygonLoops(treeBrushes); } finally { UnityEngine.Profiling.Profiler.EndSample(); }
-
             // TODO: should only do this at creation time + when moved
             UnityEngine.Profiling.Profiler.BeginSample("FindIntersectingBrushes");
             try { FindIntersectingBrushes(treeBrushes); } finally { UnityEngine.Profiling.Profiler.EndSample(); }
+
+            // TODO: should only do this once at creation time
+            UnityEngine.Profiling.Profiler.BeginSample("GenerateBasePolygonLoops"); 
+            try { GenerateBasePolygonLoops(treeBrushes); } finally { UnityEngine.Profiling.Profiler.EndSample(); }
 
             UnityEngine.Profiling.Profiler.BeginSample("FindAllIntersectionLoops");
             try { CSGManagerPerformCSG.FindAllIntersectionLoops(treeBrushes); } finally { UnityEngine.Profiling.Profiler.EndSample(); }
@@ -266,7 +266,7 @@ namespace Chisel.Core
             for (int p = 0; p < outputLoops.basePolygons.Count; p++)
             {
                 // Don't want to change the original loops so we copy them
-                var newLoop = new Loop(outputLoops.basePolygons[p]) { interiorCategory = CategoryGroupIndex.First };
+                var newLoop = new Loop(outputLoops.basePolygons[p], CategoryGroupIndex.First);
                 allBrushSurfaces[p].Add(newLoop);
             }
 
@@ -285,7 +285,7 @@ namespace Chisel.Core
                         if (!surfaceLoop.Valid)
                             continue;
 
-                        if (!routingLookup.TryGetRoute(routingTable, surfaceLoop.interiorCategory, out CategoryRoutingRow routingRow))
+                        if (!routingLookup.TryGetRoute(routingTable, surfaceLoop.info.interiorCategory, out CategoryRoutingRow routingRow))
                         {
                             Debug.Assert(false, "Could not find route");
                             continue;
@@ -297,21 +297,21 @@ namespace Chisel.Core
                         if (overlap)
                         {
                             // If we overlap don't bother with creating a new polygon + hole and reuse existing one
-                            surfaceLoop.interiorCategory = routingRow[intersectionLoop.interiorCategory];
+                            surfaceLoop.info.interiorCategory = routingRow[intersectionLoop.info.interiorCategory];
                             continue;
                         } else
                         {
-                            surfaceLoop.interiorCategory = routingRow[CategoryIndex.Outside];
+                            surfaceLoop.info.interiorCategory = routingRow[CategoryIndex.Outside];
                         }
 
                         // Add all holes that share the same plane to the polygon
                         if (intersectionLoop != null)
                         {
                             // Categorize between original surface & intersection
-                            var intersectionCategory = routingRow[intersectionLoop.interiorCategory];
+                            var intersectionCategory = routingRow[intersectionLoop.info.interiorCategory];
 
                             // If the intersection polygon would get the same category, we don't need to do a pointless intersection
-                            if (intersectionCategory == surfaceLoop.interiorCategory)
+                            if (intersectionCategory == surfaceLoop.info.interiorCategory)
                                 continue;
 
                             CSGManagerPerformCSG.Intersect(brushVertices, loopsOnBrushSurface, surfaceLoop, intersectionLoop, intersectionCategory);

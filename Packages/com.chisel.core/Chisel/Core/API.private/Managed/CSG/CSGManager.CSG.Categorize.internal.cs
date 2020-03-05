@@ -41,17 +41,12 @@ namespace Chisel.Core
         public const double kEpsilon2 = 0.001;
         public const double kEpsilonSqr = kEpsilon * kEpsilon;
 
-        // Assumes polygons are convex
+        // Note: Assumes polygons are convex
         public unsafe static bool AreLoopsOverlapping(Loop polygon1, Loop polygon2)
         {
             if (polygon1.indices.Count != polygon2.indices.Count)
                 return false;
 
-
-            Debug.Assert(polygon1.convex && polygon2.convex);
-            if (!polygon1.convex || !polygon2.convex)
-                return false;
-            
             for (int i = 0; i < polygon1.indices.Count; i++)
             {
                 if (polygon2.indices.IndexOf(polygon1.indices[i]) == -1)
@@ -60,16 +55,13 @@ namespace Chisel.Core
             return true;
         }
 
+        // Note: Assumes polygons are convex
         public unsafe static OperationResult PerformBooleanIntersection(in VertexSoup soup, Loop polygon1, Loop polygon2, List<Loop> resultLoops)
         {
             UnityEngine.Profiling.Profiler.BeginSample("PerformBooleanOperation");
             try
             {
                 Loop newPolygon = null;
-                Debug.Assert(polygon1.convex && polygon2.convex);
-                if (!polygon1.convex || !polygon2.convex)
-                    return OperationResult.Fail;
-                
                 //if (AreLoopsOverlapping(polygon1, polygon2))
                 //    return CSGManagerPerformCSG.OperationResult.Overlapping;
 
@@ -78,18 +70,16 @@ namespace Chisel.Core
                 var nodeToTreeSpaceInversed1 = brush1.TreeToNodeSpaceMatrix;
                 var nodeToTreeSpace1 = brush1.NodeToTreeSpaceMatrix;
 
-                var worldSpacePlanes1Length = mesh1.surfaces.Length;
+                var worldSpacePlanes1Length = mesh1.planes.Length;
                 var worldSpacePlanes1 = stackalloc float4[worldSpacePlanes1Length];
-                fixed (BrushMesh.Surface* mesh1Surfaces = &mesh1.surfaces[0])
+                fixed (float4* mesh1Planes = &mesh1.planes[0])
                 {
-                    CSGManagerPerformCSG.TransformByTransposedInversedMatrix(worldSpacePlanes1, (float4*)mesh1Surfaces, mesh1.surfaces.Length, math.transpose(nodeToTreeSpaceInversed1));
+                    CSGManagerPerformCSG.TransformByTransposedInversedMatrix(worldSpacePlanes1, (float4*)mesh1Planes, mesh1.planes.Length, math.transpose(nodeToTreeSpaceInversed1));
                 }
 
                 newPolygon = new Loop()
                 {
-                    info = polygon1.info,
-                    interiorCategory = polygon1.interiorCategory,
-                    convex = true
+                    info = polygon1.info
                 };
 
                 var vertices = soup.vertices;
@@ -112,11 +102,11 @@ namespace Chisel.Core
                 var nodeToTreeSpaceInversed2 = brush2.TreeToNodeSpaceMatrix;
                 var nodeToTreeSpace2 = brush2.NodeToTreeSpaceMatrix;
 
-                var worldSpacePlanes2Length = mesh2.surfaces.Length;
-                var worldSpacePlanes2 = stackalloc float4[mesh2.surfaces.Length];
-                fixed (BrushMesh.Surface* mesh2Surfaces = &mesh2.surfaces[0])
+                var worldSpacePlanes2Length = mesh2.planes.Length;
+                var worldSpacePlanes2 = stackalloc float4[mesh2.planes.Length];
+                fixed (float4* mesh2Planes = &mesh2.planes[0])
                 {
-                    CSGManagerPerformCSG.TransformByTransposedInversedMatrix(worldSpacePlanes2, (float4*)mesh2Surfaces, mesh2.surfaces.Length, math.transpose(nodeToTreeSpaceInversed2));
+                    CSGManagerPerformCSG.TransformByTransposedInversedMatrix(worldSpacePlanes2, (float4*)mesh2Planes, mesh2.planes.Length, math.transpose(nodeToTreeSpaceInversed2));
                 }
 
                 if (newPolygon.indices.Count == 0) // no vertex of polygon2 is inside polygon1
@@ -161,7 +151,7 @@ namespace Chisel.Core
                 }
                 // We need to resort the indices now
                 // TODO: find a way to not have to do this
-                SortIndices(newPolygon.indices, vertices, newPolygon.info.worldPlane.normal);
+                SortIndices(newPolygon.indices, vertices, newPolygon.info.worldPlane.xyz);
 
                 newPolygon.AddEdges(newPolygon.indices);
                 resultLoops.Add(newPolygon);
@@ -315,7 +305,7 @@ namespace Chisel.Core
                     // This new piece overrides the current loop
                     if (surfaceLoop.Valid)
                     {
-                        var newPolygon = new Loop(surfaceLoop) { interiorCategory = newHoleCategory };
+                        var newPolygon = new Loop(surfaceLoop, newHoleCategory);
                         loopsOnBrushSurface.Add(newPolygon);
                     }
                     surfaceLoop.ClearAllIndices();
@@ -324,7 +314,7 @@ namespace Chisel.Core
 
                 case CSGManagerPerformCSG.OperationResult.Polygon1InsidePolygon2:
                 {
-                    var newPolygon = new Loop(intersectionLoop) { interiorCategory = newHoleCategory };
+                    var newPolygon = new Loop(intersectionLoop, newHoleCategory);
                     s_OverlappingArea.Add(newPolygon);
                     break;
                 }
@@ -348,10 +338,10 @@ namespace Chisel.Core
                 {
                     if (CSGManagerPerformCSG.AreLoopsOverlapping(surfaceLoop, overlappingLoop))
                     {
-                        surfaceLoop.interiorCategory = newHoleCategory;
+                        surfaceLoop.info.interiorCategory = newHoleCategory;
                     } else
                     { 
-                        overlappingLoop.interiorCategory = newHoleCategory;
+                        overlappingLoop.info.interiorCategory = newHoleCategory;
 
                         for (int h = 0; h < surfaceLoop.holes.Count; h++)
                         {
@@ -360,7 +350,7 @@ namespace Chisel.Core
                             overlappingLoop.holes.Add(copyPolygon);
                         }
 
-                        var newPolygon = new Loop(overlappingLoop) { interiorCategory = newHoleCategory };
+                        var newPolygon = new Loop(overlappingLoop, newHoleCategory);
                         surfaceLoop.holes.Add(newPolygon);              // but it is also a hole for our polygon
                         loopsOnBrushSurface.Add(overlappingLoop);       // this loop is a polygon on its own
                     }

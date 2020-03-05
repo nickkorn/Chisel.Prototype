@@ -65,16 +65,16 @@ namespace Chisel.Core
             if (polygons == null)
                 return;
 
-            if (surfaces == null ||
-                surfaces.Length != polygons.Length)
-                surfaces = new Surface[polygons.Length];
+            if (planes == null ||
+                planes.Length != polygons.Length)
+                planes = new float4[polygons.Length];
 
             for (int p = 0; p < polygons.Length; p++)
             {
                 var plane       = CalculatePlane(in polygons[p]);
                 var planeVector = (Vector4)plane.normal;
                 planeVector.w = plane.distance;
-                surfaces[p].localPlane = planeVector;
+                planes[p] = planeVector;
             }
         }
 
@@ -939,7 +939,7 @@ namespace Chisel.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Clear()
         {
-            surfaces = null;
+            planes = null;
             vertices = null;
             halfEdges = null;
             halfEdgePolygonIndices = null;
@@ -968,7 +968,7 @@ namespace Chisel.Core
 
             CompactHalfEdges();
 
-            if (surfaces == null)
+            if (planes == null)
                 CalculatePlanes();
 
             s_VertexDistances.Clear();
@@ -1254,12 +1254,12 @@ namespace Chisel.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool IsInside(float3 localPoint)
         {
-            if (surfaces == null)
+            if (planes == null)
                 return false;
 
-            for (int s = 0; s < surfaces.Length; s++)
+            for (int s = 0; s < planes.Length; s++)
             {
-                var localPlane = (Plane)surfaces[s];
+                var localPlane = new Plane(planes[s].xyz, planes[s].w);
                 if (localPlane.GetDistanceToPoint(localPoint) > -kDistanceEpsilon)
                     return false;
             }
@@ -1269,12 +1269,12 @@ namespace Chisel.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool IsInsideOrOn(float3 localPoint)
         {
-            if (surfaces == null)
+            if (planes == null)
                 return false;
 
-            for (int s = 0; s < surfaces.Length; s++)
+            for (int s = 0; s < planes.Length; s++)
             {
-                var localPlane = (Plane)surfaces[s];
+                var localPlane = new Plane(planes[s].xyz, planes[s].w);
                 if (localPlane.GetDistanceToPoint(localPoint) > kDistanceEpsilon)
                     return false;
             }

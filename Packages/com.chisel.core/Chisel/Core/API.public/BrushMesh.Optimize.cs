@@ -16,7 +16,7 @@ namespace Chisel.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool IsEmpty()
         {
-            if (this.surfaces == null || this.surfaces.Length == 0)
+            if (this.planes == null || this.planes.Length == 0)
                 return true;
             if (this.polygons == null || this.polygons.Length == 0)
                 return true;
@@ -34,7 +34,7 @@ namespace Chisel.Core
             // Detect if outline is concave
             for (int p = 0; p < polygons.Length; p++)
             {
-                var localPlane = (Plane)surfaces[p];
+                var localPlane = new Plane(planes[p].xyz, planes[p].w); 
                 ref readonly var polygon = ref polygons[p];
                 var firstEdge = polygon.firstEdge;
                 var edgeCount = polygon.edgeCount;
@@ -101,13 +101,13 @@ namespace Chisel.Core
             if (halfEdgePolygonIndices == null)
                 UpdateHalfEdgePolygonIndices();
 
-            if (surfaces == null)
+            if (planes == null)
                 CalculatePlanes();
 
             // Detect if outline is inside-out
             for (int p = 0; p < polygons.Length; p++)
             {
-                var localPlane = (Plane)surfaces[p];
+                var localPlane = new Plane(planes[p].xyz, planes[p].w);
                 ref readonly var polygon = ref polygons[p];
                 var firstEdge = polygon.firstEdge;
                 var edgeCount = polygon.edgeCount;
@@ -187,8 +187,8 @@ namespace Chisel.Core
                 for (int e = firstEdge; e <= lastEdge; e++)
                     halfEdges[halfEdges[e].twinIndex].twinIndex = e;
             }
-            for (int s = 0; s < surfaces.Length; s++)
-                surfaces[s].localPlane = -surfaces[s].localPlane;
+            for (int s = 0; s < planes.Length; s++)
+                planes[s] = -planes[s];
             Validate(logErrors: true);
         }
 
@@ -280,31 +280,30 @@ namespace Chisel.Core
             return null;
         }
 
-        private static float GetEdgeHeuristic(TrianglePathCache cache, BrushMesh.Surface[] surfaces, float3[] vertices, int vi0, int vi1, int vi2)
+        private static float GetEdgeHeuristic(TrianglePathCache cache, float4[] planes, float3[] vertices, int vi0, int vi1, int vi2)
         {
             int polygonIndex;
             if (!cache.HardEdges.TryGetValue(VertPair.Create(vi0, vi1), out polygonIndex))
                 return 0;
             
-            if (polygonIndex < 0 || polygonIndex >= surfaces.Length)
+            if (polygonIndex < 0 || polygonIndex >= planes.Length)
                 return float.PositiveInfinity;
-            var localPlane = surfaces[polygonIndex].localPlane;
-            var error = math.dot(new float3(localPlane.x, localPlane.y, localPlane.z), vertices[vi2] - vertices[vi1]) - 1;
+            var error = math.dot(planes[polygonIndex].xyz, vertices[vi2] - vertices[vi1]) - 1;
             return (error * error);
         }
         
-        private static float GetTriangleHeuristic(TrianglePathCache cache, BrushMesh.Surface[] surfaces, float3[] vertices, int vi0, int vi1, int vi2)
+        private static float GetTriangleHeuristic(TrianglePathCache cache, float4[] planes, float3[] vertices, int vi0, int vi1, int vi2)
         {
             var pair0 = VertPair.Create(vi0, vi1);
             var pair1 = VertPair.Create(vi1, vi2);
             var pair2 = VertPair.Create(vi2, vi0);
                 
-            return GetEdgeHeuristic(cache, surfaces, vertices, vi0, vi1, vi2) +
-                   GetEdgeHeuristic(cache, surfaces, vertices, vi1, vi2, vi0) +
-                   GetEdgeHeuristic(cache, surfaces, vertices, vi2, vi0, vi1);
+            return GetEdgeHeuristic(cache, planes, vertices, vi0, vi1, vi2) +
+                   GetEdgeHeuristic(cache, planes, vertices, vi1, vi2, vi0) +
+                   GetEdgeHeuristic(cache, planes, vertices, vi2, vi0, vi1);
         }
 
-        private static float SplitAtEdge(out int[] triangles, TrianglePathCache cache, int[] vertexIndices, int vertexIndicesLength, float3[] vertices, BrushMesh.Surface[] surfaces)
+        private static float SplitAtEdge(out int[] triangles, TrianglePathCache cache, int[] vertexIndices, int vertexIndicesLength, float3[] vertices, float4[] planes)
         {
             if (vertexIndicesLength == 3)
             {
@@ -336,7 +335,7 @@ namespace Chisel.Core
                     triangle = cache.AllTriangles[index];
 
                 triangles = new [] { index };
-                return GetTriangleHeuristic(cache, surfaces, vertices, vi0, vi1, vi2);
+                return GetTriangleHeuristic(cache, planes, vertices, vi0, vi1, vi2);
             }
 
             TriangulationPath curLeftPath   = null;
@@ -390,7 +389,7 @@ namespace Chisel.Core
                         Array.Copy(vertexIndices, t0, tempEdges, 0, (t1 - t0) + 1);
 
                         // triangulate for the given vertices
-                        leftHeuristic = SplitAtEdge(out leftTriangles, cache, tempEdges, length0, vertices, surfaces);
+                        leftHeuristic = SplitAtEdge(out leftTriangles, cache, tempEdges, length0, vertices, planes);
 
                         // store the found triangulation in the cache
                         if (startIndex != -1)
@@ -450,7 +449,7 @@ namespace Chisel.Core
                     if (startIndex != -1 || rightPath.triangles == null)
                     {
                         // triangulate for the given vertices
-                        rightHeuristic = SplitAtEdge(out rightTriangles, cache, tempEdges, length1, vertices, surfaces);
+                        rightHeuristic = SplitAtEdge(out rightTriangles, cache, tempEdges, length1, vertices, planes);
                         
                         // store the found triangulation in the cache
                         if (startIndex != -1)
@@ -521,7 +520,7 @@ namespace Chisel.Core
 
             var halfEdges               = subMesh.halfEdges;
             var vertices                = subMesh.vertices;
-            var surfaces                = subMesh.surfaces;
+            var surfaces                = subMesh.planes;
             var halfEdgePolygonIndices  = subMesh.halfEdgePolygonIndices;
 
             var firstEdge               = polygon.firstEdge;
@@ -673,13 +672,13 @@ namespace Chisel.Core
             var orgVertices               = this.vertices;
             var orgHalfEdges              = this.halfEdges;
             var orgHalfEdgePolygonIndices = this.halfEdgePolygonIndices;
-            var orgSurfaces               = this.surfaces;
+            var orgPlanes                 = this.planes;
 
             var polygons                = orgPolygons;
             var vertices                = orgVertices;
             var halfEdges               = orgHalfEdges;
             var halfEdgePolygonIndices  = orgHalfEdgePolygonIndices;
-            var surfaces                = orgSurfaces;
+            var planes                  = orgPlanes;
 
             bool haveSplitPolygons = false;
             for (int p = this.polygons.Length - 1; p >= 0; p--)
@@ -690,7 +689,7 @@ namespace Chisel.Core
 
                 var firstEdge   = polygons[p].firstEdge;
                 var lastEdge    = firstEdge + edgeCount;
-                var plane       = (Plane)surfaces[p];
+                var plane       = new Plane(planes[p].xyz, planes[p].w);
 
                 bool isPlanar = true;
                 for (int e = firstEdge; e < lastEdge; e++)
@@ -820,7 +819,7 @@ namespace Chisel.Core
                     this.vertices               = orgVertices;
                     this.halfEdges              = orgHalfEdges;
                     this.halfEdgePolygonIndices = orgHalfEdgePolygonIndices;
-                    this.surfaces               = orgSurfaces;
+                    this.planes               = orgPlanes;
 
                     this.CalculatePlanes();
                     continue;
@@ -829,7 +828,7 @@ namespace Chisel.Core
                 vertices                = this.vertices;
                 halfEdges               = this.halfEdges;
                 halfEdgePolygonIndices  = this.halfEdgePolygonIndices;
-                surfaces                = this.surfaces;
+                planes                = this.planes;
 
                 haveSplitPolygons = true;
             }

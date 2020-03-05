@@ -35,6 +35,19 @@ namespace Chisel.Core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static float3 ClosestTangentAxis(float3 vector)
+        {
+            var absX = math.abs(vector.x);
+            var absY = math.abs(vector.y);
+            var absZ = math.abs(vector.z);
+
+            if (absY > absX && absY > absZ)
+                return new float3(0,0,1);
+
+            return new float3(0, -1, 0);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool Equals(this Vector3 self, Vector3 other, double epsilon)
         {
             return System.Math.Abs(self.x - other.x) <= epsilon &&
@@ -69,6 +82,12 @@ namespace Chisel.Core
         {
             tangent = Vector3.Cross(normal, ClosestTangentAxis(normal)).normalized;
             binormal = Vector3.Cross(normal, tangent).normalized;
+        }        
+
+        public static void CalculateTangents(float3 normal, out float3 tangent, out float3 binormal)
+        {
+            tangent = math.normalize(math.cross(normal, ClosestTangentAxis(normal)));
+            binormal = math.normalize(math.cross(normal, tangent));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

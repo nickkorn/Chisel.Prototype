@@ -14,16 +14,16 @@ using ReadOnlyAttribute = Unity.Collections.ReadOnlyAttribute;
 namespace Chisel.Core
 {
 #if USE_MANAGED_CSG_IMPLEMENTATION
-    [BurstCompile(FloatPrecision = FloatPrecision.Low, FloatMode = FloatMode.Fast, CompileSynchronously = true, Debug = false)]
+    [BurstCompile]//FloatPrecision = FloatPrecision.Low, FloatMode = FloatMode.Fast, CompileSynchronously = true, Debug = false
     public struct FindLoopIntersectionVerticesJob : IJob
     {
         public const int kMaxVertexCount = short.MaxValue;
 
-        [ReadOnly] public NativeArray<float3>   verticesInput;
+        // Add [NativeDisableContainerSafetyRestriction] when done, for performance
+        [ReadOnly] public NativeList<float3>    verticesInput;
         [ReadOnly] public NativeArray<float4>   otherPlanesNative;
         [ReadOnly] public NativeArray<float4>   selfPlanesNative;
-        [WriteOnly] public NativeArray<float3>  verticesOutput;
-        public int vertexCount;
+        [WriteOnly] public NativeList<float3>   verticesOutput;
 
         // TODO: find a way to share found intersections between loops, to avoid accuracy issues
         public unsafe void Execute()
@@ -32,12 +32,9 @@ namespace Chisel.Core
             const float kPlaneDistanceEpsilon = (float)CSGManagerPerformCSG.kDistanceEpsilon;
              
             var tempVertices = stackalloc float3[] { float3.zero, float3.zero };
-            var innerVertexCount = 0;
-
-            var verticesSrcPtr       = (float3*)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(verticesInput);
+            
             var otherPlanesNativePtr = (float4*)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(otherPlanesNative);
             var selfPlanesNativePtr  = (float4*)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(selfPlanesNative);
-            var verticesDstPtr       = (float3*)NativeArrayUnsafeUtility.GetUnsafePtr(verticesOutput);
 
             var otherPlaneCount = otherPlanesNative.Length;
             var selfPlaneCount  = selfPlanesNative.Length;
@@ -45,12 +42,12 @@ namespace Chisel.Core
             // TODO: Optimize the hell out of this
             float3 vertex1;
             float4 vertex1w;
-            var vertex0 = verticesSrcPtr[vertexCount - 1];
+            var vertex0 = verticesInput[verticesInput.Length - 1];
             float4 vertex0w = new float4(vertex0, 1);
-            for (int v0 = 0; v0 < vertexCount; v0++)
+            for (int v0 = 0; v0 < verticesInput.Length; v0++)
             {
                 vertex1 = vertex0;
-                vertex0 = verticesSrcPtr[v0];
+                vertex0 = verticesInput[v0];
 
                 vertex1w = vertex0w;
                 vertex0w = new float4(vertex0, 1);
@@ -135,24 +132,21 @@ namespace Chisel.Core
                         var dot1 = math.lengthsq(tempVertices[1] - vertex1);
                         if (dot0 < dot1)
                         {
-                            verticesDstPtr[innerVertexCount] = tempVertices[0]; innerVertexCount++;
-                            verticesDstPtr[innerVertexCount] = tempVertices[1]; innerVertexCount++;
+                            verticesOutput.Add(tempVertices[0]);
+                            verticesOutput.Add(tempVertices[1]);
                         }
                         else
                         {
-                            verticesDstPtr[innerVertexCount] = tempVertices[1]; innerVertexCount++;
-                            verticesDstPtr[innerVertexCount] = tempVertices[0]; innerVertexCount++;
+                            verticesOutput.Add(tempVertices[1]);
+                            verticesOutput.Add(tempVertices[0]);
                         }
-                    }
-                    else
+                    } else
                     {
-                        verticesDstPtr[innerVertexCount] = tempVertices[0]; innerVertexCount++;
+                        verticesOutput.Add(tempVertices[0]);
                     }
                 }
-                verticesDstPtr[innerVertexCount] = vertex0; innerVertexCount++;
+                verticesOutput.Add(vertex0);
             }
-
-            this.vertexCount = innerVertexCount;
         }
     }
 

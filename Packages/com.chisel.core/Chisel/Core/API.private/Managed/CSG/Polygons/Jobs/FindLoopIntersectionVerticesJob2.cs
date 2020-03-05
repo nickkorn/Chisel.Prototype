@@ -14,30 +14,30 @@ using ReadOnlyAttribute = Unity.Collections.ReadOnlyAttribute;
 namespace Chisel.Core
 {
 #if USE_MANAGED_CSG_IMPLEMENTATION
-    [BurstCompile(FloatPrecision = FloatPrecision.Low, FloatMode = FloatMode.Fast, CompileSynchronously = true, Debug = false)]
+    [BurstCompile]//Debug = false
     public struct FindLoopIntersectionVerticesJob2 : IJob
     {
         public const int kMaxVertexCount = short.MaxValue;
+        const float kPlaneDistanceEpsilon = CSGManagerPerformCSG.kDistanceEpsilon;
 
-        [ReadOnly] public NativeArray<float3>   verticesInput;
-        [ReadOnly] public NativeArray<float3>   otherVertices;
-        [WriteOnly] public NativeArray<float3>  verticesOutput;
-        public int vertexCount;
-        public int otherVertexCount;
+        // Add [NativeDisableContainerSafetyRestriction] when done, for performance
+        [ReadOnly] public NativeList<float3>    verticesInput;
+        public NativeList<float3>               otherVertices;
+        public NativeList<float3>               verticesOutput;
 
 
         public void FindIntersections(in VertexSoup vertexSoup, List<ushort> indices, List<ushort> otherIndices, NativeArray<float4> selfPlanes)
         {
             var vertices = vertexSoup.vertices;
 
-            vertexCount = indices.Count;
+            verticesInput.Clear();
+            verticesInput.ResizeUninitialized(indices.Count);
             // TODO: use edges instead + 2 planes intersecting each edge
             for (int v = 0; v < indices.Count; v++)
                 verticesInput[v] = vertices[indices[v]];
 
-            const float kPlaneDistanceEpsilon = (float)CSGManagerPerformCSG.kDistanceEpsilon;
 
-            otherVertexCount = 0;
+            otherVertices.Clear();
             for (int v = 0; v < otherIndices.Count; v++)
             {
                 if (indices.Contains(otherIndices[v]))
@@ -50,23 +50,21 @@ namespace Chisel.Core
                         goto NextVertex;
                 }
                 // TODO: Check if vertex intersects at least 2 selfPlanes
-                otherVertices[otherVertexCount] = vertices[otherIndices[v]];
-                otherVertexCount++;
+                otherVertices.Add(vertex);
             NextVertex:
                 ;
             }
-            Execute();
         }
 
         public void GetOutput(in VertexSoup vertexSoup, List<ushort> indices)
         {
-            if (vertexCount <= indices.Count)
+            if (verticesOutput.Length <= indices.Count)
                 return;
 
             indices.Clear();
-            if (indices.Capacity < vertexCount)
-                indices.Capacity = vertexCount;
-            for (int n = 0; n < vertexCount; n++)
+            if (indices.Capacity < verticesOutput.Length)
+                indices.Capacity = verticesOutput.Length;
+            for (int n = 0; n < verticesOutput.Length; n++)
             {
                 var worldVertex = verticesOutput[n];
                 var vertexIndex = vertexSoup.Add(worldVertex);
@@ -82,71 +80,58 @@ namespace Chisel.Core
         // TODO: find a way to share found intersections between loops, to avoid accuracy issues
         public unsafe void Execute()
         {
-            var tempVertices = stackalloc float3[] { float3.zero, float3.zero };
-            var innerVertexCount = 0;
-
-            var verticesSrcPtr       = (float3*)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(verticesInput);
-            var otherVerticesSrcPtr  = (float3*)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(otherVertices);
-            var verticesDstPtr       = (float3*)NativeArrayUnsafeUtility.GetUnsafePtr(verticesOutput);
-
             // TODO: Optimize the hell out of this
             float3 vertex1;
             float4 vertex1w;
-            var vertex0 = verticesSrcPtr[vertexCount - 1];
+            var vertex0 = verticesInput[verticesInput.Length - 1];
             var vertex0w = new float4(vertex0, 1);
-            for (int v0 = 0; v0 < vertexCount; v0++)
+            for (int v0 = 0; v0 < verticesInput.Length; v0++)
             {
-                verticesDstPtr[innerVertexCount] = vertex0; innerVertexCount++;
+                verticesOutput.Add(vertex0); 
                 vertex1 = vertex0;
-                vertex0 = verticesSrcPtr[v0];
+                vertex0 = verticesInput[v0];
 
                 vertex1w = vertex0w;
                 vertex0w = new float4(vertex0, 1);
 
                 var delta = (vertex1 - vertex0);
                 var max = math.dot(vertex1 - vertex0, delta);
-                var foundVertices = 0;
-                for (int v1 = 0; v1 < otherVertexCount; v1++)
+                var first = verticesOutput.Length;
+                for (int v1 = otherVertices.Length - 1; v1 >= 0; v1--)
                 {
-                    var otherVertex = otherVerticesSrcPtr[v1];
+                    var otherVertex = otherVertices[v1];
                     var dot = math.dot(otherVertex - vertex0, delta);
-                    if (dot <= 0 || dot >= max) 
+                    if (dot <= 0 || dot >= max)
                         continue;
                     if (!GeometryMath.IsPointOnLineSegment(otherVertex, vertex0, vertex1))
                         continue;
-                    verticesDstPtr[innerVertexCount] = otherVertex; innerVertexCount++;
-                    foundVertices++;
+                    verticesOutput.Add(otherVertex);
+                    otherVertices.RemoveAtSwapBack(v1);
                 }
-                
 
-                if (foundVertices > 0)
+
+                var last = verticesOutput.Length;
+                if (last > first)
                 {
-                    var first = innerVertexCount;
-                    var last = innerVertexCount + foundVertices;
+                    float dot1, dot2;
                     for (int v1 = first; v1 < last - 1; v1++)
                     {
-                        var dot1 = math.dot(delta, verticesDstPtr[v1]);
                         for (int v2 = first + 1; v2 < last; v2++)
                         {
-                            var dot2 = math.dot(delta, verticesDstPtr[v2]);
-                            if (dot1 > dot2)
+                            dot1 = math.dot(delta, verticesOutput[v1]);
+                            dot2 = math.dot(delta, verticesOutput[v2]);
+                            if (dot1 < dot2)
                             {
                                 {
-                                    var t = verticesDstPtr[v1];
-                                    verticesDstPtr[v1] = verticesDstPtr[v2];
-                                    verticesDstPtr[v2] = t;
-                                }
-                                {
-                                    var t = dot1;
-                                    dot1 = dot2;
-                                    dot2 = t;
+                                    var t = verticesOutput[v1];
+                                    verticesOutput[v1] = verticesOutput[v2];
+                                    verticesOutput[v2] = t;
                                 }
                             }
                         }
                     }
                 }
             }
-            this.vertexCount = innerVertexCount;
         }
     }
 

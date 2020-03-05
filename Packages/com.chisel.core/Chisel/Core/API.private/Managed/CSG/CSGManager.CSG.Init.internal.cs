@@ -79,9 +79,9 @@ namespace Chisel.Core
 
             var halfEdges               = mesh.halfEdges;
             var vertices                = mesh.vertices;
-            var surfaces                = mesh.surfaces;
+            var planes                  = mesh.planes;
             var polygons                = mesh.polygons;
-            //var surfacesAroundVertex    = mesh.surfacesAroundVertex;
+            //var surfacesAroundVertex  = mesh.surfacesAroundVertex;
             var nodeToTreeSpaceMatrix   = outputLoops.brush.NodeToTreeSpaceMatrix;
             outputLoops.basePolygons.Clear();
             if (outputLoops.basePolygons.Capacity < polygons.Length)
@@ -106,13 +106,13 @@ namespace Chisel.Core
                 var lastEdge     = firstEdge + polygon.edgeCount;
 
                 if (polygon.edgeCount < 3 ||
-                    surfaceIndex >= surfaces.Length)
+                    surfaceIndex >= planes.Length)
                     continue;
 
-                var localPlane          = (Plane)surfaces[surfaceIndex];
+                // TODO: simplify
+                var localPlane          = new Plane(planes[surfaceIndex].xyz, planes[surfaceIndex].w);
                 var worldPlane          = outputLoops.brush.NodeToTreeSpaceMatrix.TransformPlane(localPlane);
-
-                MathExtensions.CalculateTangents(worldPlane.normal, out Vector3 right, out Vector3 forward);
+                var worldPlaneVector    = new float4(worldPlane.normal, worldPlane.distance);
 
                 s_Indices.Clear();
                 if (s_Indices.Capacity < lastEdge - firstEdge)
@@ -145,17 +145,14 @@ namespace Chisel.Core
 
                 var surfacePolygon = new Loop()
                 {
-                    info = new LoopInfo()
+                    info = new SurfaceInfo()
                     {
-                        basePlaneIndex  = surfaceIndex,
-                        brush           = outputLoops.brush,
-                        layers          = polygon.surface.brushMaterial.LayerDefinition,
-                        worldPlane      = worldPlane,
-                        right           = right,
-                        forward         = forward
+                        worldPlane          = worldPlaneVector,
+                        layers              = polygon.surface.brushMaterial.LayerDefinition,
+                        basePlaneIndex      = surfaceIndex,
+                        brush               = outputLoops.brush,
+                        interiorCategory    = (CategoryGroupIndex)(int)CategoryIndex.ValidAligned,
                     },
-                    interiorCategory = (CategoryGroupIndex)(int)CategoryIndex.ValidAligned,
-                    convex           = true,
                     holes            = new List<Loop>()
                 };
 

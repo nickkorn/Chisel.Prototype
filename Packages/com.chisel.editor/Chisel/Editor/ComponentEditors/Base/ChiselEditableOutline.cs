@@ -723,8 +723,8 @@ namespace Chisel.Editors
             var afterHalfEdgePolygonIndices = afterBrushMesh.halfEdgePolygonIndices;
             var beforeHalfEdgePolygonIndices = beforBrushMesh.halfEdgePolygonIndices;
 
-            var afterSurfaces = afterBrushMesh.surfaces;
-            var afterVertices = afterBrushMesh.vertices;
+            var afterPlanes     = afterBrushMesh.planes;
+            var afterVertices   = afterBrushMesh.vertices;
 
             s_TempPolygon1ToPolygon2.Clear();
             for (int i = 0; i < afterPolygons.Length; i++)
@@ -777,8 +777,8 @@ namespace Chisel.Editors
                     afterPolygonIndexB = afterPolygonIndexB,
                     afterPolygonCenterA = afterBrushMesh.GetPolygonCentroid(afterPolygonIndexA),
                     afterPolygonCenterB = afterBrushMesh.GetPolygonCentroid(afterPolygonIndexB),
-                    afterLocalPlaneA = afterSurfaces[afterPolygonIndexA].localPlane,
-                    afterLocalPlaneB = afterSurfaces[afterPolygonIndexB].localPlane
+                    afterLocalPlaneA = afterPlanes[afterPolygonIndexA],
+                    afterLocalPlaneB = afterPlanes[afterPolygonIndexB]
                 });
             }
             softEdges = softEdgeList.ToArray();
@@ -1061,7 +1061,7 @@ namespace Chisel.Editors
             var isCameraInsideOutline   = IsPointInsideOutline(cameraLocalPos);
 
             var polygons                = brushMesh.polygons;
-            var surfaces                = brushMesh.surfaces;
+            var planes                  = brushMesh.planes;
             var vertices                = brushMesh.vertices;
             var halfEdges               = brushMesh.halfEdges;
             var halfEdgePolygonIndices  = brushMesh.halfEdgePolygonIndices;
@@ -1115,7 +1115,7 @@ namespace Chisel.Editors
                 var isHovering      = currentFocusControl == id;
                 var isActive        = currentHotControl == id;
                 var isSelected      = selection.selectedPolygons.Contains(p);
-                var isFrontFacing   = IsPolygonFrontfacing(polygonCenters[p], surfaces[p].localPlane, cameraLocalPos, cameraLocalForward, isCameraInsideOutline, isCameraOrthographic);
+                var isFrontFacing   = IsPolygonFrontfacing(polygonCenters[p], planes[p], cameraLocalPos, cameraLocalForward, isCameraInsideOutline, isCameraOrthographic);
 
                 var firstEdge   = polygons[p].firstEdge;
                 var edgeCount   = polygons[p].edgeCount;
@@ -1197,13 +1197,13 @@ namespace Chisel.Editors
         {
             var vertices                = brushMesh.vertices;
             var halfEdges               = brushMesh.halfEdges;
-            var surfaces                = brushMesh.surfaces;
+            var planes                  = brushMesh.planes;
             var halfEdgePolygonIndices  = brushMesh.halfEdgePolygonIndices;
             var twinIndex           = halfEdges[edgeIndex].twinIndex;
             var edgePolygonIndex    = halfEdgePolygonIndices[edgeIndex];
             var twinPolygonIndex    = halfEdgePolygonIndices[twinIndex];
-            var edgeLocalPlane      = (Plane)surfaces[edgePolygonIndex];
-            var twinLocalPlane      = (Plane)surfaces[twinPolygonIndex];
+            var edgeLocalPlane      = new Plane(planes[edgePolygonIndex].xyz, planes[edgePolygonIndex].w);
+            var twinLocalPlane      = new Plane(planes[twinPolygonIndex].xyz, planes[twinPolygonIndex].w);
             var localToWorldMatrix  = brush.hierarchyItem.LocalToWorldMatrix;
             var worldToLocalMatrix  = brush.hierarchyItem.WorldToLocalMatrix;
 
@@ -1591,8 +1591,8 @@ namespace Chisel.Editors
         // Do not use polygons when they are camera aligned, or when their normal is zero (zero area)
         bool IsPolygonCameraAligned(int polygonIndex, Vector3 cameraDirection, bool isOutlineInsideOut)
         {
-            var normal = isOutlineInsideOut ? -brushMesh.surfaces[polygonIndex].Normal
-                                            :  brushMesh.surfaces[polygonIndex].Normal;
+            var normal = isOutlineInsideOut ? -brushMesh.planes[polygonIndex].xyz
+                                            :  brushMesh.planes[polygonIndex].xyz;
             return math.lengthsq(normal) == 0 ||
                    math.abs(math.dot(cameraDirection, normal)) > 1 - kAlignmentEpsilon;
         }
@@ -1607,10 +1607,10 @@ namespace Chisel.Editors
             var currentFocusControl     = SceneHandleUtility.focusControl;
             var inCreateEdgeEditMode    = InCreateEdgeEditMode;
 
-            var polygons = brushMesh.polygons;
-            var surfaces = brushMesh.surfaces;
-            var vertices = brushMesh.vertices;
-            var halfEdges = brushMesh.halfEdges;
+            var polygons    = brushMesh.polygons;
+            var planes      = brushMesh.planes;
+            var vertices    = brushMesh.vertices;
+            var halfEdges   = brushMesh.halfEdges;
 
             // Render the vertices 
             for (int v = 0; v < vertices.Length; v++)
@@ -1664,7 +1664,7 @@ namespace Chisel.Editors
                 var polygonCenter   = polygonCenters[p];
                 var handleSize      = UnityEditor.HandleUtility.GetHandleSize(polygonCenter);
                 var pointSize       = handleSize * SceneHandles.kPointScale;
-                var normal          = isOutlineInsideOut ? -surfaces[p].Normal : surfaces[p].Normal;
+                var normal          = isOutlineInsideOut ? -planes[p].xyz : planes[p].xyz;
 
                 SceneHandles.color = polygonColors[p];
                 var rotation = Quaternion.LookRotation(normal);
@@ -1771,9 +1771,9 @@ namespace Chisel.Editors
             SelectVertex(v, currentSelectionType);
             if (currentSelectionType == SelectionType.Replace)
                 currentSelectionType = SelectionType.Additive;
-            var halfEdges = brushMesh.halfEdges;
-            var surfaces = brushMesh.surfaces;
-            var halfEdgePolygonIndices = brushMesh.halfEdgePolygonIndices;
+            var halfEdges               = brushMesh.halfEdges;
+            var planes                  = brushMesh.planes;
+            var halfEdgePolygonIndices  = brushMesh.halfEdgePolygonIndices;
             for (int edgeIndex = 0; edgeIndex < halfEdges.Length; edgeIndex++)
             {
                 var vertexIndex = halfEdges[edgeIndex].vertexIndex;
@@ -1783,9 +1783,9 @@ namespace Chisel.Editors
                 var twinIndex = halfEdges[edgeIndex].twinIndex;
 
                 var edgePolygonIndex = halfEdgePolygonIndices[edgeIndex];
-                var edgeNormal = surfaces[edgePolygonIndex].Normal;
+                var edgeNormal = planes[edgePolygonIndex].xyz;
                 var twinPolygonIndex = halfEdgePolygonIndices[twinIndex];
-                var twinNormal = surfaces[twinPolygonIndex].Normal;
+                var twinNormal = planes[twinPolygonIndex].xyz;
 
                 // Check if both polygons on either side of edge are aligned with the view direction 
                 // (which means the edge is as well)
@@ -1888,7 +1888,7 @@ namespace Chisel.Editors
 
             var evt = Event.current;
 
-            var surfaces    = brushMesh.surfaces;
+            var planes      = brushMesh.planes;
             var vertices    = brushMesh.vertices;
             var halfEdges   = brushMesh.halfEdges;
             var halfEdgePolygonIndices = brushMesh.halfEdgePolygonIndices;
@@ -1897,9 +1897,9 @@ namespace Chisel.Editors
             var twinIndex = halfEdges[edgeIndex].twinIndex;
 
             var edgePolygonIndex    = halfEdgePolygonIndices[edgeIndex];
-            var edgeNormal          = surfaces[edgePolygonIndex].Normal;
+            var edgeNormal          = planes[edgePolygonIndex].xyz;
             var twinPolygonIndex    = halfEdgePolygonIndices[twinIndex];
-            var twinNormal          = surfaces[twinPolygonIndex].Normal;
+            var twinNormal          = planes[twinPolygonIndex].xyz;
             var alignedIndex = -1;
 
             // Check if the polygon is aligned with the view direction
@@ -2061,7 +2061,7 @@ namespace Chisel.Editors
         // This method returns true when the brushMesh has changed
         public bool HandlePolygonMovementCameraAligned(Vector3 cameraDirection, bool isOutlineInsideOut)
         {
-            var surfaces = brushMesh.surfaces;
+            var planes = brushMesh.planes;
 
             for (int p = 0; p < s_TempPolygonsIDCount; p++)
             {
@@ -2069,7 +2069,7 @@ namespace Chisel.Editors
                     continue;
                 
                 var id      = s_TempPolygonsIDs[p];
-                var normal  = isOutlineInsideOut ? -surfaces[p].Normal : surfaces[p].Normal;
+                var normal  = isOutlineInsideOut ? -planes[p].xyz : planes[p].xyz;
                 var offset  = Vector3.zero;
                 EditorGUI.BeginChangeCheck();   { offset = SceneHandles.Slider2DHandleOffset(id, polygonCenters[p], normal, handleSize: -1); }
                 if (EditorGUI.EndChangeCheck()) { MoveSelectedVertices(offset); return true; }
@@ -2083,7 +2083,7 @@ namespace Chisel.Editors
         {
             // TODO: handle moving in axis aligned direction instead of along normal
 
-            var surfaces = brushMesh.surfaces;
+            var planes = brushMesh.planes;
 
             for (int p = 0; p < s_TempPolygonsIDCount; p++)
             {
@@ -2091,7 +2091,7 @@ namespace Chisel.Editors
                     continue;
 
                 var id      = s_TempPolygonsIDs[p];
-                var normal  = isOutlineInsideOut ? -surfaces[p].Normal : surfaces[p].Normal;
+                var normal  = isOutlineInsideOut ? -planes[p].xyz : planes[p].xyz;
 
                 var offset = Vector3.zero;
                 EditorGUI.BeginChangeCheck();   { offset = SceneHandles.Slider1DHandleOffset(id, polygonCenters[p], normal, handleSize: -1); }

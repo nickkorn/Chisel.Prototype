@@ -17,42 +17,6 @@ namespace Chisel.Core
 {
 #if USE_MANAGED_CSG_IMPLEMENTATION
     // TODO: rename
-    public struct LoopInfo
-    {
-        [NonSerialized] public Plane            worldPlane;
-        [NonSerialized] public Vector3          right;
-        [NonSerialized] public Vector3          forward;
-        [NonSerialized] public int              basePlaneIndex;
-        [NonSerialized] public CSGTreeBrush     brush;
-        [NonSerialized] public SurfaceLayers    layers;				    // always on owning brush
-    }
-
-    // TODO: rename
-    public sealed class LoopGroup
-    {
-        public Dictionary<int, Loop> loopLookup = new Dictionary<int, Loop>();
-        public List<Loop> loops = new List<Loop>();
-
-        public void Clear()
-        {
-            loopLookup.Clear();
-            loops.Clear();
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Loop FindOrAddLoop(int basePlaneIndex, CSGTreeBrush brush, bool isConvex = true)
-        {
-            if (!loopLookup.TryGetValue(basePlaneIndex, out Loop loop))
-            {
-                loop = new Loop() { info = new LoopInfo() { basePlaneIndex = basePlaneIndex, brush = brush }, convex = isConvex };
-                loopLookup.Add(basePlaneIndex, loop);
-                loops.Add(loop);
-            }
-            return loop;
-        }
-    }
-
-    // TODO: rename
     public sealed class Loop
     {
 #if DebugInfo
@@ -73,28 +37,7 @@ namespace Chisel.Core
         public bool[]                       destroyed;
 
         [NonSerialized] public List<Loop>   holes       = new List<Loop>();
-        [NonSerialized] public LoopInfo     info;
-
-        [NonSerialized] public bool         convex      = false;
-#if DebugInfo
-        CategoryGroupIndex   _interiorCategory    = CategoryGroupIndex.Invalid; // determine if the loop is inside another brush or aligned with another brush
-        public CategoryGroupIndex   interiorCategory
-        {
-            get { return _interiorCategory; }
-            set
-            {
-                if (logLoopIndices.Contains(loopIndex))
-                    Debug.Log($"{loopIndex}: Set {(CategoryIndex)_interiorCategory} => {(CategoryIndex)value}");
-                _interiorCategory = value;
-            }
-        }
-        internal static HashSet<int> logLoopIndices = new HashSet<int>()
-        {
-            245,118
-        };
-#else
-        [NonSerialized] public CategoryGroupIndex   interiorCategory    = CategoryGroupIndex.Invalid; // determine if the loop is inside another brush or aligned with another brush
-#endif
+        [NonSerialized] public SurfaceInfo  info;
 
         public bool Valid { [MethodImpl(MethodImplOptions.AggressiveInlining)] get { return indices.Count >= 3; } }
 
@@ -117,11 +60,22 @@ namespace Chisel.Core
             this.edges  .AddRange(original.edges);
             this.indices.AddRange(original.indices);
             this.info               = original.info;
-            this.interiorCategory   = original.interiorCategory;
-            this.convex             = original.convex;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public Loop(Loop original, CategoryGroupIndex newHoleCategory)
+        {
+#if DebugInfo
+            if (logLoopIndices.Contains(loopIndex))
+                Debug.Log($"copy {original.loopIndex} ({original.holes.Count}/{original.indices.Count}/{original.edges.Count}/{(CategoryIndex)original.interiorCategory}) => {loopIndex}");
+#endif
+            this.edges.AddRange(original.edges);
+            this.indices.AddRange(original.indices);
+            this.info = original.info;
+            this.info.interiorCategory = newHoleCategory;
+        }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ClearAllIndices()
         {
             indices.Clear();
@@ -130,12 +84,22 @@ namespace Chisel.Core
 
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal void AddIndices(NativeList<PlaneVertexIndexPair> foundIndices, int offset, int length)
+        internal void SetIndices(NativeList<ushort> srcIndices, int offset, int length)
         {
+            indices.Clear();
+            indices.Capacity = length;
             for (int j = 0; j < length; j++, offset++)
-            {
-                indices.Add(foundIndices[offset].vertexIndex);
-            }
+                indices.Add(srcIndices[offset]);
+        }
+
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal unsafe void SetIndices(ushort* srcIndices, int offset, int length)
+        {
+            indices.Clear();
+            indices.Capacity = length;
+            for (int j = 0; j < length; j++, offset++)
+                indices.Add(srcIndices[offset]);
         }
 
 
@@ -232,8 +196,9 @@ namespace Chisel.Core
                 return (inverted) ? EdgeCategory.ReverseAligned : EdgeCategory.Aligned;
             var vertices = soup.vertices;
             var midPoint = (vertices[edge.index1] + vertices[edge.index2]) * 0.5f;
-
-            if (CSGManagerPerformCSG.IsPointInPolygon(info.right, info.forward, indices, soup, midPoint))
+            
+            MathExtensions.CalculateTangents(info.worldPlane.xyz, out float3 right, out float3 forward);
+            if (CSGManagerPerformCSG.IsPointInPolygon(right, forward, indices, soup, midPoint))
                 return EdgeCategory.Inside;
             return EdgeCategory.Outside;
         }

@@ -24,8 +24,8 @@ namespace Chisel.Core
                 brushMesh1 == null)
                 return IntersectionType.NoIntersection;
 
-            var brushSurfaces0      = brushMesh0.surfaces;
-            var brushSurfaces1      = brushMesh1.surfaces;
+            var brushSurfaces0      = brushMesh0.planes;
+            var brushSurfaces1      = brushMesh1.planes;
 
             var transformedPlanes0  = TransformOtherIntoBrushSpace(brush0, brush1, brushSurfaces0);
             
@@ -105,7 +105,7 @@ namespace Chisel.Core
 
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        static float4[] TransformOtherIntoBrushSpace(CSGTreeBrush brush0, CSGTreeBrush brush1, BrushMesh.Surface[] srcPlanes1)
+        static float4[] TransformOtherIntoBrushSpace(CSGTreeBrush brush0, CSGTreeBrush brush1, float4[] srcPlanes1)
         {
             // inverse of (otherTransform.localToWorldSpace * this->worldToLocalSpace)
 
@@ -116,7 +116,7 @@ namespace Chisel.Core
             
             var dstPlanes = new float4[srcPlanes1.Length];
             for (int plane_index = 0; plane_index < srcPlanes1.Length; plane_index++)
-                dstPlanes[plane_index] = math.mul(brush1ToBrush0LocalLocalSpace, srcPlanes1[plane_index].localPlane);;
+                dstPlanes[plane_index] = math.mul(brush1ToBrush0LocalLocalSpace, srcPlanes1[plane_index]);;
 
             return dstPlanes;
         }

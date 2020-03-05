@@ -28,7 +28,7 @@ namespace Chisel.Core
             brushOutline.Reset();
             if (brushMesh == null)
                 return brushOutline;
-            brushOutline.surfaceOutlines = new Outline[brushMesh.surfaces.Length];
+            brushOutline.surfaceOutlines = new Outline[brushMesh.planes.Length];
             brushOutline.vertices = brushMesh.vertices.ToArray();
 
             var surfaceOutlines = brushOutline.surfaceOutlines;

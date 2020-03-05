@@ -10,33 +10,37 @@ using Unity.Jobs;
 using Unity.Mathematics;
 using ReadOnlyAttribute = Unity.Collections.ReadOnlyAttribute;
 using System.Runtime.CompilerServices;
+using Unity.Entities;
 
 namespace Chisel.Core
 {
+
     [BurstCompile]
     unsafe struct FindInsideVerticesJob : IJobParallelFor
-    {
-        [ReadOnly] public NativeArray<float4>   intersectingPlanes2;
-        [ReadOnly] public NativeArray<int>      usedVertices1;
-        [ReadOnly] public NativeArray<float3>   allVertices1;
-        [ReadOnly] public float4x4              nodeToTreeSpaceMatrix;
-        [ReadOnly] public float4x4              vertexToLocal1;
+    { 
+        // Add [NativeDisableContainerSafetyRestriction] when done, for performance
+        [ReadOnly] public NativeList<float4>  intersectingPlanes2;
+        [ReadOnly] public NativeList<int>     usedVertices1;
+        [NativeDisableUnsafePtrRestriction] [ReadOnly] public float3* allVertices1;
+        [ReadOnly] public float4x4            nodeToTreeSpaceMatrix;
+        [ReadOnly] public float4x4            vertexToLocal1;
 
-        [WriteOnly] public NativeStream.Writer  foundVertices;
+        [NativeDisableUnsafePtrRestriction]
+        [WriteOnly] public NativeStream.Writer vertexWriter;
 
         public void Execute(int index)
         {
-            foundVertices.BeginForEachIndex(index);
+            vertexWriter.BeginForEachIndex(index);
             var vertexIndex1 = usedVertices1[index];
             var brushVertex1 = new float4(allVertices1[vertexIndex1], 1);
             var localVertex1 = math.mul(vertexToLocal1, brushVertex1);
             if (!CSGManagerPerformCSG.IsOutsidePlanes(intersectingPlanes2, localVertex1))
             { 
-                var worldVertex = math.mul(nodeToTreeSpaceMatrix, brushVertex1).xyz;
-                foundVertices.Write(localVertex1);
-                foundVertices.Write(worldVertex);
+                var worldVertex = math.mul(nodeToTreeSpaceMatrix, brushVertex1);
+                vertexWriter.Write(localVertex1);
+                vertexWriter.Write(worldVertex);
             }
-            foundVertices.EndForEachIndex();
+            vertexWriter.EndForEachIndex();
         }
     }
     
@@ -45,14 +49,17 @@ namespace Chisel.Core
     {
         const float kPlaneDistanceEpsilon = CSGManagerPerformCSG.kPlaneDistanceEpsilon;
 
+        // Add [NativeDisableContainerSafetyRestriction] when done, for performance
         [ReadOnly] public NativeStream.Reader   vertexReader;
-        [ReadOnly] public NativeArray<float4>   intersectingPlanes;
-        [ReadOnly] public NativeArray<int>      intersectingPlaneIndices;
+        [ReadOnly] public NativeList<float4>    intersectingPlanes;
+        [ReadOnly] public NativeList<int>       intersectingPlaneIndices;
 
         public VertexSoup                       brushVertices;
+
         [WriteOnly] public NativeList<PlaneVertexIndexPair> foundIndices;
 
-        public void Execute()
+
+        public void Execute() 
         {
             int maxIndex = vertexReader.ForEachCount;
 
@@ -63,7 +70,7 @@ namespace Chisel.Core
             while (vertexReader.RemainingItemCount > 0)
             {
                 var localVertex1    = vertexReader.Read<float4>();
-                var worldVertex     = vertexReader.Read<float3>();
+                var worldVertex     = vertexReader.Read<float4>();
 
                 var worldVertexIndex = -1;
                 // TODO: optimize this, we already know these vertices are ON the planes of this brush, just not which: this can be precalculated
@@ -75,7 +82,7 @@ namespace Chisel.Core
                     {
                         var planeIndex = intersectingPlaneIndices[i];
                         if (worldVertexIndex == -1)
-                            worldVertexIndex = brushVertices.Add(worldVertex);
+                            worldVertexIndex = brushVertices.Add(worldVertex.xyz);
                         foundIndices.Add(new PlaneVertexIndexPair() { planeIndex = (ushort)planeIndex, vertexIndex = (ushort)worldVertexIndex });
                     }
                 }

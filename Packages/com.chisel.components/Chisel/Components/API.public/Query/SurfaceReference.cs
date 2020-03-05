@@ -116,9 +116,9 @@ namespace Chisel.Components
                 var brushMesh = brushContainerAsset.BrushMeshes[subMeshIndex];
                 if (brushMesh == null)
                     return null;
-                if (surfaceIndex < 0 || surfaceIndex >= brushMesh.surfaces.Length)
+                if (surfaceIndex < 0 || surfaceIndex >= brushMesh.planes.Length)
                     return null;
-                return LocalToWorldSpace.TransformPlane(brushMesh.surfaces[surfaceIndex]);
+                return LocalToWorldSpace.TransformPlane(new Plane(brushMesh.planes[surfaceIndex].xyz, brushMesh.planes[surfaceIndex].w));
             }
         }
 
@@ -171,10 +171,10 @@ namespace Chisel.Components
                 if (brushMesh == null)
                     return Matrix4x4.identity;
                 
-                if (surfaceIndex < 0 || surfaceIndex >= brushMesh.surfaces.Length)
+                if (surfaceIndex < 0 || surfaceIndex >= brushMesh.planes.Length)
                     return Matrix4x4.identity;
                 
-                var localToPlaneSpace   = MathExtensions.GenerateLocalToPlaneSpaceMatrix(brushMesh.surfaces[surfaceIndex]);
+                var localToPlaneSpace   = MathExtensions.GenerateLocalToPlaneSpaceMatrix(brushMesh.planes[surfaceIndex]);
                 var worldToLocal        = node.hierarchyItem.WorldToLocalMatrix;
                 return localToPlaneSpace * worldToLocal;
             }	

@@ -1,17 +1,69 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using Unity.Collections;
+using Unity.Entities;
 using Unity.Mathematics;
 using UnityEngine;
 
 namespace Chisel.Core
 {
+    internal struct BrushMeshBlob
+    {
+        public struct Polygon
+        {
+            public Int32 firstEdge;
+            public Int32 edgeCount;
+            public SurfaceLayers layerDefinition;
+        }
+
+        public Bounds		                    localBounds;
+        public BlobArray<float3>	            vertices;
+        public BlobArray<BrushMesh.HalfEdge>	halfEdges;
+        public BlobArray<int>                   halfEdgePolygonIndices;
+        public BlobArray<Polygon>	            polygons;
+        public BlobArray<float4>                planes;
+        
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool IsEmpty()
+        {
+            return (planes.Length == 0 || polygons.Length == 0 || vertices.Length == 0 || halfEdges.Length == 0);
+        }
+
+        public static BlobAssetReference<BrushMeshBlob> Build(BrushMesh brushMesh)
+        {
+            using (var builder = new BlobBuilder(Allocator.Temp))
+            {
+                ref var root = ref builder.ConstructRoot<BrushMeshBlob>();
+                root.localBounds = brushMesh.localBounds;
+                builder.Construct(ref root.vertices, brushMesh.vertices);
+                builder.Construct(ref root.halfEdges, brushMesh.halfEdges);
+                builder.Construct(ref root.halfEdgePolygonIndices, brushMesh.halfEdgePolygonIndices);
+                var array = builder.Allocate(ref root.polygons, brushMesh.polygons.Length);
+                for (int i = 0; i < brushMesh.polygons.Length; i++)
+                {
+                    var polygon = brushMesh.polygons[i];
+                    array[i] = new Polygon()
+                    {
+                        firstEdge = polygon.firstEdge,
+                        edgeCount = polygon.edgeCount,
+                        layerDefinition = polygon.surface.brushMaterial.LayerDefinition
+                    };
+                }
+                builder.Construct(ref root.planes, brushMesh.planes);
+                return builder.CreateBlobAssetReference<BrushMeshBlob>(Allocator.Persistent);
+            }
+        }
+    }
+
     internal partial class BrushMeshManager
     {
 #if USE_MANAGED_CSG_IMPLEMENTATION
         static List<BrushMesh>	brushMeshes		= new List<BrushMesh>();
         static List<int>		userIDs			= new List<int>();
         static List<int>		unusedIDs		= new List<int>();
+        static List<BlobAssetReference<BrushMeshBlob>> brushMeshesBlobs = new List<BlobAssetReference<BrushMeshBlob>>();
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static bool		IsBrushMeshIDValid		(Int32 brushMeshInstanceID)	{ return brushMeshInstanceID > 0 && brushMeshInstanceID <= brushMeshes.Count; }
@@ -53,6 +105,14 @@ namespace Chisel.Core
             return brushMesh;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static BlobAssetReference<BrushMeshBlob> GetBrushMeshBlob(Int32 brushMeshInstanceID)
+        {
+            if (!AssertBrushMeshIDValid(brushMeshInstanceID))
+                return BlobAssetReference<BrushMeshBlob>.Null;
+            return brushMeshesBlobs[brushMeshInstanceID - 1];
+        }
+
         public static Int32 CreateBrushMesh(Int32				 userID,
                                             float3[]			 vertices,
                                             BrushMesh.HalfEdge[] halfEdges,
@@ -74,6 +134,9 @@ namespace Chisel.Core
                 DestroyBrushMesh(brushMeshID);
                 return BrushMeshInstance.InvalidInstanceID;
             }
+
+            var brushMeshIndex = brushMeshID - 1;
+            brushMeshesBlobs[brushMeshIndex] = BrushMeshBlob.Build(brushMesh);
             return brushMeshID;
         }
 
@@ -101,6 +164,10 @@ namespace Chisel.Core
                 return false;
             }
 
+            var brushMeshIndex = brushMeshInstanceID - 1;
+            if (brushMeshesBlobs[brushMeshIndex].IsCreated)
+                brushMeshesBlobs[brushMeshIndex].Dispose();
+            brushMeshesBlobs[brushMeshIndex] = BrushMeshBlob.Build(brushMesh);
             CSGManager.NotifyBrushMeshModified(brushMeshInstanceID);
             return true;
         }
@@ -111,6 +178,7 @@ namespace Chisel.Core
             {
                 int index = brushMeshes.Count;
                 brushMeshes.Add(new BrushMesh());
+                brushMeshesBlobs.Add(BlobAssetReference<BrushMeshBlob>.Null);
                 userIDs.Add(userID);
                 return index + 1;
             }
@@ -120,6 +188,9 @@ namespace Chisel.Core
             var brushMeshIndex	= brushMeshID - 1;
             unusedIDs.RemoveAt(0); // sorry again
             brushMeshes[brushMeshIndex].Reset();
+            if (brushMeshesBlobs[brushMeshIndex].IsCreated)
+                brushMeshesBlobs[brushMeshIndex].Dispose();
+            brushMeshesBlobs[brushMeshIndex] = BlobAssetReference<BrushMeshBlob>.Null;
             userIDs[brushMeshIndex] = userID;
             return brushMeshID;
         }
@@ -133,6 +204,9 @@ namespace Chisel.Core
 
             var brushMeshIndex = brushMeshInstanceID - 1;
             brushMeshes[brushMeshIndex].Reset();
+            if (brushMeshesBlobs[brushMeshIndex].IsCreated)
+                brushMeshesBlobs[brushMeshIndex].Dispose();
+            brushMeshesBlobs[brushMeshIndex] = BlobAssetReference<BrushMeshBlob>.Null;
             userIDs[brushMeshIndex] = CSGManager.kDefaultUserID;
             unusedIDs.Add(brushMeshInstanceID);
 

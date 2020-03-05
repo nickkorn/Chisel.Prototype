@@ -31,7 +31,7 @@ namespace Chisel.Core
     /// <seealso cref="Chisel.Core.CSGTreeBranch"/>
     /// <seealso cref="Chisel.Core.BrushMesh"/>
     /// <seealso cref="Chisel.Core.BrushMeshInstance"/>
-    [StructLayout(LayoutKind.Sequential, Pack = 4)]	
+    [StructLayout(LayoutKind.Sequential)]	
     public partial struct CSGTreeBrush 
     {
         #region Create
