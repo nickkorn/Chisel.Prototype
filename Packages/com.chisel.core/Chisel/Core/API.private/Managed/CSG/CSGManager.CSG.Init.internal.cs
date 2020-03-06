@@ -151,8 +151,8 @@ namespace Chisel.Core
                 var worldPlane          = outputLoops.brush.NodeToTreeSpaceMatrix.TransformPlane(localPlane);
                 var worldPlaneVector    = new float4(worldPlane.normal, worldPlane.distance);
 
-                var indices = new List<ushort>(lastEdge - firstEdge);
-                { 
+                using (var indices = new NativeList<ushort>(lastEdge - firstEdge, Allocator.Temp))
+                {
                     //if (loop != null && loop.worldPlane.normal == Vector3.zero) Debug.LogError("!");
                     for (int e = firstEdge; e < lastEdge; e++)
                     {
@@ -163,9 +163,9 @@ namespace Chisel.Core
                         min.z = Mathf.Min(min.z, vertex.z); max.z = Mathf.Max(max.z, vertex.z);
 
                         var newIndex = outputLoops.vertexSoup.Add(vertex);
-                        Debug.Assert(indices.Count == 0 ||
+                        Debug.Assert(indices.Length == 0 ||
                                         (indices[0] != newIndex &&
-                                        indices[indices.Count - 1] != newIndex));
+                                        indices[indices.Length - 1] != newIndex));
                         indices.Add(newIndex);
                     }
 
@@ -191,7 +191,7 @@ namespace Chisel.Core
                         holes            = new List<Loop>()
                     };
 
-                    for (int i = 0; i < indices.Count; i++)
+                    for (int i = 0; i < indices.Length; i++)
                         surfacePolygon.indices.Add(indices[i]);
                     surfacePolygon.AddEdges(surfacePolygon.indices);
                     outputLoops.basePolygons.Add(surfacePolygon);

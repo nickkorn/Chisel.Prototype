@@ -16,14 +16,14 @@ namespace Chisel.Core
     
     public struct RemoveIdenticalIndicesJob : IJob
     {
-        public List<ushort> indices;
+        public NativeList<ushort> indices;
         public NativeList<float3> vertices;
 
         // TODO: optimize
         public void Execute()
         {
-            var newIndices = new List<ushort>(indices.Count);
-            for (int i = 0; i < indices.Count; i++)
+            var newIndices = new List<ushort>(indices.Length);
+            for (int i = 0; i < indices.Length; i++)
                 newIndices.Add(indices[i]);
 
             while (newIndices.Count > 3 && newIndices[newIndices.Count - 1] == newIndices[0])

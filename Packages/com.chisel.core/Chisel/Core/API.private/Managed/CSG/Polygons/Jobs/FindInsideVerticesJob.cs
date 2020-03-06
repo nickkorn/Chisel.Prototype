@@ -19,7 +19,9 @@ namespace Chisel.Core
         public NativeArray<float4>  selfPlanes;
         public List<Edge>           edges;
         public Loop                 loop;
-        public List<ushort>         indices;
+        public int                  brushNodeID;
+        public int                  surfaceIndex;
+        public NativeList<ushort>   indices;
     }
 
     unsafe struct OverlapIntersectionData : IDisposable
@@ -35,6 +37,7 @@ namespace Chisel.Core
 
         public List<IntersectionLoop>[]             intersectionSurfaces;
         public List<IntersectionLoop>               allIntersectionLoops;
+        public IntersectionLoop[]                   basePolygonLoops;
 
         public Dictionary<int, NativeArray<float4>>     brushPlanes;
         
@@ -47,6 +50,7 @@ namespace Chisel.Core
             
             this.basePolygons               = basePolygons;
             this.intersectionSurfaceLoops   = intersectionSurfaceLoops;
+            this.basePolygonLoops           = new IntersectionLoop[basePolygons.Count];
             this.allIntersectionLoops       = new List<IntersectionLoop>();
             this.intersectionSurfaces       = new List<IntersectionLoop>[0];
             this.brushPlanes                = new Dictionary<int, NativeArray<float4>>();
@@ -78,6 +82,24 @@ namespace Chisel.Core
             intersectionSurfaces = new List<IntersectionLoop>[intersectionSurfaceLength];
             for (int i = 0; i < intersectionSurfaceLength; i++)
                 intersectionSurfaces[i] = new List<IntersectionLoop>(16);
+            
+            for (int s = 0; s < basePolygons.Count; s++)
+            {
+                var loop = basePolygons[s];
+                var intersectionLoop = new IntersectionLoop()
+                {
+                    selfPlanes      = allWorldSpacePlanes,
+                    indices         = new NativeList<ushort>(loop.indices.Count, Allocator.Persistent),
+                    surfaceIndex    = s,
+                    brushNodeID     = brush0.brushNodeID,
+                    edges           = loop.edges,
+                    loop            = loop
+                };
+                for (int i = 0; i < loop.indices.Count; i++)
+                    intersectionLoop.indices.Add(loop.indices[i]);
+
+                basePolygonLoops[s] = intersectionLoop;                
+            }
 
             foreach (var pair in intersectionSurfaceLoops)
             {
@@ -116,11 +138,15 @@ namespace Chisel.Core
                     var loop = loops[0];
                     var intersectionLoop = new IntersectionLoop()
                     {
-                        selfPlanes  = worldSpacePlanes,
-                        indices     = loop.indices,
-                        edges       = loop.edges,
-                        loop        = loop
+                        selfPlanes      = worldSpacePlanes,
+                        indices         = new NativeList<ushort>(loop.indices.Count, Allocator.Persistent),
+                        surfaceIndex    = s,
+                        brushNodeID     = pair.Key,
+                        edges           = loop.edges,
+                        loop            = loop
                     };
+                    for (int i = 0; i < loop.indices.Count; i++)
+                        intersectionLoop.indices.Add(loop.indices[i]);
 
                     // We add the intersection loop of this particular brush with our own brush
                     intersectionSurface.Add(intersectionLoop);
@@ -131,15 +157,40 @@ namespace Chisel.Core
 
         public void StoreOutput()
         {
-            foreach (var brushPlane in brushPlanes)
-                brushPlane.Value.Dispose();
-            brushPlanes.Clear();
+            foreach (var intersectionLoop in allIntersectionLoops)
+            {
+                //var surfaceLoops = intersectionSurfaceLoops[intersectionLoop.brushNodeID];
+                var surfaceLoop = intersectionLoop.loop;// surfaceLoops.surfaces[intersectionLoop.surfaceIndex][0];
+                if (intersectionLoop.indices.Length < 3)
+                    //surfaceLoops.surfaces[intersectionLoop.surfaceIndex][0].ClearAllIndices();
+                    surfaceLoop.ClearAllIndices();
+                else
+                    surfaceLoop.SetIndices(intersectionLoop.indices);
+            }
+
+            foreach (var basePolygonsLoop in basePolygonLoops)
+            {
+                basePolygonsLoop.loop.SetIndices(basePolygonsLoop.indices);
+                //basePolygons[intersectionLoop.surfaceIndex].SetIndices(intersectionLoop.indices);
+            }
         }
 
         public void Dispose()
         {
             if (allWorldSpacePlanes.IsCreated)
                 allWorldSpacePlanes.Dispose();
+
+            foreach (var brushPlane in brushPlanes)
+                brushPlane.Value.Dispose();
+            brushPlanes.Clear();
+
+            foreach (var intersectionLoop in allIntersectionLoops)
+                intersectionLoop.indices.Dispose();
+            allIntersectionLoops.Clear();
+
+            foreach (var basePolygonLoop in basePolygonLoops)
+                basePolygonLoop.indices.Dispose();
+            allIntersectionLoops.Clear();
         }
     }
 

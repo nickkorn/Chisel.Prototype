@@ -489,10 +489,10 @@ namespace Chisel.Core
                                     var indices              = intersectionSurface0.indices;
                                     var planes0              = intersectionSurfaceList[l0].selfPlanes;
 
-                                    using (var verticesInput = new NativeList<float3>(indices.Count + intersectionSurfaceList.Count, Allocator.Persistent))
-                                    using (var verticesOutput = new NativeList<float3>(indices.Count + intersectionSurfaceList.Count, Allocator.Persistent))
+                                    using (var verticesInput = new NativeList<float3>(indices.Length + intersectionSurfaceList.Count, Allocator.Persistent))
+                                    using (var verticesOutput = new NativeList<float3>(indices.Length + intersectionSurfaceList.Count, Allocator.Persistent))
                                     {
-                                    for (int v = 0; v < indices.Count; v++)
+                                    for (int v = 0; v < indices.Length; v++)
                                         verticesInput.Add(srcVertices[indices[v]]);
 
                                     var input = verticesOutput;
@@ -520,7 +520,7 @@ namespace Chisel.Core
                                         // TODO: merge these so that intersections will be identical on both loops (without using math, use logic)
                                         // TODO: make sure that intersections between loops will be identical on OTHER brushes (without using math, use logic)
                                     }
-                                    if (output.Length > indices.Count)
+                                    if (output.Length > indices.Length)
                                     {
                                         indices.Clear();
                                         if (indices.Capacity < output.Length)
@@ -533,8 +533,7 @@ namespace Chisel.Core
                                             if (indices.Contains(vertexIndex))
                                                 continue;
 
-                                            indices.Add(vertexIndex);}}
-                                    }
+                                            indices.Add(vertexIndex);}}}
                                 }
                             }
                         }
@@ -547,13 +546,13 @@ namespace Chisel.Core
                             // TODO: should only intersect with all brushes that each particular basepolygon intersects with
                             //       but also need adjency information between basePolygons to ensure that intersections exist on 
                             //       both sides of each edge on a brush. 
-                            for (int b = 0; b < intersectionData.basePolygons.Count; b++)
+                            for (int b = 0; b < intersectionData.basePolygonLoops.Length; b++)
                             {
-                                var indices = intersectionData.basePolygons[b].indices;                                
-                                using (var verticesInput = new NativeList<float3>(indices.Count + intersectionData.brushPlanes.Count, Allocator.Persistent))
-                                using (var verticesOutput = new NativeList<float3>(indices.Count + intersectionData.brushPlanes.Count, Allocator.Persistent))
+                                var indices = intersectionData.basePolygonLoops[b].indices;                                
+                                using (var verticesInput = new NativeList<float3>(indices.Length + intersectionData.basePolygonLoops.Length, Allocator.Persistent))
+                                using (var verticesOutput = new NativeList<float3>(indices.Length + intersectionData.basePolygonLoops.Length, Allocator.Persistent))
                                 {
-                                for (int v = 0; v < indices.Count; v++)
+                                for (int v = 0; v < indices.Length; v++)
                                     verticesInput.Add(srcVertices[indices[v]]);
 
                                 var input = verticesOutput;
@@ -576,7 +575,7 @@ namespace Chisel.Core
                                     intersectionJob.Run();
                                 }
 
-                                if (output.Length > indices.Count)
+                                if (output.Length > indices.Length)
                                 {
                                     indices.Clear();
                                     if (indices.Capacity < output.Length)
@@ -604,23 +603,23 @@ namespace Chisel.Core
                                 if (intersectionSurfaceList.Count == 0)
                                     continue;
                                 
-                                var basePolygon = intersectionData.basePolygons[s];
+                                var basePolygonIndices = intersectionData.basePolygonLoops[s].indices;
                                 for (int l0 = 0; l0 < intersectionSurfaceList.Count; l0++)
                                 {
-                                    using (var verticesInput = new NativeList<float3>(intersectionSurfaceList[l0].indices.Count, Allocator.Persistent))
-                                    using (var otherVertices = new NativeList<float3>(intersectionSurfaceList[l0].indices.Count + basePolygon.indices.Count, Allocator.Persistent))
-                                    using (var verticesOutput = new NativeList<float3>(intersectionSurfaceList[l0].indices.Count + basePolygon.indices.Count, Allocator.Persistent))
+                                    using (var otherIndices = new NativeList<ushort>(intersectionSurfaceList[l0].indices.Length + basePolygonIndices.Length, Allocator.Persistent))
+                                    using (var verticesOutput = new NativeList<ushort>(intersectionSurfaceList[l0].indices.Length + basePolygonIndices.Length, Allocator.Persistent))
                                     {
                                     var intersectionJob2 = new FindLoopVertexOverlapsJob()
                                     {
-                                        verticesInput   = verticesInput,
-                                        otherVertices   = otherVertices,
-                                        verticesOutput  = verticesOutput
+                                        selfPlanes      = intersectionSurfaceList[l0].selfPlanes,
+                                        otherIndices    = otherIndices,
+                                        indices         = verticesOutput,
+                                        vertexSoup      = outputLoops.vertexSoup
                                     };
                                     verticesOutput.Clear();
-                                    intersectionJob2.FindIntersections(outputLoops.vertexSoup, intersectionSurfaceList[l0].indices, basePolygon.indices, intersectionSurfaceList[l0].selfPlanes);
+                                    intersectionJob2.FindIntersections(intersectionSurfaceList[l0].indices, basePolygonIndices);
                                     intersectionJob2.Run();
-                                    intersectionJob2.GetOutput(outputLoops.vertexSoup, intersectionSurfaceList[l0].indices);}
+                                    intersectionJob2.GetOutput(intersectionSurfaceList[l0].indices);}
                                 }
                             }
                         }
@@ -642,14 +641,11 @@ namespace Chisel.Core
                                 removeIdenticalIndicesJob.indices = indices;
                                 // TODO: eventually actually use jobs
                                 removeIdenticalIndicesJob.Execute();
-
-                                if (indices.Count < 3)
-                                    intersectionData.allIntersectionLoops.RemoveAt(i);
                             }
 
-                            for (int i = intersectionData.basePolygons.Count - 1; i >= 0; i--)
+                            for (int i = intersectionData.basePolygonLoops.Length - 1; i >= 0; i--)
                             {
-                                var indices = intersectionData.basePolygons[i].indices;
+                                var indices = intersectionData.basePolygonLoops[i].indices;
 
                                 removeIdenticalIndicesJob.indices = indices;
                                 // TODO: eventually actually use jobs
