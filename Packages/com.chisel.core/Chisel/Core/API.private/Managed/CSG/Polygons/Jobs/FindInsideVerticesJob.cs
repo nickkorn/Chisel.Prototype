@@ -206,7 +206,7 @@ namespace Chisel.Core
         [ReadOnly] public float4x4            nodeToTreeSpaceMatrix;
         [ReadOnly] public float4x4            vertexToLocal0;
 
-        [NativeDisableUnsafePtrRestriction]
+        //[NativeDisableUnsafePtrRestriction]
         [WriteOnly] public NativeStream.Writer vertexWriter;
 
         public void Execute(int index)

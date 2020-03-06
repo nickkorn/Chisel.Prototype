@@ -575,8 +575,7 @@ namespace Chisel.Core
                                 {
                                     indices = indices
                                 };
-                                // TODO: eventually actually use jobs
-                                removeIdenticalIndicesJob.Execute();
+                                removeIdenticalIndicesJob.Run();
                             }
 
                             for (int i = intersectionData.basePolygonLoops.Length - 1; i >= 0; i--)
@@ -587,8 +586,7 @@ namespace Chisel.Core
                                 {
                                     indices = indices
                                 };
-                                // TODO: eventually actually use jobs
-                                removeIdenticalIndicesJob.Execute();
+                                removeIdenticalIndicesJob.Run();
                             }
 
                             intersectionData.StoreOutput();
