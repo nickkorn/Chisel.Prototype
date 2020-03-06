@@ -3,6 +3,11 @@ using System.Collections.Generic;
 using System.Linq;
 using System.ComponentModel;
 using UnityEngine;
+using Unity.Mathematics;
+using Unity.Jobs;
+using Unity.Collections;
+using Unity.Collections.LowLevel.Unsafe;
+using Unity.Entities;
 
 namespace Chisel.Core
 {
@@ -143,50 +148,81 @@ namespace Chisel.Core
             }
         }
 
-        static void FindIntersectingBrushes(List<int> treeBrushes)
+        unsafe static void FillBrushIntersectionTestData(List<int> treeBrushes, NativeArray<BrushIntersectionTestData> brushData)
         {
-            // Find intersecting brushes
-            // TODO: do this at insertion/removal time (grouped, in update loop)
-            // TODO: optimize, use hashed grid
             for (int b0 = 0; b0 < treeBrushes.Count; b0++)
             {
                 var brush0NodeID    = treeBrushes[b0];
                 var brush0          = new CSGTreeBrush { brushNodeID = brush0NodeID };
-                var output0         = CSGManager.GetBrushInfo(brush0NodeID);
                 var bounds0         = nodeBounds[brush0NodeID - 1];
 
-                for (int b1 = b0 + 1; b1 < treeBrushes.Count; b1++)
+                var treeToNode0SpaceMatrix = (float4x4)brush0.TreeToNodeSpaceMatrix;
+                var nodeToTree0SpaceMatrix = (float4x4)brush0.NodeToTreeSpaceMatrix;
+
+                var brushMesh0 = BrushMeshManager.GetBrushMeshBlob(brush0.BrushMesh.brushMeshID);
+                brushData[b0] = new BrushIntersectionTestData()
                 {
-                    var brush1NodeID    = treeBrushes[b1];
-                    var brush1          = new CSGTreeBrush { brushNodeID = brush1NodeID };
-                    var bounds1         = nodeBounds[brush1NodeID - 1];
+                    bounds                  = bounds0,
+                    treeToNodeSpaceMatrix   = treeToNode0SpaceMatrix,
+                    nodeToTreeSpaceMatrix   = nodeToTree0SpaceMatrix,
+                    brushMesh               = brushMesh0
+                };
+            }
+        }
 
-                    if (!bounds0.Intersects(bounds1, CSGManagerPerformCSG.kEpsilon))
-                        continue;
+        unsafe static void FindIntersectingBrushes(List<int> treeBrushes)
+        {
+            // Find intersecting brushes
+            // TODO: do this at insertion/removal time (grouped, in update loop)
+            // TODO: optimize, use hashed grid
 
-                    var intersectionType = BrushIntersection.ConvexPolytopeTouching(brush0, brush1, CSGManagerPerformCSG.kEpsilon);
+            using (var brushData            = new NativeArray<BrushIntersectionTestData>(treeBrushes.Count, Allocator.TempJob))
+            using (var intersectionResults  = new NativeStream(treeBrushes.Count * treeBrushes.Count, Allocator.TempJob))
+            {
+                FillBrushIntersectionTestData(treeBrushes, brushData);
 
-                    //Debug.Log($"{brush0.NodeID}/{brush1.NodeID} {intersectionType}");
+                int maxIndex = brushData.Length * brushData.Length;
 
+                var intersectionTestJob = new IntersectionTestJob()
+                {
+                    brushData = brushData,
+                    output = intersectionResults.AsWriter()
+                };
+                intersectionTestJob.Run(maxIndex); // FIXME: When I use "Run", it fails?
+
+                var reader = intersectionResults.AsReader();
+
+                int index = 0;
+                reader.BeginForEachIndex(index++);
+                while (reader.RemainingItemCount == 0 && index < maxIndex)
+                    reader.BeginForEachIndex(index++);
+                while (reader.RemainingItemCount > 0)
+                {
+                    var result = reader.Read<BrushBrushIntersection>();
+                    var brush0NodeID = treeBrushes[result.brushNodeID0];
+                    var brush1NodeID = treeBrushes[result.brushNodeID1];
+                    var output0 = CSGManager.GetBrushInfo(brush0NodeID);
                     var output1 = CSGManager.GetBrushInfo(brush1NodeID);
-                    if (intersectionType == IntersectionType.NoIntersection)
-                        continue;
-
-                    if (intersectionType == IntersectionType.Intersection)
+                    if (result.type == IntersectionType.Intersection)
                     {
-                        output0.brushBrushIntersections.Add(new BrushBrushIntersection() { brushNodeID0 = brush0.brushNodeID, brushNodeID1 = brush1.brushNodeID, type = IntersectionType.Intersection });
-                        output1.brushBrushIntersections.Add(new BrushBrushIntersection() { brushNodeID0 = brush1.brushNodeID, brushNodeID1 = brush0.brushNodeID, type = IntersectionType.Intersection });
-                    } else
-                    if (intersectionType == IntersectionType.AInsideB)
+                        output0.brushBrushIntersections.Add(new BrushBrushIntersection() { brushNodeID0 = brush0NodeID, brushNodeID1 = brush1NodeID, type = IntersectionType.Intersection });
+                        output1.brushBrushIntersections.Add(new BrushBrushIntersection() { brushNodeID0 = brush1NodeID, brushNodeID1 = brush0NodeID, type = IntersectionType.Intersection });
+                    }
+                    else
+                    if (result.type == IntersectionType.AInsideB)
                     {
-                        output0.brushBrushIntersections.Add(new BrushBrushIntersection() { brushNodeID0 = brush0.brushNodeID, brushNodeID1 = brush1.brushNodeID, type = IntersectionType.AInsideB });
-                        output1.brushBrushIntersections.Add(new BrushBrushIntersection() { brushNodeID0 = brush1.brushNodeID, brushNodeID1 = brush0.brushNodeID, type = IntersectionType.BInsideA });
-                    } else
+                        output0.brushBrushIntersections.Add(new BrushBrushIntersection() { brushNodeID0 = brush0NodeID, brushNodeID1 = brush1NodeID, type = IntersectionType.AInsideB });
+                        output1.brushBrushIntersections.Add(new BrushBrushIntersection() { brushNodeID0 = brush1NodeID, brushNodeID1 = brush0NodeID, type = IntersectionType.BInsideA });
+                    }
+                    else
                     //if (intersectionType == IntersectionType.BInsideA)
                     {
-                        output0.brushBrushIntersections.Add(new BrushBrushIntersection() { brushNodeID0 = brush0.brushNodeID, brushNodeID1 = brush1.brushNodeID, type = IntersectionType.BInsideA });
-                        output1.brushBrushIntersections.Add(new BrushBrushIntersection() { brushNodeID0 = brush1.brushNodeID, brushNodeID1 = brush0.brushNodeID, type = IntersectionType.AInsideB });
+                        output0.brushBrushIntersections.Add(new BrushBrushIntersection() { brushNodeID0 = brush0NodeID, brushNodeID1 = brush1NodeID, type = IntersectionType.BInsideA });
+                        output1.brushBrushIntersections.Add(new BrushBrushIntersection() { brushNodeID0 = brush1NodeID, brushNodeID1 = brush0NodeID, type = IntersectionType.AInsideB });
                     }
+
+                    while (reader.RemainingItemCount == 0 && index < maxIndex)
+                        reader.BeginForEachIndex(index++);
                 }
             }
         }
@@ -328,9 +364,9 @@ namespace Chisel.Core
             return true;
         }
 
-        #endregion
+#endregion
 
-        #region Reset/Rebuild
+                    #region Reset/Rebuild
         static void Reset()
         {
             for (int t = 0; t < trees.Count; t++)
@@ -407,7 +443,7 @@ namespace Chisel.Core
             Reset();
             UpdateAllTreeMeshes();
         }
-        #endregion
+                    #endregion
     }
 #endif
-}
+                }

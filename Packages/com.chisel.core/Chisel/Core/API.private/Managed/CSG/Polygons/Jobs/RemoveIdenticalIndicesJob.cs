@@ -22,16 +22,24 @@ namespace Chisel.Core
         // TODO: optimize
         public void Execute()
         {
-            while (indices.Count > 3 && indices[indices.Count - 1] == indices[0])
-                indices.RemoveAt(indices.Count - 1);
+            var newIndices = new List<ushort>(indices.Count);
+            for (int i = 0; i < indices.Count; i++)
+                newIndices.Add(indices[i]);
 
-            for (int v0 = indices.Count - 2, v1 = indices.Count - 1; indices.Count > 3 && v0 >= 0; v1 = v0, v0--)
+            while (newIndices.Count > 3 && newIndices[newIndices.Count - 1] == newIndices[0])
+                newIndices.RemoveAt(newIndices.Count - 1);
+
+            // TODO: fix this mess
+            for (int v0 = newIndices.Count - 2, v1 = newIndices.Count - 1; newIndices.Count > 3 && v0 >= 0; v1 = v0, v0--)
             {
                 if (indices[v0] != indices[v1])
                     continue;
 
-                indices.RemoveAt(v1);
+                newIndices.RemoveAt(v1);
             }
+            indices.Clear();
+            for (int i = 0; i < newIndices.Count; i++)
+                indices.Add(newIndices[i]);
         }
     }
 

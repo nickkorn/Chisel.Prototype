@@ -5,37 +5,57 @@ using System.ComponentModel;
 using UnityEngine;
 using System.Runtime.CompilerServices;
 using Unity.Mathematics;
+using Unity.Burst;
+using Unity.Entities;
 
 namespace Chisel.Core
 {
 #if USE_MANAGED_CSG_IMPLEMENTATION
     internal class BrushIntersection
     {
-        internal static IntersectionType ConvexPolytopeTouching(CSGTreeBrush brush0, CSGTreeBrush brush1, double epsilon)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [BurstCompile]
+        unsafe static void TransformOtherIntoBrushSpace(CSGTreeBrush brush0, CSGTreeBrush brush1, ref BlobArray<float4> srcPlanes, float4* dstPlanes)
         {
-            if (!brush0.BrushMesh.Valid ||
-                !brush1.BrushMesh.Valid)
+            // inverse of (otherTransform.localToWorldSpace * this->worldToLocalSpace)
+
+            var treeToBrush0SpaceMatrix = brush0.TreeToNodeSpaceMatrix;
+            var brushToTree1SpaceMatrix = brush1.NodeToTreeSpaceMatrix;
+
+            var brush1ToBrush0LocalLocalSpace = math.transpose(math.mul(treeToBrush0SpaceMatrix, brushToTree1SpaceMatrix));
+            for (int plane_index = 0; plane_index < srcPlanes.Length; plane_index++)
+            {
+                ref var srcPlane = ref srcPlanes[plane_index];
+                dstPlanes[plane_index] = math.mul(brush1ToBrush0LocalLocalSpace, srcPlane);
+            }
+        }
+
+
+        [BurstCompile]
+        unsafe internal static IntersectionType ConvexPolytopeTouching(CSGTreeBrush brush0, CSGTreeBrush brush1, double epsilon)
+        {
+            var brushMesh0 = BrushMeshManager.GetBrushMeshBlob(brush0.BrushMesh.brushMeshID);
+            var brushMesh1 = BrushMeshManager.GetBrushMeshBlob(brush1.BrushMesh.brushMeshID);
+            if (brushMesh0 == BlobAssetReference<BrushMeshBlob>.Null ||
+                brushMesh1 == BlobAssetReference<BrushMeshBlob>.Null)
                 return IntersectionType.NoIntersection;
 
-            var brushMesh0          = BrushMeshManager.GetBrushMesh(brush0.BrushMesh.brushMeshID);
-            var brushMesh1          = BrushMeshManager.GetBrushMesh(brush1.BrushMesh.brushMeshID);
+            ref var brushPlanes0   = ref brushMesh0.Value.planes;
+            ref var brushPlanes1   = ref brushMesh1.Value.planes;
 
-            if (brushMesh0 == null ||
-                brushMesh1 == null)
-                return IntersectionType.NoIntersection;
+            ref var brushVertices0 = ref brushMesh0.Value.vertices;
+            ref var brushVertices1 = ref brushMesh1.Value.vertices;
 
-            var brushSurfaces0      = brushMesh0.planes;
-            var brushSurfaces1      = brushMesh1.planes;
-
-            var transformedPlanes0  = TransformOtherIntoBrushSpace(brush0, brush1, brushSurfaces0);
+            var transformedPlanes0 = stackalloc float4[brushPlanes0.Length];
+            TransformOtherIntoBrushSpace(brush0, brush1, ref brushPlanes0, transformedPlanes0);
             
             int negativeSides1 = 0;
             int positiveSides1 = 0;
             int intersectingSides1 = 0;
-            for (var i = 0; i < transformedPlanes0.Length; i++)
+            for (var i = 0; i < brushPlanes0.Length; i++)
             {
                 var plane0 = transformedPlanes0[i];
-                int side = WhichSide(brushMesh1.vertices, plane0, epsilon);
+                int side = WhichSide(ref brushVertices1, plane0, epsilon);
                 if (side < 0) negativeSides1++;
                 if (side > 0) positiveSides1++;
                 if (side == 0) intersectingSides1++;
@@ -47,19 +67,20 @@ namespace Chisel.Core
             //if (intersectingSides > 0) return IntersectionType.Intersection;
             if (positiveSides1 > 0) return IntersectionType.NoIntersection;
             //if (negativeSides > 0 && positiveSides > 0) return IntersectionType.Intersection;
-            if (negativeSides1 == transformedPlanes0.Length)
+            if (negativeSides1 == brushPlanes0.Length)
                 return IntersectionType.BInsideA;
-            
+
             //*
-            var transformedPlanes1 = TransformOtherIntoBrushSpace(brush1, brush0, brushSurfaces1);
+            var transformedPlanes1 = stackalloc float4[brushPlanes1.Length];
+            TransformOtherIntoBrushSpace(brush1, brush0, ref brushPlanes1, transformedPlanes1);
 
             int negativeSides2 = 0;
             int positiveSides2 = 0;
             int intersectingSides2 = 0;
-            for (var i = 0; i < transformedPlanes1.Length; i++)
+            for (var i = 0; i < brushPlanes1.Length; i++)
             {
                 var plane1 = transformedPlanes1[i];
-                int side = WhichSide(brushMesh0.vertices, plane1, epsilon);
+                int side = WhichSide(ref brushVertices0, plane1, epsilon);
                 if (side < 0) negativeSides2++;
                 if (side > 0) positiveSides2++;
                 if (side == 0) intersectingSides2++;
@@ -67,20 +88,20 @@ namespace Chisel.Core
 
             //Debug.Log($"B positive: {positiveSides2} negative: {negativeSides2} intersecting: {intersectingSides2} / {transformedPlanes1.Length}");
 
-            if (positiveSides2 > 0) return IntersectionType.NoIntersection;
+            if (positiveSides2     > 0) return IntersectionType.NoIntersection;
             if (intersectingSides2 > 0) return IntersectionType.Intersection;
             //if (negativeSides > 0 && positiveSides > 0) return IntersectionType.Intersection;
-            if (negativeSides2 == transformedPlanes1.Length)
+            if (negativeSides2 == brushPlanes1.Length)
                 return IntersectionType.AInsideB;
             
             return IntersectionType.Intersection;//*/
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        static int WhichSide(float3[] vertices, float4 plane, double epsilon)
+        static int WhichSide(ref BlobArray<float3> vertices, float4 plane, double epsilon)
         {
             {
-                float t = math.dot(plane, new float4(vertices[0], 1));
+                var t = math.dot(plane, new float4(vertices[0], 1));
                 if (t >=  epsilon) goto HavePositive;
                 if (t <= -epsilon) goto HaveNegative;
                 return 0;
@@ -88,7 +109,7 @@ namespace Chisel.Core
         HaveNegative:
             for (var i = 1; i < vertices.Length; i++)
             {
-                float t = math.dot(plane, new float4(vertices[i], 1));
+                var t = math.dot(plane, new float4(vertices[i], 1));
                 if (t > -epsilon)
                     return 0;
             }
@@ -96,29 +117,11 @@ namespace Chisel.Core
         HavePositive:
             for (var i = 1; i < vertices.Length; i++)
             {
-                float t = math.dot(plane, new float4(vertices[i], 1));
+                var t = math.dot(plane, new float4(vertices[i], 1));
                 if (t < epsilon)
                     return 0;
             }
             return 1;
-        }
-
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        static float4[] TransformOtherIntoBrushSpace(CSGTreeBrush brush0, CSGTreeBrush brush1, float4[] srcPlanes1)
-        {
-            // inverse of (otherTransform.localToWorldSpace * this->worldToLocalSpace)
-
-            var brush0ToTreeSpaceMatrix = brush0.NodeToTreeSpaceMatrix;
-            var treeToBrush1SpaceMatrix = brush1.TreeToNodeSpaceMatrix;
-
-            var brush1ToBrush0LocalLocalSpace = (float4x4)((treeToBrush1SpaceMatrix * brush0ToTreeSpaceMatrix).inverse.transpose);
-            
-            var dstPlanes = new float4[srcPlanes1.Length];
-            for (int plane_index = 0; plane_index < srcPlanes1.Length; plane_index++)
-                dstPlanes[plane_index] = math.mul(brush1ToBrush0LocalLocalSpace, srcPlanes1[plane_index]);;
-
-            return dstPlanes;
         }
     }
 #endif

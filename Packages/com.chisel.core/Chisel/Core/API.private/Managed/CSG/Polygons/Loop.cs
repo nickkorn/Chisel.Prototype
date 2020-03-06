@@ -44,38 +44,35 @@ namespace Chisel.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public Loop()
         {
-#if DebugInfo
-            if (logLoopIndices.Contains(loopIndex))
-                Debug.Log($"new => {loopIndex} {interiorCategory}");
-#endif
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public Loop(Loop original)
         {
-#if DebugInfo
-            if (logLoopIndices.Contains(loopIndex))
-                Debug.Log($"copy {original.loopIndex} ({original.holes.Count}/{original.indices.Count}/{original.edges.Count}/{(CategoryIndex)original.interiorCategory}) => {loopIndex}");
-#endif
             this.edges  .AddRange(original.edges);
             this.indices.AddRange(original.indices);
-            this.info               = original.info;
+            this.info = original.info;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public Loop(Loop original, CategoryGroupIndex newHoleCategory)
         {
-#if DebugInfo
-            if (logLoopIndices.Contains(loopIndex))
-                Debug.Log($"copy {original.loopIndex} ({original.holes.Count}/{original.indices.Count}/{original.edges.Count}/{(CategoryIndex)original.interiorCategory}) => {loopIndex}");
-#endif
             this.edges.AddRange(original.edges);
             this.indices.AddRange(original.indices);
             this.info = original.info;
             this.info.interiorCategory = newHoleCategory;
         }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        unsafe public Loop(in SurfaceInfo surfaceInfo, ushort* srcIndices, int offset, int length)
+        {
+            indices.Capacity = length;
+            for (int j = 0; j < length; j++, offset++)
+                indices.Add(srcIndices[offset]);
+            this.info = surfaceInfo;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ClearAllIndices()
         {
             indices.Clear();
@@ -87,11 +84,34 @@ namespace Chisel.Core
         internal void SetIndices(NativeList<ushort> srcIndices, int offset, int length)
         {
             indices.Clear();
-            indices.Capacity = length;
+            if (indices.Capacity < length)
+                indices.Capacity = length;
             for (int j = 0; j < length; j++, offset++)
                 indices.Add(srcIndices[offset]);
         }
 
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal void SetIndices(List<ushort> srcIndices)
+        {
+            if (indices == srcIndices)
+                return;
+            indices.Clear();
+            if (indices.Capacity < srcIndices.Count)
+                indices.Capacity = srcIndices.Count;
+            for (int j = 0; j < srcIndices.Count; j++)
+                indices.Add(srcIndices[j]);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal void SetIndices(NativeList<ushort> srcIndices)
+        {
+            indices.Clear();
+            if (indices.Capacity < srcIndices.Length)
+                indices.Capacity = srcIndices.Length;
+            for (int j = 0; j < srcIndices.Length; j++)
+                indices.Add(srcIndices[j]);
+        }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal unsafe void SetIndices(ushort* srcIndices, int offset, int length)

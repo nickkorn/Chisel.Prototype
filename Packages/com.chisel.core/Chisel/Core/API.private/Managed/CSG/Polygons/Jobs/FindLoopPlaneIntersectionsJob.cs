@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
@@ -8,6 +8,7 @@ using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Jobs;
 using Unity.Mathematics;
+using Unity.Entities;
 using UnityEngine;
 using ReadOnlyAttribute = Unity.Collections.ReadOnlyAttribute;
 
@@ -15,9 +16,12 @@ namespace Chisel.Core
 {
 #if USE_MANAGED_CSG_IMPLEMENTATION
     [BurstCompile]//FloatPrecision = FloatPrecision.Low, FloatMode = FloatMode.Fast, CompileSynchronously = true, Debug = false
-    public struct FindLoopIntersectionVerticesJob : IJob
+    public struct FindLoopPlaneIntersectionsJob : IJob
     {
-        public const int kMaxVertexCount = short.MaxValue;
+        public const int kMaxVertexCount    = short.MaxValue;
+        const float kVertexEqualEpsilonSqr  = (float)CSGManagerPerformCSG.kEpsilonSqr;
+        const float kPlaneDistanceEpsilon   = CSGManagerPerformCSG.kDistanceEpsilon;
+             
 
         // Add [NativeDisableContainerSafetyRestriction] when done, for performance
         [ReadOnly] public NativeList<float3>    verticesInput;

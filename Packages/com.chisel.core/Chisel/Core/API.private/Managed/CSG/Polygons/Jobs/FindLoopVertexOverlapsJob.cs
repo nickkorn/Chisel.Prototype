@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
@@ -15,7 +15,7 @@ namespace Chisel.Core
 {
 #if USE_MANAGED_CSG_IMPLEMENTATION
     [BurstCompile]//Debug = false
-    public struct FindLoopIntersectionVerticesJob2 : IJob
+    public struct FindLoopVertexOverlapsJob : IJob
     {
         public const int kMaxVertexCount = short.MaxValue;
         const float kPlaneDistanceEpsilon = CSGManagerPerformCSG.kDistanceEpsilon;

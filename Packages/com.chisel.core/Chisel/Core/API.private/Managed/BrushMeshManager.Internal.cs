@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using Unity.Burst;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
@@ -8,7 +9,7 @@ using UnityEngine;
 
 namespace Chisel.Core
 {
-    internal struct BrushMeshBlob
+    public struct BrushMeshBlob
     {
         public struct Polygon
         {
@@ -106,9 +107,10 @@ namespace Chisel.Core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [BurstDiscard]
         internal static BlobAssetReference<BrushMeshBlob> GetBrushMeshBlob(Int32 brushMeshInstanceID)
         {
-            if (!AssertBrushMeshIDValid(brushMeshInstanceID))
+            if (!IsBrushMeshIDValid(brushMeshInstanceID))
                 return BlobAssetReference<BrushMeshBlob>.Null;
             return brushMeshesBlobs[brushMeshInstanceID - 1];
         }
