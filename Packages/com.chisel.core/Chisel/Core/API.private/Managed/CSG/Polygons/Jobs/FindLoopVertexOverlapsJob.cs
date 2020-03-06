@@ -26,31 +26,6 @@ namespace Chisel.Core
         [ReadOnly] public NativeList<ushort>    otherIndices;
         public NativeList<ushort>               indices;
 
-
-        public void FindIntersections(NativeList<ushort> inputIndices, NativeList<ushort> otherIndices)
-        {
-            this.indices.ResizeUninitialized(inputIndices.Length);
-            for (int v = 0; v < inputIndices.Length; v++)
-                this.indices[v] = inputIndices[v];
-
-            this.otherIndices.ResizeUninitialized(otherIndices.Length);
-            for (int v = 0; v < otherIndices.Length; v++)
-                this.otherIndices[v] = otherIndices[v];
-        }
-
-        public void GetOutput(NativeList<ushort> indices)
-        {
-            if (this.indices.Length <= indices.Length)
-                return;
-
-            indices.Clear();
-            if (indices.Capacity < this.indices.Length)
-                indices.Capacity = this.indices.Length;
-            for (int n = 0; n < this.indices.Length; n++)
-                indices.Add(this.indices[n]);
-        }
-
-
         // TODO: find a way to share found intersections between loops, to avoid accuracy issues
         public unsafe void Execute()
         {

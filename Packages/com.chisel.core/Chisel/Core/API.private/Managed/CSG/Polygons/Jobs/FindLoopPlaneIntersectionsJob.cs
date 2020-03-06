@@ -24,34 +24,49 @@ namespace Chisel.Core
              
 
         // Add [NativeDisableContainerSafetyRestriction] when done, for performance
-        [ReadOnly] public NativeList<float3>    verticesInput;
-        [ReadOnly] public NativeArray<float4>   otherPlanesNative;
-        [ReadOnly] public NativeArray<float4>   selfPlanesNative;
-        [WriteOnly] public NativeList<float3>   verticesOutput;
+
+        [ReadOnly] public NativeList<float4>    allWorldSpacePlanes;
+        [ReadOnly] public int2                  otherPlanesSegment;
+        [ReadOnly] public int2                  selfPlanesSegment;
+        
+        public VertexSoup                       vertexSoup;
+        public NativeList<ushort>               indices;
 
         // TODO: find a way to share found intersections between loops, to avoid accuracy issues
         public unsafe void Execute()
         {
-            const float kVertexEqualEpsilonSqr = (float)CSGManagerPerformCSG.kEpsilonSqr;
-            const float kPlaneDistanceEpsilon = (float)CSGManagerPerformCSG.kDistanceEpsilon;
-             
-            var tempVertices = stackalloc float3[] { float3.zero, float3.zero };
-            
-            var otherPlanesNativePtr = (float4*)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(otherPlanesNative);
-            var selfPlanesNativePtr  = (float4*)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(selfPlanesNative);
+            var inputIndicesLength = indices.Length;
+            var inputIndices = (ushort*)UnsafeUtility.Malloc(indices.Length * sizeof(ushort), 4, Allocator.TempJob);
+            UnsafeUtility.MemCpyReplicate(inputIndices, indices.GetUnsafePtr(), sizeof(ushort) * indices.Length, 1);
 
-            var otherPlaneCount = otherPlanesNative.Length;
-            var selfPlaneCount  = selfPlanesNative.Length;
+
+            indices.Clear();
+
+
+            var tempVertices = stackalloc ushort[] { 0, 0 };
+
+            var allWorldSpacePlanePtr   = (float4*)allWorldSpacePlanes.GetUnsafeReadOnlyPtr();
+            var otherPlanesNativePtr    = allWorldSpacePlanePtr + otherPlanesSegment.x;
+            var selfPlanesNativePtr     = allWorldSpacePlanePtr + selfPlanesSegment.x;
+
+            var otherPlaneCount = otherPlanesSegment.y;
+            var selfPlaneCount  = selfPlanesSegment.y;
+
 
             // TODO: Optimize the hell out of this
             float3 vertex1;
             float4 vertex1w;
-            var vertex0 = verticesInput[verticesInput.Length - 1];
-            float4 vertex0w = new float4(vertex0, 1);
-            for (int v0 = 0; v0 < verticesInput.Length; v0++)
+            var vertexIndex0 = inputIndices[inputIndicesLength - 1];
+            var vertex0 = vertexSoup.vertices[vertexIndex0];
+            var vertex0w = new float4(vertex0, 1);
+            for (int v0 = 0; v0 < inputIndicesLength; v0++)
             {
+                indices.Add(vertexIndex0);
+                var vertexIndex1 = vertexIndex0;
+                vertexIndex0 = inputIndices[v0];
+
                 vertex1 = vertex0;
-                vertex0 = verticesInput[v0];
+                vertex0 = vertexSoup.vertices[vertexIndex0];
 
                 vertex1w = vertex0w;
                 vertex0w = new float4(vertex0, 1);
@@ -118,39 +133,50 @@ namespace Chisel.Core
                             goto SkipEdge;
                     }
 
-                    tempVertices[foundVertices] = newVertex;
-                    foundVertices++;
+                    var tempVertexIndex = vertexSoup.Add(newVertex);
+                    if ((foundVertices == 0 || tempVertexIndex != tempVertices[0]) &&
+                        vertexIndex0 != tempVertexIndex &&
+                        vertexIndex1 != tempVertexIndex)
+                    {
+                        tempVertices[foundVertices] = tempVertexIndex;
+                        foundVertices++;
 
-                    // It's impossible to have more than 2 intersections on a single edge when intersecting with a convex shape
-                    if (foundVertices == 2)
-                        break;
+                        // It's impossible to have more than 2 intersections on a single edge when intersecting with a convex shape
+                        if (foundVertices == 2)
+                            break;
+                    }
                     SkipEdge:
                     ;
                 }
 
                 if (foundVertices > 0)
                 {
+                    var tempVertexIndex0 = tempVertices[0];
+                    var tempVertex0 = vertexSoup.vertices[tempVertexIndex0];
+                    var tempVertexIndex1 = tempVertexIndex0;
                     if (foundVertices == 2)
                     {
-                        var dot0 = math.lengthsq(tempVertices[0] - vertex1);
-                        var dot1 = math.lengthsq(tempVertices[1] - vertex1);
+                        tempVertexIndex1 = tempVertices[1];
+                        var tempVertex1 = vertexSoup.vertices[tempVertexIndex1];
+                        var dot0 = math.lengthsq(tempVertex0 - vertex1);
+                        var dot1 = math.lengthsq(tempVertex1 - vertex1);
                         if (dot0 < dot1)
                         {
-                            verticesOutput.Add(tempVertices[0]);
-                            verticesOutput.Add(tempVertices[1]);
-                        }
-                        else
+                            indices.Add(tempVertexIndex0);
+                            indices.Add(tempVertexIndex1);
+                        } else
                         {
-                            verticesOutput.Add(tempVertices[1]);
-                            verticesOutput.Add(tempVertices[0]);
+                            indices.Add(tempVertexIndex1);
+                            indices.Add(tempVertexIndex0);
                         }
                     } else
                     {
-                        verticesOutput.Add(tempVertices[0]);
+                        indices.Add(tempVertexIndex0);
                     }
                 }
-                verticesOutput.Add(vertex0);
             }
+
+            UnsafeUtility.Free(inputIndices, Allocator.TempJob);
         }
     }
 

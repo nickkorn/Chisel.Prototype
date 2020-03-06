@@ -126,12 +126,6 @@ namespace Chisel.Core
 
             outputLoops.vertexSoup.Initialize(vertices.Length);
 
-
-            var removeIdenticalIndicesJob = new RemoveIdenticalIndicesJob
-            {
-                vertices = outputLoops.vertexSoup.vertices
-            };
-
             var min = new Vector3(float.PositiveInfinity, float.PositiveInfinity, float.PositiveInfinity);
             var max = new Vector3(float.NegativeInfinity, float.NegativeInfinity, float.NegativeInfinity);
 
@@ -157,12 +151,12 @@ namespace Chisel.Core
                     for (int e = firstEdge; e < lastEdge; e++)
                     {
                         var vertexIndex = halfEdges[e].vertexIndex;
-                        var vertex      = nodeToTreeSpaceMatrix.MultiplyPoint(vertices[vertexIndex]);
-                        min.x = Mathf.Min(min.x, vertex.x); max.x = Mathf.Max(max.x, vertex.x);
-                        min.y = Mathf.Min(min.y, vertex.y); max.y = Mathf.Max(max.y, vertex.y);
-                        min.z = Mathf.Min(min.z, vertex.z); max.z = Mathf.Max(max.z, vertex.z);
+                        var vertex      = (float3)nodeToTreeSpaceMatrix.MultiplyPoint(vertices[vertexIndex]);
+                        min.x = math.min(min.x, vertex.x); max.x = math.max(max.x, vertex.x);
+                        min.y = math.min(min.y, vertex.y); max.y = math.max(max.y, vertex.y);
+                        min.z = math.min(min.z, vertex.z); max.z = math.max(max.z, vertex.z);
 
-                        var newIndex = outputLoops.vertexSoup.Add(vertex);
+                        var newIndex = outputLoops.vertexSoup.Add(vertex); 
                         Debug.Assert(indices.Length == 0 ||
                                         (indices[0] != newIndex &&
                                         indices[indices.Length - 1] != newIndex));
@@ -171,7 +165,10 @@ namespace Chisel.Core
 
 
                     // THEORY: can end up with duplicate vertices when close enough vertices are snapped together
-                    removeIdenticalIndicesJob.indices = indices;
+                    var removeIdenticalIndicesJob = new RemoveIdenticalIndicesJob
+                    {
+                        indices = indices
+                    };
                     // TODO: eventually actually use jobs
                     removeIdenticalIndicesJob.Execute();
 

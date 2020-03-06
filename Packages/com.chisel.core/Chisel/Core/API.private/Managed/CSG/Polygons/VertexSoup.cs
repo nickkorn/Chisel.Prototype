@@ -51,7 +51,9 @@ namespace Chisel.Core
         {
             if (hashTable.IsCreated) hashTable.Dispose();
             hashTable = new NativeArray<int>((int)(kHashTableSize + 1), Allocator.Persistent, NativeArrayOptions.ClearMemory);
-
+            for (int i = 0; i < hashTable.Length; i++)
+                hashTable[i] = -1;
+            
             if (chainedIndices.IsCreated) chainedIndices.Dispose();
             chainedIndices = new NativeList<ChainedIndex>(minCapacity, Allocator.Persistent);
 
@@ -103,7 +105,7 @@ namespace Chisel.Core
                         {
                             ushort closestIndex = ushort.MaxValue;
                             float closestDistance = CSGManagerPerformCSG.kSqrMergeEpsilon;
-                            while (chainIndex != 0)
+                            while (chainIndex != -1)
                             {
                                 var vertexIndex = chainedIndices[chainIndex].vertexIndex;
                                 chainIndex = chainedIndices[chainIndex].nextChainIndex;
@@ -124,7 +126,7 @@ namespace Chisel.Core
                         {
                             ushort closestIndex = ushort.MaxValue;
                             float closestDistance = CSGManagerPerformCSG.kSqrMergeEpsilon;
-                            while (chainIndex != 0)
+                            while (chainIndex != -1)
                             {
                                 var vertexIndex = chainedIndices[chainIndex].vertexIndex;
                                 chainIndex = chainedIndices[chainIndex].nextChainIndex;
@@ -145,7 +147,7 @@ namespace Chisel.Core
                         {
                             ushort closestIndex = ushort.MaxValue;
                             float closestDistance = CSGManagerPerformCSG.kSqrMergeEpsilon;
-                            while (chainIndex != 0)
+                            while (chainIndex != -1)
                             {
                                 var vertexIndex = chainedIndices[chainIndex].vertexIndex;
                                 chainIndex = chainedIndices[chainIndex].nextChainIndex;

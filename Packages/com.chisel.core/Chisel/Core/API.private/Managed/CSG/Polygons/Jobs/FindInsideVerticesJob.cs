@@ -16,11 +16,9 @@ namespace Chisel.Core
 {
     struct IntersectionLoop
     {
-        public NativeArray<float4>  selfPlanes;
-        public List<Edge>           edges;
-        public Loop                 loop;
-        public int                  brushNodeID;
+        public int2                 segment;
         public int                  surfaceIndex;
+        public int                  brushNodeID;
         public NativeList<ushort>   indices;
     }
 
@@ -29,31 +27,35 @@ namespace Chisel.Core
         public CSGTreeBrush                         brush0;
         public BlobAssetReference<BrushMeshBlob>    meshBlob0;
         public float4x4                             treeToNodeSpaceMatrix0;
-
-        public NativeArray<float4>                  allWorldSpacePlanes;
+        
+        public NativeList<float4>                   allWorldSpacePlanes;
+        public NativeList<int2>                     brushPlaneSegments;
+        public int2                                 worldSpacePlanes0Segment;
 
         public List<Loop>                           basePolygons;
         public Dictionary<int, SurfaceLoops>        intersectionSurfaceLoops;
 
-        public List<IntersectionLoop>[]             intersectionSurfaces;
+        public List<int>[]                          intersectionSurfaces;
         public List<IntersectionLoop>               allIntersectionLoops;
         public IntersectionLoop[]                   basePolygonLoops;
 
-        public Dictionary<int, NativeArray<float4>>     brushPlanes;
-        
         public OverlapIntersectionData(CSGTreeBrush brush0, BlobAssetReference<BrushMeshBlob> meshBlob0, Dictionary<int, SurfaceLoops> intersectionSurfaceLoops, List<Loop> basePolygons)
         {
             this.brush0                 = brush0;
             this.meshBlob0              = meshBlob0;
             this.treeToNodeSpaceMatrix0 = brush0.TreeToNodeSpaceMatrix;
-            this.allWorldSpacePlanes    = new NativeArray<float4>(meshBlob0.Value.planes.Length, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
-            
+            this.allWorldSpacePlanes    = new NativeList<float4>(meshBlob0.Value.planes.Length, Allocator.Persistent);
+            this.brushPlaneSegments     = new NativeList<int2>(intersectionSurfaceLoops.Count, Allocator.Persistent);
+            this.worldSpacePlanes0Segment = new int2();
+
+
             this.basePolygons               = basePolygons;
             this.intersectionSurfaceLoops   = intersectionSurfaceLoops;
-            this.basePolygonLoops           = new IntersectionLoop[basePolygons.Count];
-            this.allIntersectionLoops       = new List<IntersectionLoop>();
-            this.intersectionSurfaces       = new List<IntersectionLoop>[0];
-            this.brushPlanes                = new Dictionary<int, NativeArray<float4>>();
+            this.basePolygonLoops       = new IntersectionLoop[basePolygons.Count];
+            this.allIntersectionLoops   = new List<IntersectionLoop>();
+            this.intersectionSurfaces   = new List<int>[meshBlob0.Value.planes.Length];
+            for (int i = 0; i < this.intersectionSurfaces.Length; i++)
+                this.intersectionSurfaces[i] = new List<int>(16);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -66,34 +68,42 @@ namespace Chisel.Core
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static unsafe void TransformByTransposedInversedMatrix(float4* planes, int length, float4x4 nodeToTreeSpaceInversed)
+        {
+            for (int p = 0; p < length; p++)
+            {
+                var planeVector = math.mul(nodeToTreeSpaceInversed, planes[p]);
+                planes[p] = planeVector / math.length(planeVector.xyz);
+            }
+        }
+
+        public NativeArray<float4> GetPlanes(int2 segment)
+        {
+            return allWorldSpacePlanes.AsArray().GetSubArray(segment.x, segment.y);
+        }
+
         public void Execute()
         {
-            var treeToNodeSpaceTransposed = math.transpose(brush0.TreeToNodeSpaceMatrix);
-            fixed (float4* meshSurfaces = &meshBlob0.Value.planes[0])
+            var treeToNodeSpaceTransposed = math.transpose(treeToNodeSpaceMatrix0);            
             {
-                float4* meshPlanes = (float4*)meshSurfaces;
-                var worldSpacePlanesPtr = (float4*)allWorldSpacePlanes.GetUnsafePtr();
-                TransformByTransposedInversedMatrix(worldSpacePlanesPtr, meshPlanes, meshBlob0.Value.planes.Length, treeToNodeSpaceTransposed);
+                var meshPlanes = (float4*)meshBlob0.Value.planes.GetUnsafePtr();
+                var startIndex = allWorldSpacePlanes.Length;
+                allWorldSpacePlanes.AddRange(meshPlanes, meshBlob0.Value.planes.Length);
+                worldSpacePlanes0Segment = new int2(startIndex, allWorldSpacePlanes.Length - startIndex);
+                var worldSpacePlanesPtr = ((float4*)allWorldSpacePlanes.GetUnsafePtr()) + worldSpacePlanes0Segment.x;
+                TransformByTransposedInversedMatrix(worldSpacePlanesPtr, worldSpacePlanes0Segment.y, treeToNodeSpaceTransposed);
             }
 
-            brushPlanes.Clear();
-            allIntersectionLoops.Clear();
-            var intersectionSurfaceLength = meshBlob0.Value.planes.Length;
-            intersectionSurfaces = new List<IntersectionLoop>[intersectionSurfaceLength];
-            for (int i = 0; i < intersectionSurfaceLength; i++)
-                intersectionSurfaces[i] = new List<IntersectionLoop>(16);
-            
             for (int s = 0; s < basePolygons.Count; s++)
             {
                 var loop = basePolygons[s];
                 var intersectionLoop = new IntersectionLoop()
                 {
-                    selfPlanes      = allWorldSpacePlanes,
+                    segment         = worldSpacePlanes0Segment,
                     indices         = new NativeList<ushort>(loop.indices.Count, Allocator.Persistent),
                     surfaceIndex    = s,
-                    brushNodeID     = brush0.brushNodeID,
-                    edges           = loop.edges,
-                    loop            = loop
+                    brushNodeID     = brush0.brushNodeID
                 };
                 for (int i = 0; i < loop.indices.Count; i++)
                     intersectionLoop.indices.Add(loop.indices[i]);
@@ -103,23 +113,20 @@ namespace Chisel.Core
 
             foreach (var pair in intersectionSurfaceLoops)
             {
-                var intersectingBrush = new CSGTreeBrush() { brushNodeID = pair.Key };
-                var mesh2 = BrushMeshManager.GetBrushMesh(intersectingBrush.BrushMesh.BrushMeshID);
-                Debug.Assert(mesh2 != null);
+                var intersectingBrush       = new CSGTreeBrush() { brushNodeID = pair.Key };
+                var mesh2                   = BrushMeshManager.GetBrushMeshBlob(intersectingBrush.BrushMesh.BrushMeshID);
+                Debug.Assert(!mesh2.Value.IsEmpty());
 
-                if (mesh2.planes.Length == 0 || pair.Value == null)
-                    continue;
+                treeToNodeSpaceTransposed   = math.transpose(intersectingBrush.TreeToNodeSpaceMatrix);
 
-                var worldSpacePlanes = new NativeArray<float4>(mesh2.planes.Length, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
-                var worldSpacePlanesPtr = (float4*)worldSpacePlanes.GetUnsafePtr();
-                treeToNodeSpaceTransposed = math.transpose(intersectingBrush.TreeToNodeSpaceMatrix);
-                fixed (float4* mesh2Surfaces = &mesh2.planes[0])
-                {
-                    float4* mesh2Planes = (float4*)mesh2Surfaces;
-                    TransformByTransposedInversedMatrix(worldSpacePlanesPtr, mesh2Planes, mesh2.planes.Length, treeToNodeSpaceTransposed);
-                }
-                brushPlanes.Add(intersectingBrush.brushNodeID, worldSpacePlanes);
-
+                var mesh2Planes = (float4*)mesh2.Value.planes.GetUnsafePtr();
+                var startIndex  = allWorldSpacePlanes.Length;
+                allWorldSpacePlanes.AddRange(mesh2Planes, mesh2.Value.planes.Length);
+                var segment = new int2(startIndex, allWorldSpacePlanes.Length - startIndex);
+                brushPlaneSegments.Add(segment);
+                var worldSpacePlanesPtr = ((float4*)allWorldSpacePlanes.GetUnsafePtr()) + segment.x;
+                TransformByTransposedInversedMatrix(worldSpacePlanesPtr, segment.y, treeToNodeSpaceTransposed);
+                
                 var surfaces = pair.Value.surfaces;
                 if (surfaces == null)
                     continue;
@@ -138,18 +145,16 @@ namespace Chisel.Core
                     var loop = loops[0];
                     var intersectionLoop = new IntersectionLoop()
                     {
-                        selfPlanes      = worldSpacePlanes,
+                        segment         = segment,
                         indices         = new NativeList<ushort>(loop.indices.Count, Allocator.Persistent),
                         surfaceIndex    = s,
-                        brushNodeID     = pair.Key,
-                        edges           = loop.edges,
-                        loop            = loop
+                        brushNodeID     = pair.Key
                     };
                     for (int i = 0; i < loop.indices.Count; i++)
                         intersectionLoop.indices.Add(loop.indices[i]);
 
                     // We add the intersection loop of this particular brush with our own brush
-                    intersectionSurface.Add(intersectionLoop);
+                    intersectionSurface.Add(allIntersectionLoops.Count);
                     allIntersectionLoops.Add(intersectionLoop);
                 }
             }
@@ -159,19 +164,15 @@ namespace Chisel.Core
         {
             foreach (var intersectionLoop in allIntersectionLoops)
             {
-                //var surfaceLoops = intersectionSurfaceLoops[intersectionLoop.brushNodeID];
-                var surfaceLoop = intersectionLoop.loop;// surfaceLoops.surfaces[intersectionLoop.surfaceIndex][0];
+                var surfaceLoops = intersectionSurfaceLoops[intersectionLoop.brushNodeID];
                 if (intersectionLoop.indices.Length < 3)
-                    //surfaceLoops.surfaces[intersectionLoop.surfaceIndex][0].ClearAllIndices();
-                    surfaceLoop.ClearAllIndices();
-                else
-                    surfaceLoop.SetIndices(intersectionLoop.indices);
+                    surfaceLoops.surfaces[intersectionLoop.surfaceIndex][0].ClearAllIndices();
+                surfaceLoops.surfaces[intersectionLoop.surfaceIndex][0].SetIndices(intersectionLoop.indices);
             }
 
-            foreach (var basePolygonsLoop in basePolygonLoops)
+            foreach (var intersectionLoop in basePolygonLoops)
             {
-                basePolygonsLoop.loop.SetIndices(basePolygonsLoop.indices);
-                //basePolygons[intersectionLoop.surfaceIndex].SetIndices(intersectionLoop.indices);
+                basePolygons[intersectionLoop.surfaceIndex].SetIndices(intersectionLoop.indices);
             }
         }
 
@@ -180,17 +181,18 @@ namespace Chisel.Core
             if (allWorldSpacePlanes.IsCreated)
                 allWorldSpacePlanes.Dispose();
 
-            foreach (var brushPlane in brushPlanes)
-                brushPlane.Value.Dispose();
-            brushPlanes.Clear();
+            if (brushPlaneSegments.IsCreated)
+                brushPlaneSegments.Dispose();
 
             foreach (var intersectionLoop in allIntersectionLoops)
+            {
                 intersectionLoop.indices.Dispose();
-            allIntersectionLoops.Clear();
+            }
 
-            foreach (var basePolygonLoop in basePolygonLoops)
-                basePolygonLoop.indices.Dispose();
-            allIntersectionLoops.Clear();
+            foreach (var intersectionLoop in basePolygonLoops)
+            {
+                intersectionLoop.indices.Dispose();
+            }
         }
     }
 

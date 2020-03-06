@@ -17,7 +17,6 @@ namespace Chisel.Core
     public struct RemoveIdenticalIndicesJob : IJob
     {
         public NativeList<ushort> indices;
-        public NativeList<float3> vertices;
 
         // TODO: optimize
         public void Execute()
