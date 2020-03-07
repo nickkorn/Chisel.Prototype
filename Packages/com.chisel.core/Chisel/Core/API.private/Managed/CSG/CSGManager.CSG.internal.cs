@@ -99,7 +99,7 @@ namespace Chisel.Core
                 var brush0NodeID = treeBrushes[b0];
                 var output = CSGManager.GetBrushInfo(brush0NodeID);
                 var outputLoops = output.brushOutputLoops;
-                outputLoops.vertexSoup.Clear();
+                outputLoops.vertexSoup.Dispose();
             }
             return true;
         }

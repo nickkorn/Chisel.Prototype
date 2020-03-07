@@ -154,7 +154,7 @@ namespace Chisel.Core
     static partial class CSGManager
     {
 #if USE_MANAGED_CSG_IMPLEMENTATION
-        const int kMaxVertexCount = 65000;
+        const int kMaxVertexCount = VertexSoup.kMaxVertexCount;
         internal sealed class ChiselBrushRenderBuffer
         {
             public readonly List<ChiselSurfaceRenderBuffer> surfaceRenderBuffers = new List<ChiselSurfaceRenderBuffer>();

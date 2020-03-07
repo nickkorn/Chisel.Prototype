@@ -48,7 +48,6 @@ namespace Chisel.Core
             this.brushPlaneSegments     = new NativeList<int2>(intersectionSurfaceLoops.Count, Allocator.Persistent);
             this.worldSpacePlanes0Segment = new int2();
 
-
             this.basePolygons               = basePolygons;
             this.intersectionSurfaceLoops   = intersectionSurfaceLoops;
             this.basePolygonLoops       = new IntersectionLoop[basePolygons.Count];
@@ -56,6 +55,80 @@ namespace Chisel.Core
             this.intersectionSurfaces   = new List<int>[meshBlob0.Value.planes.Length];
             for (int i = 0; i < this.intersectionSurfaces.Length; i++)
                 this.intersectionSurfaces[i] = new List<int>(16);
+        }
+
+        public void Dispose()
+        {
+            if (allWorldSpacePlanes.IsCreated)
+                allWorldSpacePlanes.Dispose();
+
+            if (brushPlaneSegments.IsCreated)
+                brushPlaneSegments.Dispose();
+
+            foreach (var intersectionLoop in allIntersectionLoops)
+            {
+                intersectionLoop.indices.Dispose();
+            }
+
+            foreach (var intersectionLoop in basePolygonLoops)
+            {
+                intersectionLoop.indices.Dispose();
+            }
+        }
+
+        public void StoreOutput(Dictionary<int, SurfaceLoops> intersectionSurfaceLoops, Dictionary<int, Loop[]> intersectionLoops, List<Loop> basePolygons)
+        {
+            foreach (var intersectionLoop in allIntersectionLoops)
+            {
+                var surfaceLoops = intersectionSurfaceLoops[intersectionLoop.brushNodeID];
+                if (intersectionLoop.indices.Length < 3)
+                    surfaceLoops.surfaces[intersectionLoop.surfaceIndex][0].ClearAllIndices();
+                surfaceLoops.surfaces[intersectionLoop.surfaceIndex][0].SetIndices(intersectionLoop.indices);
+            }
+
+            foreach (var intersectionLoop in basePolygonLoops)
+            {
+                basePolygons[intersectionLoop.surfaceIndex].SetIndices(intersectionLoop.indices);
+            }
+            
+            for (int i = 0; i < basePolygons.Count; i++)
+            {
+                var basePolygon = basePolygons[i];
+                basePolygon.edges.Clear();
+                basePolygon.AddEdges(basePolygon.indices);
+            }
+
+            foreach (var pair in intersectionSurfaceLoops)
+            {
+                var surfaceLoops = pair.Value.surfaces;
+                if (surfaceLoops == null)
+                {
+                    intersectionLoops[pair.Key] = null;
+                } else
+                {
+                    var loops = new Loop[surfaceLoops.Length];
+                    for (int i = 0; i < surfaceLoops.Length; i++)
+                    {
+                        var surfaceLoop = surfaceLoops[i];
+                        if (surfaceLoop == null ||
+                            surfaceLoop.Count == 0 ||
+                            surfaceLoop[0] == null ||
+                            !surfaceLoop[0].Valid)
+                        {
+                            loops[i] = null;
+                            continue;
+                        }
+
+                        Debug.Assert(surfaceLoop[0].Valid && (int)surfaceLoop[0].info.interiorCategory < CategoryRoutingRow.Length);
+
+                        var intersectionLoop = surfaceLoop[0];
+                        intersectionLoop.edges.Clear();
+                        intersectionLoop.AddEdges(intersectionLoop.indices);
+                        loops[i] = intersectionLoop;
+                    }
+                    intersectionLoops[pair.Key] = loops;
+                }
+            }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -157,41 +230,6 @@ namespace Chisel.Core
                     intersectionSurface.Add(allIntersectionLoops.Count);
                     allIntersectionLoops.Add(intersectionLoop);
                 }
-            }
-        }
-
-        public void StoreOutput()
-        {
-            foreach (var intersectionLoop in allIntersectionLoops)
-            {
-                var surfaceLoops = intersectionSurfaceLoops[intersectionLoop.brushNodeID];
-                if (intersectionLoop.indices.Length < 3)
-                    surfaceLoops.surfaces[intersectionLoop.surfaceIndex][0].ClearAllIndices();
-                surfaceLoops.surfaces[intersectionLoop.surfaceIndex][0].SetIndices(intersectionLoop.indices);
-            }
-
-            foreach (var intersectionLoop in basePolygonLoops)
-            {
-                basePolygons[intersectionLoop.surfaceIndex].SetIndices(intersectionLoop.indices);
-            }
-        }
-
-        public void Dispose()
-        {
-            if (allWorldSpacePlanes.IsCreated)
-                allWorldSpacePlanes.Dispose();
-
-            if (brushPlaneSegments.IsCreated)
-                brushPlaneSegments.Dispose();
-
-            foreach (var intersectionLoop in allIntersectionLoops)
-            {
-                intersectionLoop.indices.Dispose();
-            }
-
-            foreach (var intersectionLoop in basePolygonLoops)
-            {
-                intersectionLoop.indices.Dispose();
             }
         }
     }

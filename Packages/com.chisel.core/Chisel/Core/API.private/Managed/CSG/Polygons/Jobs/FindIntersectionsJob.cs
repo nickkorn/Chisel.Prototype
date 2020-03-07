@@ -303,7 +303,6 @@ namespace Chisel.Core
             }
         }
 
-        // TODO: get rid of references to mesh0/mesh1 and make this a job
         public void Execute()
         {
             ref var mesh0 = ref blobMesh0.Value;
@@ -564,12 +563,14 @@ namespace Chisel.Core
     unsafe struct SortLoopsJob : IJob
     {
         // Add [NativeDisableContainerSafetyRestriction] when done, for performance
-        [ReadOnly] public NativeList<PlaneVertexIndexPair>  foundIndices;
-        [ReadOnly] public NativeArray<SurfaceInfo>          surfaceCategory; // TODO: only use plane information here
-        [ReadOnly] public VertexSoup                        vertexSoup;
+        [ReadOnly] public NativeArray<SurfaceInfo>  surfaceCategory; // TODO: only use plane information here
+        [ReadOnly] public VertexSoup                vertexSoup;
 
-        public NativeList<int2> sortedStack;
+        // Cannot be ReadOnly because we sort it
+        //[ReadOnly] 
+        public NativeList<PlaneVertexIndexPair>     foundIndices;
 
+        // Cannot be WriteOnly because we sort segments after we insert them
         //[WriteOnly]
         public NativeList<ushort>                   uniqueIndices;
         //[WriteOnly]
@@ -577,25 +578,21 @@ namespace Chisel.Core
 
 
         #region Sort
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        float3 FindPolygonCentroid(ushort* indicesPtr, int offset, int indicesCount)
+        static float3 FindPolygonCentroid(float3* vertices, ushort* indicesPtr, int offset, int indicesCount)
         {
             var centroid = float3.zero;
-            var vertices = vertexSoup.vertices;
             for (int i = 0; i < indicesCount; i++, offset++)
                 centroid += vertices[indicesPtr[offset]];
             return centroid / indicesCount;
         }
 
         // TODO: sort by using plane information instead of unreliable floating point math ..
-        // TODO: make this work on non-convex polygons
-        void SortIndices(ushort* indicesPtr, int offset, int indicesCount, float3 normal)
+        unsafe void SortIndices(ushort* indicesPtr, int offset, int indicesCount, float3 normal)
         {
             // There's no point in trying to sort a point or a line 
             if (indicesCount < 3)
                 return;
 
-            var vertices = vertexSoup.vertices;
 
             float3 tangentX, tangentY;
             if (normal.x > normal.y)
@@ -622,16 +619,19 @@ namespace Chisel.Core
                 }
             }
 
-            var centroid = FindPolygonCentroid(indicesPtr, offset, indicesCount);
+            var vertices = (float3*)vertexSoup.vertices.GetUnsafePtr();
+            var centroid = FindPolygonCentroid(vertices, indicesPtr, offset, indicesCount);
             var center = new float2(math.dot(tangentX, centroid), // distance in direction of tangentX
                                     math.dot(tangentY, centroid)); // distance in direction of tangentY
 
-            sortedStack.Clear();
-            sortedStack.Add(new int2(0, indicesCount - 1));
-            while (sortedStack.Length > 0)
+
+            var sortedStack = (int2*)UnsafeUtility.Malloc(indicesCount * 2 * sizeof(int2), 4, Allocator.TempJob);
+            var sortedStackLength = 1;
+            sortedStack[0] = new int2(0, indicesCount - 1);
+            while (sortedStackLength > 0)
             {
-                var top = sortedStack[sortedStack.Length - 1];
-                sortedStack.Resize(sortedStack.Length - 1, NativeArrayOptions.UninitializedMemory);
+                var top = sortedStack[sortedStackLength - 1];
+                sortedStackLength--;
                 var l = top.x;
                 var r = top.y;
                 var left = l;
@@ -680,21 +680,30 @@ namespace Chisel.Core
                 }
                 if (l < right)
                 {
-                    sortedStack.Add(new int2(l, right));
+                    sortedStack[sortedStackLength] = new int2(l, right);
+                    sortedStackLength++;
                 }
                 if (left < r)
                 {
-                    sortedStack.Add(new int2(left, r));
+                    sortedStack[sortedStackLength] = new int2(left, r);
+                    sortedStackLength++;
                 }
             }
+            UnsafeUtility.Free(sortedStack, Allocator.TempJob);
         }
         #endregion
 
 
         public void Execute()
         {
-            //NativeSortExtension.Sort(foundIndices); // <- we can't if it's readonly!
+            if (foundIndices.Length < 3)
+            {
+                foundIndices.Clear();
+                return;
+            }
+            NativeSortExtension.Sort(foundIndices); // <- we can only do this if it's readonly!
 
+            // Now that our indices are sorted by planeIndex, we can segment them by start/end offset
             var previousPlaneIndex  = foundIndices[0].planeIndex;
             var previousVertexIndex = foundIndices[0].vertexIndex;
             uniqueIndices.Add(previousVertexIndex);
@@ -706,7 +715,7 @@ namespace Chisel.Core
                 var planeIndex  = indices.planeIndex;
                 var vertexIndex = indices.vertexIndex;
 
-                // TODO: why do we have soooo many duplicates?
+                // TODO: why do we have soooo many duplicates sometimes?
                 if (planeIndex  == previousPlaneIndex &&
                     vertexIndex == previousVertexIndex)
                     continue;
@@ -735,8 +744,9 @@ namespace Chisel.Core
 
             // TODO: do in separate pass?
 
+            // For each segment, we now sort our vertices within each segment, 
+            // making the assumption that they are convex
             var indicesPtr = (ushort*)uniqueIndices.GetUnsafeReadOnlyPtr();
-
             for (int n = planeIndexOffsets.Length - 1; n >= 0; n--)
             {
                 var planeIndexOffset    = planeIndexOffsets[n];
@@ -746,6 +756,7 @@ namespace Chisel.Core
                     planeIndexOffsets.RemoveAtSwapBack(n);
                     continue;
                 }
+
                 var offset      = planeIndexOffset.offset;
                 var planeIndex = planeIndexOffset.planeIndex;
                 SortIndices(indicesPtr, offset, length, surfaceCategory[planeIndex].worldPlane.xyz);
@@ -765,6 +776,9 @@ namespace Chisel.Core
 
         public void Execute()
         {
+            if (uniqueIndices.Length < 3)
+                return;
+            
             var indicesPtr              = (ushort*)uniqueIndices.GetUnsafeReadOnlyPtr();
             var planeIndexOffsetsPtr    = (PlaneIndexOffsetLength*)planeIndexOffsets.GetUnsafeReadOnlyPtr();
             var planeIndexOffsetsLength = planeIndexOffsets.Length;

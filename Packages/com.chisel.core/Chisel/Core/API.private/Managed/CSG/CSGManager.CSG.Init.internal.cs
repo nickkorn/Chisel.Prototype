@@ -10,6 +10,7 @@ using Unity.Jobs;
 using Unity.Mathematics;
 using ReadOnlyAttribute = Unity.Collections.ReadOnlyAttribute;
 using System.Runtime.CompilerServices;
+using Unity.Entities;
 
 namespace Chisel.Core
 {
@@ -107,20 +108,18 @@ namespace Chisel.Core
             if (!BrushMeshManager.IsBrushMeshIDValid(outputLoops.brush.BrushMesh.BrushMeshID))
                 return new Bounds();
 
-            var mesh                    = BrushMeshManager.GetBrushMesh(outputLoops.brush.BrushMesh.BrushMeshID);
-            if (mesh == null)
+            var mesh = BrushMeshManager.GetBrushMeshBlob(outputLoops.brush.BrushMesh.BrushMeshID);
+            if (mesh == BlobAssetReference<BrushMeshBlob>.Null)
             {
                 Debug.Log("mesh == null");
                 return new Bounds();
             }
 
-            var halfEdges               = mesh.halfEdges;
-            var vertices                = mesh.vertices;
-            var planes                  = mesh.planes;
-            var polygons                = mesh.polygons;
-            //var surfacesAroundVertex  = mesh.surfacesAroundVertex;
+            ref var vertices   = ref mesh.Value.vertices;
+            ref var planes     = ref mesh.Value.planes;
+            ref var polygons   = ref mesh.Value.polygons;
             var nodeToTreeSpaceMatrix   = outputLoops.brush.NodeToTreeSpaceMatrix;
-            outputLoops.basePolygons.Clear();
+            outputLoops.basePolygons.Clear(); 
             if (outputLoops.basePolygons.Capacity < polygons.Length)
                 outputLoops.basePolygons.Capacity = polygons.Length;
 
@@ -132,47 +131,41 @@ namespace Chisel.Core
             for (int p = 0; p < polygons.Length; p++)
             {
                 var polygon      = polygons[p];
-                var surfaceIndex = polygon.surfaceID;
-                var firstEdge    = polygon.firstEdge;
-                var lastEdge     = firstEdge + polygon.edgeCount;
 
                 if (polygon.edgeCount < 3 ||
-                    surfaceIndex >= planes.Length)
+                    p >= planes.Length)
                     continue;
 
                 // TODO: simplify
-                var localPlane          = new Plane(planes[surfaceIndex].xyz, planes[surfaceIndex].w);
+                var localPlane          = new Plane(planes[p].xyz, planes[p].w);
                 var worldPlane          = outputLoops.brush.NodeToTreeSpaceMatrix.TransformPlane(localPlane);
                 var worldPlaneVector    = new float4(worldPlane.normal, worldPlane.distance);
 
-                using (var indices = new NativeList<ushort>(lastEdge - firstEdge, Allocator.Temp))
+                var firstEdge    = polygon.firstEdge;
+                var lastEdge     = firstEdge + polygon.edgeCount;
+                var indexCount   = lastEdge - firstEdge;
+
+                using (var indices = new NativeList<ushort>(indexCount, Allocator.TempJob))
                 {
-                    //if (loop != null && loop.worldPlane.normal == Vector3.zero) Debug.LogError("!");
-                    for (int e = firstEdge; e < lastEdge; e++)
-                    {
-                        var vertexIndex = halfEdges[e].vertexIndex;
-                        var vertex      = (float3)nodeToTreeSpaceMatrix.MultiplyPoint(vertices[vertexIndex]);
-                        min.x = math.min(min.x, vertex.x); max.x = math.max(max.x, vertex.x);
-                        min.y = math.min(min.y, vertex.y); max.y = math.max(max.y, vertex.y);
-                        min.z = math.min(min.z, vertex.z); max.z = math.max(max.z, vertex.z);
-
-                        var newIndex = outputLoops.vertexSoup.Add(vertex); 
-                        Debug.Assert(indices.Length == 0 ||
-                                        (indices[0] != newIndex &&
-                                        indices[indices.Length - 1] != newIndex));
-                        indices.Add(newIndex);
-                    }
-
-
                     // THEORY: can end up with duplicate vertices when close enough vertices are snapped together
-                    var removeIdenticalIndicesJob = new RemoveIdenticalIndicesJob
+                    var removeIdenticalIndicesJob = new CopyPolygonToIndicesJob
                     {
-                        indices = indices
-                    };
-                    // TODO: eventually actually use jobs
-                    removeIdenticalIndicesJob.Execute();
+                        mesh = mesh,
+                        polygonIndex = p,
+                        nodeToTreeSpaceMatrix = nodeToTreeSpaceMatrix,
+                        vertexSoup = outputLoops.vertexSoup,
+                        indices = indices,
 
-                    if (CSGManagerPerformCSG.IsDegenerate(outputLoops.vertexSoup, indices))
+                        min = min,
+                        max = max
+                    };
+
+                    removeIdenticalIndicesJob.Run();
+
+                    min = removeIdenticalIndicesJob.min;
+                    max = removeIdenticalIndicesJob.max;
+
+                    if (indices.Length == 0)
                         continue;
 
                     var surfacePolygon = new Loop()
@@ -180,12 +173,12 @@ namespace Chisel.Core
                         info = new SurfaceInfo()
                         {
                             worldPlane          = worldPlaneVector,
-                            layers              = polygon.surface.brushMaterial.LayerDefinition,
-                            basePlaneIndex      = surfaceIndex,
+                            layers              = polygon.layerDefinition,
+                            basePlaneIndex      = p,
                             brush               = outputLoops.brush,
                             interiorCategory    = (CategoryGroupIndex)(int)CategoryIndex.ValidAligned,
                         },
-                        holes            = new List<Loop>()
+                        holes = new List<Loop>()
                     };
 
                     for (int i = 0; i < indices.Length; i++)
