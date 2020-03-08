@@ -204,8 +204,10 @@ namespace Chisel.Core
         //*
         internal static void Dump(System.Text.StringBuilder builder, Loop categorized_loop, in VertexSoup soup, Quaternion rotation)
         {
+            var vertices = soup.vertices;
             //builder.AppendLine($"loop ({categorized_loop.indices.Count}):");
             //builder.AppendLine($"loop {categorized_loop.loopIndex}:");
+            /*
             for (int i = 0; i < categorized_loop.indices.Count; i++)
             {
                 if (i > 0)
@@ -216,7 +218,6 @@ namespace Chisel.Core
             }
             builder.AppendLine();
 
-            var vertices = soup.vertices;
             for (int i = 0; i < categorized_loop.indices.Count; i++)
             {
                 var index = categorized_loop.indices[i];
@@ -232,7 +233,7 @@ namespace Chisel.Core
                 builder.Append($"({Convert.ToString((Decimal)vertex.x, CultureInfo.InvariantCulture)}, {Convert.ToString((Decimal)vertex.y, CultureInfo.InvariantCulture)})");
             }
             builder.AppendLine("             ");
-
+            */
 
             for (int i = 0; i < categorized_loop.edges.Count; i++)
             {
@@ -381,6 +382,13 @@ namespace Chisel.Core
                     continue;
                 }
 
+                var baseLoopNormal = CalculatePlaneEdges(baseloop, brushVertices);
+                if (math.all(baseLoopNormal == float3.zero))
+                {
+                    baseloop.edges.Clear();
+                    continue;
+                }
+
                 var holes = baseloop.holes;
                 if (holes.Count == 0)
                     continue;
@@ -393,17 +401,40 @@ namespace Chisel.Core
                         holes.RemoveAt(h);
                         continue;
                     }
+                    var holeNormal = CalculatePlaneEdges(hole, brushVertices);
+                    if (math.all(holeNormal == float3.zero))
+                    {
+                        holes.RemoveAt(h);
+                        continue;
+                    }
                 }
                 if (holes.Count == 0)
                     continue;
 
-                // TODO: why is not the same as worldPlane.normal?
-                var normal = CalculatePlane(baseloop, brushVertices);
+                /*
+                // TODO: figure out why sometimes polygons are flipped around, and try to fix this at the source
+                if (math.dot(baseLoopNormal, baseloop.info.worldPlane.xyz) < 0)
+                {
+                    var holeEdges = baseloop.edges;
+                    for (int n = 0; n < holeEdges.Count; n++)
+                    {
+                        var holeEdge = holeEdges[n];
+                        var i1 = holeEdge.index1;
+                        var i2 = holeEdge.index2;
+                        holeEdge.index1 = i2;
+                        holeEdge.index2 = i1;
+                        holeEdges[n] = holeEdge;
+                    }
+                    baseLoopNormal = baseloop.info.worldPlane.xyz;
+                }
+                */
 
+                // TODO: figure out why sometimes polygons are flipped around, and try to fix this at the source
                 for (int h = holes.Count - 1; h >= 0; h--)
                 {
                     var holeEdges = holes[h].edges;
-                    if (math.dot(CalculatePlane(holes[h], brushVertices), normal) > 0)
+                    var holeNormal = CalculatePlaneEdges(holes[h], brushVertices);
+                    if (math.dot(holeNormal, baseLoopNormal) > 0)
                     {
                         for (int n = 0; n < holeEdges.Count; n++)
                         {
@@ -517,6 +548,26 @@ namespace Chisel.Core
                 normal.y = normal.y + ((prevVertex.z - currVertex.z) * (prevVertex.x + currVertex.x));
                 normal.z = normal.z + ((prevVertex.x - currVertex.x) * (prevVertex.y + currVertex.y));
                 prevVertex = currVertex;
+            }
+            normal = normal.normalized;
+
+            return normal;
+        }
+
+        static float3 CalculatePlaneEdges(in Loop loop, in VertexSoup soup)
+        {
+            // Newell's algorithm to create a plane for concave polygons.
+            // NOTE: doesn't work well for self-intersecting polygons
+            var normal = Vector3.zero;
+            var vertices = soup.vertices;
+            for (int n = 0; n < loop.edges.Count; n++)
+            {
+                var edge = loop.edges[n];
+                var prevVertex = vertices[edge.index1];
+                var currVertex = vertices[edge.index2];
+                normal.x = normal.x + ((prevVertex.y - currVertex.y) * (prevVertex.z + currVertex.z));
+                normal.y = normal.y + ((prevVertex.z - currVertex.z) * (prevVertex.x + currVertex.x));
+                normal.z = normal.z + ((prevVertex.x - currVertex.x) * (prevVertex.y + currVertex.y));
             }
             normal = normal.normalized;
 

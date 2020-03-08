@@ -327,7 +327,7 @@ namespace Chisel.Core
             {
                 var localPlaneVector = mesh0.localPlanes[i];
                 var worldPlaneVector = math.mul(inverseNodeToTreeSpaceMatrix0, localPlaneVector);
-                var length = math.length(worldPlaneVector);
+                var length = math.length(worldPlaneVector.xyz);
                 worldPlaneVector /= length;
 
                 surfaceCategory0[i] = new SurfaceInfo()
@@ -343,7 +343,7 @@ namespace Chisel.Core
             {
                 var localPlaneVector = mesh1.localPlanes[i];
                 var worldPlaneVector = math.mul(inverseNodeToTreeSpaceMatrix1, localPlaneVector);
-                var length = math.length(worldPlaneVector);
+                var length = math.length(worldPlaneVector.xyz);
                 worldPlaneVector /= length;
 
                 surfaceCategory1[i] = new SurfaceInfo()
