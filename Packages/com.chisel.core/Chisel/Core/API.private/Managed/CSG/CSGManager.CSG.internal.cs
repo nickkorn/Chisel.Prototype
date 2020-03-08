@@ -56,6 +56,9 @@ namespace Chisel.Core
             UnityEngine.Profiling.Profiler.BeginSample("UpdateBrushTransformations");
             try { UpdateBrushTransformations(treeBrushes); } finally { UnityEngine.Profiling.Profiler.EndSample(); }
 
+            UnityEngine.Profiling.Profiler.BeginSample("UpdateBrushWorldPlanes");
+            try { UpdateBrushWorldPlanes(treeBrushes); } finally { UnityEngine.Profiling.Profiler.EndSample(); }
+
             // TODO: should only do this at creation time + when moved
             UnityEngine.Profiling.Profiler.BeginSample("FindIntersectingBrushes");
             try { FindIntersectingBrushes(treeBrushes); } finally { UnityEngine.Profiling.Profiler.EndSample(); }
@@ -130,6 +133,24 @@ namespace Chisel.Core
             for (int i = 0; i < treeBrushes.Count; i++)
             {
                 UpdateBrushTransformation(treeBrushes[i]);
+            }
+        }
+
+        static void UpdateBrushWorldPlanes(int brushNodeID)
+        {
+            var brushNodeIndex	= brushNodeID - 1;
+            var brushInfo       = nodeHierarchies[brushNodeIndex].brushInfo;
+            if (brushInfo.brushWorldPlanes.IsCreated)
+                brushInfo.brushWorldPlanes.Dispose();
+            brushInfo.brushWorldPlanes = BrushWorldPlanes.BuildPlanes(BrushMeshManager.GetBrushMeshBlob(brushInfo.brushMeshInstanceID), nodeTransforms[brushNodeIndex].nodeToTree);
+        }
+
+        static void UpdateBrushWorldPlanes(List<int> treeBrushes)
+        {
+            // TODO: optimize, only do this when necessary
+            for (int i = 0; i < treeBrushes.Count; i++)
+            {
+                UpdateBrushWorldPlanes(treeBrushes[i]);
             }
         }
 
@@ -350,23 +371,47 @@ namespace Chisel.Core
                             if (intersectionCategory == surfaceLoop.info.interiorCategory)
                                 continue;
 
-                            CSGManagerPerformCSG.Intersect(brushVertices, loopsOnBrushSurface, surfaceLoop, intersectionLoop, intersectionCategory);
+                            UnityEngine.Profiling.Profiler.BeginSample("Intersect");
+                            try
+                            {
+                                CSGManagerPerformCSG.Intersect(brushVertices, loopsOnBrushSurface, surfaceLoop, intersectionLoop, intersectionCategory);
+                            }
+                            finally
+                            {
+                                UnityEngine.Profiling.Profiler.EndSample();
+                            }
                         }
                         
                     }
 
                     // TODO: remove the need for this (check on insertion)
-                    CSGManagerPerformCSG.RemoveEmptyLoops(loopsOnBrushSurface);
+                    UnityEngine.Profiling.Profiler.BeginSample("RemoveEmptyLoops");
+                    try
+                    {
+                        CSGManagerPerformCSG.RemoveEmptyLoops(loopsOnBrushSurface);
+                    }
+                    finally
+                    {
+                        UnityEngine.Profiling.Profiler.EndSample();
+                    }
                 }
             }
 
-            CSGManagerPerformCSG.CleanUp(brushVertices, allBrushSurfaces);
+            UnityEngine.Profiling.Profiler.BeginSample("CleanUp");
+            try
+            {
+                CSGManagerPerformCSG.CleanUp(brushVertices, allBrushSurfaces);
+            }
+            finally
+            {
+                UnityEngine.Profiling.Profiler.EndSample();
+            }
             return true;
         }
 
-#endregion
+        #endregion
 
-                    #region Reset/Rebuild
+        #region Reset/Rebuild
         static void Reset()
         {
             for (int t = 0; t < trees.Count; t++)
@@ -443,7 +488,7 @@ namespace Chisel.Core
             Reset();
             UpdateAllTreeMeshes();
         }
-                    #endregion
+        #endregion
     }
 #endif
-                }
+}

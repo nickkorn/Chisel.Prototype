@@ -49,8 +49,8 @@ namespace Chisel.Core
                                                        ref float4x4 treeToNode1SpaceMatrix,
                                                        ref float4x4 nodeToTree1SpaceMatrix)
         {
-            ref var brushPlanes0   = ref brushMesh0.Value.planes;
-            ref var brushPlanes1   = ref brushMesh1.Value.planes;
+            ref var brushPlanes0   = ref brushMesh0.Value.localPlanes;
+            ref var brushPlanes1   = ref brushMesh1.Value.localPlanes;
 
             ref var brushVertices0 = ref brushMesh0.Value.vertices;
             ref var brushVertices1 = ref brushMesh1.Value.vertices;

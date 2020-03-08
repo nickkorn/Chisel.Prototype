@@ -11,6 +11,7 @@ using Unity.Mathematics;
 using ReadOnlyAttribute = Unity.Collections.ReadOnlyAttribute;
 using System.Globalization;
 using System.Runtime.CompilerServices;
+using Unity.Entities;
 
 namespace Chisel.Core
 {
@@ -366,10 +367,10 @@ namespace Chisel.Core
         internal static void CleanUp(in VertexSoup soup, List<Loop>[] surfaceLoops)
         {
             for (int surfaceIndex = 0; surfaceIndex < surfaceLoops.Length; surfaceIndex++)
-                CleanUp(soup, surfaceLoops[surfaceIndex], surfaceIndex);
+                CleanUp(soup, surfaceLoops[surfaceIndex]);
         }
 
-        internal static void CleanUp(in VertexSoup brushVertices, List<Loop> baseloops, int surfaceIndex)
+        internal static void CleanUp(in VertexSoup brushVertices, List<Loop> baseloops)
         {
             for (int l = baseloops.Count - 1; l >= 0; l--)
             {
@@ -416,23 +417,48 @@ namespace Chisel.Core
                     }
                 }
 
-
-                baseloop.destroyed = new bool[baseloop.edges.Count];
-                for (int h1 = holes.Count - 1; h1 >= 0; h1--)
                 {
-                    var hole1 = holes[h1];
-                    hole1.destroyed = new bool[hole1.edges.Count];
-                    CSGManagerPerformCSG.Subtract(brushVertices, baseloop, hole1);
+                    var brushInfo1 = CSGManager.GetBrushInfoUnsafe(baseloop.info.brush.brushNodeID);
+                    var worldPlanes1 = brushInfo1.brushWorldPlanes;
+                    using (var loop1Edges = new NativeArray<Edge>(baseloop.edges.Count, Allocator.TempJob))
+                    {
+                        baseloop.destroyed = new bool[baseloop.edges.Count];
+                        for (int h1 = holes.Count - 1; h1 >= 0; h1--)
+                        {
+                            var hole1 = holes[h1];
+                            hole1.destroyed = new bool[hole1.edges.Count];
+                            CSGManagerPerformCSG.Subtract(brushVertices, worldPlanes1, loop1Edges, baseloop, hole1);
+                        }
+                    }
                 }
 
                 // TODO: optimize, keep track which holes (potentially) intersect
                 for (int h1 = holes.Count - 1; h1 >= 0; h1--)
                 {
                     var hole1 = holes[h1];
-                    for (int h2 = holes.Count - 1; h2 > h1; h2--)
+
+                    var brush1NodeID = hole1.info.brush.brushNodeID;
+
+                    // TODO: create our own data structure that doesn't use stupid slow properties for everything
+                    //Bounds bounds1 = default;
+                    //if (CSGManager.GetBrushBounds(brush1NodeID, ref bounds1))
                     {
-                        var hole2 = holes[h2];
-                        CSGManagerPerformCSG.Merge(brushVertices, hole1, hole2);
+                        var brushInfo1 = CSGManager.GetBrushInfoUnsafe(brush1NodeID);
+                        var worldPlanes1 = brushInfo1.brushWorldPlanes;
+                        using (var loop1Edges = new NativeArray<Edge>(hole1.edges.Count, Allocator.TempJob))
+                        {
+                            for (int h2 = holes.Count - 1; h2 > h1; h2--)
+                            {
+                                var hole2 = holes[h2];
+                                var brush2NodeID = hole2.info.brush.brushNodeID;
+                                //Bounds bounds2 = default;
+                                //if (CSGManager.GetBrushBounds(brush1NodeID, ref bounds2) &&
+                                //    bounds1.Intersects(bounds2))
+                                {
+                                    CSGManagerPerformCSG.Merge(brushVertices, worldPlanes1, loop1Edges, hole1, hole2);
+                                }
+                            }
+                        }
                     }
                 }
                 for (int e = baseloop.destroyed.Length - 1; e >= 0; e--)
@@ -497,108 +523,137 @@ namespace Chisel.Core
             return normal;
         }
 
-        static void Subtract(in VertexSoup soup, Loop loop1, Loop loop2)
+        static unsafe void Subtract(in VertexSoup soup, BlobAssetReference<BrushWorldPlanes> worldPlanes1, NativeArray<Edge> loop1Edges, Loop loop1, Loop loop2)
         {
             if (loop1.edges.Count == 0 ||
                 loop2.edges.Count == 0)
                 return;
 
-            var categories1 = new EdgeCategory[loop1.edges.Count];
-            var categories2 = new EdgeCategory[loop2.edges.Count];
+            var brushInfo2 = CSGManager.GetBrushInfoUnsafe(loop2.info.brush.brushNodeID);
+            var worldPlanes2 = brushInfo2.brushWorldPlanes;
 
-
-            // 1. there are edges with two identical vertex indices?
-            // 2. all edges should overlap, but some aren't overlapping?
-
-            // TODO: use something that assumes convexity instead,
-            //          current method sometimes fails
-            for (int e = 0; e < loop1.edges.Count; e++)
+            // TODO: allocate/dispose arrays outside of outer loop, or make all edges always a NativeArray
+            using (var loop2Edges = new NativeArray<Edge>(loop2.edges.Count, Allocator.TempJob))
             {
-                categories1[e] = loop2.CategorizeEdge(soup, loop1.edges[e]);
-            }
+                {
+                    NativeArray<Edge> temp = loop1Edges; // workaround for "CaN't EdIt DiSpOsAbLe VaRiAbLeS" nonsense
+                    var edgePtr = (Edge*)temp.GetUnsafePtr();
+                    for (int e = 0; e < loop1.edges.Count; e++)
+                        edgePtr[e] = loop1.edges[e];
+                }
+                {
+                    NativeArray<Edge> temp = loop2Edges; // workaround for "CaN't EdIt DiSpOsAbLe VaRiAbLeS" nonsense
+                    var edgePtr = (Edge*)temp.GetUnsafePtr();
+                    for (int e = 0; e < loop2.edges.Count; e++)
+                        edgePtr[e] = loop2.edges[e];
+                }
+                // 1. there are edges with two identical vertex indices?
+                // 2. all edges should overlap, but some aren't overlapping?
+                
+                // *------*......*
+                // |      |      .
+                // |      |      .
+                // |      |      .
+                // *------*......*
 
-            for (int e = 0; e < loop2.edges.Count; e++)
-            {
-                categories2[e] = loop1.CategorizeEdge(soup, loop2.edges[e]);
-            }
-            
-            // *------*......*
-            // |      |      .
-            // |      |      .
-            // |      |      .
-            // *------*......*
+                // *------*
+                // | *----*
+                // | |    .
+                // | *----*
+                // *------*
 
-            // *------*
-            // | *----*
-            // | |    .
-            // | *----*
-            // *------*
+                fixed (bool* loop1EdgesDestroyed = &loop1.destroyed[0])
+                { 
+                    var categorizeEdgesJob1 = new CategorizeEdgesJob()
+                    {
+                        vertexSoup          = soup,
+                        edges1              = loop1Edges,
+                        destroyed1          = loop1EdgesDestroyed,
+                        brushWorldPlanes    = worldPlanes2,
+                        edges2              = loop2Edges,
+                    
+                        // TODO: reversed edges should cancel?
+                        good1           = EdgeCategory.Outside,
+                        good2           = EdgeCategory.Aligned
+                    };
+                    categorizeEdgesJob1.Run();
+                }
+                 
+                fixed (bool* loop2EdgesDestroyed = &loop2.destroyed[0])
+                { 
+                    var categorizeEdgesJob2 = new CategorizeEdgesJob()
+                    {
+                        vertexSoup          = soup,
+                        edges1              = loop2Edges,
+                        destroyed1          = loop2EdgesDestroyed,
+                        brushWorldPlanes    = worldPlanes1,
+                        edges2              = loop1Edges,
 
-
-            // TODO: reversed edges should cancel?
-            for (int e = loop1.edges.Count - 1; e >= 0; e--)
-            {
-                if (categories1[e] == EdgeCategory.Outside
-                    || categories1[e] == EdgeCategory.Aligned
-                    //|| categories1[e] == EdgeCategory.ReverseAligned
-                    )
-                    continue;
-                loop1.destroyed[e] = true;
-            }
-
-            for (int e = loop2.edges.Count - 1; e >= 0; e--)
-            {
-                if (categories2[e] == EdgeCategory.Inside
-                    //|| categories2[e] == EdgeCategory.Outside
-                    //|| categories2[e] == EdgeCategory.Aligned
-                    //|| categories2[e] == EdgeCategory.ReverseAligned
-                    )
-                    continue;
-                loop2.destroyed[e] = true;
+                        good1           = EdgeCategory.Inside,
+                        good2           = EdgeCategory.Inside
+                    };
+                    categorizeEdgesJob2.Run();
+                }
             }
         }
 
-        static void Merge(in VertexSoup soup, Loop loop1, Loop loop2)
+
+
+        static unsafe void Merge(in VertexSoup soup, BlobAssetReference<BrushWorldPlanes> worldPlanes1, NativeArray<Edge> loop1Edges, Loop loop1, Loop loop2)
         {
             if (loop1.edges.Count == 0 ||
                 loop2.edges.Count == 0)
                 return;
 
-            var categories1 = new EdgeCategory[loop1.edges.Count];
-            var categories2 = new EdgeCategory[loop2.edges.Count];
+            var brushInfo2 = CSGManager.GetBrushInfoUnsafe(loop2.info.brush.brushNodeID);
+            var worldPlanes2 = brushInfo2.brushWorldPlanes;
 
-
-            for (int e = 0; e < loop1.edges.Count; e++)
+            // TODO: allocate/dispose arrays outside of outer loop, or make all edges always a NativeArray
+            using (var loop2Edges = new NativeArray<Edge>(loop2.edges.Count, Allocator.TempJob))
             {
-                if (!loop1.destroyed[e])
-                    categories1[e] = loop2.CategorizeEdge(soup, loop1.edges[e]);
-            }
+                {
+                    NativeArray<Edge> temp = loop1Edges; // workaround for "CaN't EdIt DiSpOsAbLe VaRiAbLeS" nonsense
+                    var edgePtr = (Edge*)temp.GetUnsafePtr();
+                    for (int e = 0; e < loop1.edges.Count; e++)
+                        edgePtr[e] = loop1.edges[e];
+                }
+                {
+                    NativeArray<Edge> temp = loop2Edges; // workaround for "CaN't EdIt DiSpOsAbLe VaRiAbLeS" nonsense
+                    var edgePtr = (Edge*)temp.GetUnsafePtr();
+                    for (int e = 0; e < loop2.edges.Count; e++)
+                        edgePtr[e] = loop2.edges[e];
+                }
+                fixed(bool* loop1EdgesDestroyed = &loop1.destroyed[0])
+                { 
+                    var categorizeEdgesJob1 = new CategorizeEdgesJob()
+                    {
+                        vertexSoup          = soup,
+                        edges1              = loop1Edges,
+                        destroyed1          = loop1EdgesDestroyed,
+                        brushWorldPlanes    = worldPlanes2,
+                        edges2              = loop2Edges,
 
-            for (int e = 0; e < loop2.edges.Count; e++)
-            {
-                if (!loop2.destroyed[e])
-                    categories2[e] = loop1.CategorizeEdge(soup, loop2.edges[e]);
-            }
+                        good1           = EdgeCategory.Outside,
+                        good2           = EdgeCategory.Aligned
+                    };
+                    categorizeEdgesJob1.Run();
+                }
 
+                fixed (bool* loop2EdgesDestroyed = &loop2.destroyed[0])
+                {
+                    var categorizeEdgesJob2 = new CategorizeEdgesJob()
+                    {
+                        vertexSoup          = soup,
+                        edges1              = loop2Edges,
+                        destroyed1          = loop2EdgesDestroyed,
+                        brushWorldPlanes    = worldPlanes1,
+                        edges2              = loop1Edges,
 
-            for (int e = loop1.edges.Count - 1; e >= 0; e--)
-            {
-                if (categories1[e] == EdgeCategory.Outside
-                    //|| categories1[e] == EdgeCategory.ReverseAligned
-                    || categories1[e] == EdgeCategory.Aligned
-                    )
-                    continue;
-                loop1.destroyed[e] = true;
-            }
-
-            for (int e = loop2.edges.Count - 1; e >= 0; e--)
-            {
-                if (categories2[e] == EdgeCategory.Outside
-                    //|| categories1[e] == EdgeCategory.ReverseAligned
-                    //|| categories1[e] == EdgeCategory.Aligned
-                    )
-                    continue;
-                loop2.destroyed[e] = true;
+                        good1           = EdgeCategory.Outside,
+                        good2           = EdgeCategory.Outside
+                    };
+                    categorizeEdgesJob2.Run();
+                }
             }
         }
 

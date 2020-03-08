@@ -9,6 +9,30 @@ using UnityEngine;
 
 namespace Chisel.Core
 {
+    public struct BrushWorldPlanes
+    {
+        public BlobArray<float4> worldPlanes;
+
+        public static BlobAssetReference<BrushWorldPlanes> BuildPlanes(BlobAssetReference<BrushMeshBlob> brushMeshBlob, float4x4 nodeToTreeTransformation)
+        {
+            if (!brushMeshBlob.IsCreated)
+                return BlobAssetReference<BrushWorldPlanes>.Null;
+
+            var nodeToTreeInverseTransposed = math.transpose(math.inverse(nodeToTreeTransformation));
+            using (var builder = new BlobBuilder(Allocator.Temp))
+            {
+                ref var root = ref builder.ConstructRoot<BrushWorldPlanes>();
+                var worldPlaneArray = builder.Allocate(ref root.worldPlanes, brushMeshBlob.Value.localPlanes.Length);
+                for (int i = 0; i < brushMeshBlob.Value.localPlanes.Length; i++)
+                {
+                    var localPlane = brushMeshBlob.Value.localPlanes[i];
+                    worldPlaneArray[i] = math.mul(nodeToTreeInverseTransposed, localPlane);
+                }
+                return builder.CreateBlobAssetReference<BrushWorldPlanes>(Allocator.Persistent);
+            }
+        }
+    }
+
     public struct BrushMeshBlob
     {
         public struct Polygon
@@ -23,17 +47,19 @@ namespace Chisel.Core
         public BlobArray<BrushMesh.HalfEdge>	halfEdges;
         public BlobArray<int>                   halfEdgePolygonIndices;
         public BlobArray<Polygon>	            polygons;
-        public BlobArray<float4>                planes;
+        public BlobArray<float4>                localPlanes;
         
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool IsEmpty()
         {
-            return (planes.Length == 0 || polygons.Length == 0 || vertices.Length == 0 || halfEdges.Length == 0);
+            return (localPlanes.Length == 0 || polygons.Length == 0 || vertices.Length == 0 || halfEdges.Length == 0);
         }
 
         public static BlobAssetReference<BrushMeshBlob> Build(BrushMesh brushMesh)
         {
+            if (brushMesh == null)
+                return BlobAssetReference<BrushMeshBlob>.Null;
             using (var builder = new BlobBuilder(Allocator.Temp))
             {
                 ref var root = ref builder.ConstructRoot<BrushMeshBlob>();
@@ -41,18 +67,18 @@ namespace Chisel.Core
                 builder.Construct(ref root.vertices, brushMesh.vertices);
                 builder.Construct(ref root.halfEdges, brushMesh.halfEdges);
                 builder.Construct(ref root.halfEdgePolygonIndices, brushMesh.halfEdgePolygonIndices);
-                var array = builder.Allocate(ref root.polygons, brushMesh.polygons.Length);
+                var polygonArray = builder.Allocate(ref root.polygons, brushMesh.polygons.Length);
                 for (int i = 0; i < brushMesh.polygons.Length; i++)
                 {
                     var polygon = brushMesh.polygons[i];
-                    array[i] = new Polygon()
+                    polygonArray[i] = new Polygon()
                     {
                         firstEdge = polygon.firstEdge,
                         edgeCount = polygon.edgeCount,
                         layerDefinition = polygon.surface.brushMaterial.LayerDefinition
                     };
                 }
-                builder.Construct(ref root.planes, brushMesh.planes);
+                builder.Construct(ref root.localPlanes, brushMesh.planes);
                 return builder.CreateBlobAssetReference<BrushMeshBlob>(Allocator.Persistent);
             }
         }

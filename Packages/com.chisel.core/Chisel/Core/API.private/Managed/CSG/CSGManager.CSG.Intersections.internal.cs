@@ -139,15 +139,12 @@ namespace Chisel.Core
                 if (l < right)
                 {
                     s_SortStack.Add(new int2(l, right));
-                    //SortIndices(indices, vertices, tangentX, tangentY, center, l, right);
                 }
                 if (left < r)
                 {
                     s_SortStack.Add(new int2(left, r));
-                    //SortIndices(indices, vertices, tangentX, tangentY, center, left, r);
                 }
             }
-            //SortIndices(indices, vertices, tangentX, tangentY, center, 0, indices.Count - 1);
 #else
             // sort vertices according to their angle relative to the centroid on plane defined by tangentX/tangentY
             vertices.Sort(delegate (Vector3 a, Vector3 b) 
@@ -187,9 +184,26 @@ namespace Chisel.Core
         public static unsafe bool IsOutsidePlanes(NativeArray<float4> planes, float4 localVertex)
         {
             const float kEpsilon = CSGManagerPerformCSG.kDistanceEpsilon;
+            var planePtr = (float4*)planes.GetUnsafeReadOnlyPtr();
             for (int n = 0; n < planes.Length; n++)
             {
-                var distance = math.dot(planes[n], localVertex);
+                var distance = math.dot(planePtr[n], localVertex);
+
+                // will be 'false' when distance is NaN or Infinity
+                if (!(distance <= kEpsilon))
+                    return true;
+            }
+            return false;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static unsafe bool IsOutsidePlanes(ref BlobArray<float4> planes, float4 localVertex)
+        {
+            const float kEpsilon = CSGManagerPerformCSG.kDistanceEpsilon;
+            var planePtr = (float4*)planes.GetUnsafePtr();
+            for (int n = 0; n < planes.Length; n++)
+            {
+                var distance = math.dot(planePtr[n], localVertex);
 
                 // will be 'false' when distance is NaN or Infinity
                 if (!(distance <= kEpsilon))
@@ -198,11 +212,11 @@ namespace Chisel.Core
             return false;
         }
         #endregion
-        
+
         #endregion
-        
+
         #region FindLoopOverlapIntersections
-        
+
         internal struct BrushData
         {
             public BlobAssetReference<BrushMeshBlob>    meshBlob;
@@ -232,12 +246,20 @@ namespace Chisel.Core
             public List<IntersectionLoop>           allIntersectionLoops;
             public Temporaries(List<int> treeBrushes)
             {
-                this.treeBrushes            = treeBrushes;
-                this.allWorldSpacePlanes    = new NativeList<float4>(4, Allocator.Persistent);
-                this.brushPlaneSegments     = new NativeList<int2>(treeBrushes.Count, Allocator.Persistent);
+                UnityEngine.Profiling.Profiler.BeginSample("Temporaries_Constructor");
+                try
+                {
+                    this.treeBrushes            = treeBrushes;
+                    this.allWorldSpacePlanes    = new NativeList<float4>(4, Allocator.Persistent);
+                    this.brushPlaneSegments     = new NativeList<int2>(treeBrushes.Count, Allocator.Persistent);
                 
-                this.brushDataList          = new List<BrushData>();
-                this.allIntersectionLoops   = new List<IntersectionLoop>();
+                    this.brushDataList          = new List<BrushData>();
+                    this.allIntersectionLoops   = new List<IntersectionLoop>();
+                }
+                finally
+                {
+                    UnityEngine.Profiling.Profiler.EndSample();
+                }
             }
 
 
@@ -270,109 +292,126 @@ namespace Chisel.Core
 
             public void Init()
             {
-                int totalPlanes = 0;
-
-                intersectingBrushes.Clear();
-                for (int b0 = 0; b0 < treeBrushes.Count; b0++)
+                UnityEngine.Profiling.Profiler.BeginSample("Temporaries.Init");
+                try
                 {
-                    var brushInfo = CSGManager.GetBrushInfo(treeBrushes[b0]);
-                    var intersections = brushInfo.brushBrushIntersections;
-                    if (intersections.Count == 0)
-                    {
-                        brushDataList.Add(BrushData.Default);
-                        continue;
-                    }
+                    int totalPlanes = 0;
 
-                    // Find all intersections between brushes
-                    foreach (var intersection in intersections)
+                    intersectingBrushes.Clear();
+                    for (int b0 = 0; b0 < treeBrushes.Count; b0++)
                     {
-                        Debug.Assert(intersection.brushNodeID0 != intersection.brushNodeID1);
-                        var reverseOrder    = intersection.brushNodeID0 > intersection.brushNodeID1; // ensures we do calculations exactly the same for each brush pair
-                        var type            = intersection.type;
-
-                        CSGTreeBrush brush0, brush1;
-                        if (reverseOrder)
+                        var brushInfo = CSGManager.GetBrushInfo(treeBrushes[b0]);
+                        var intersections = brushInfo.brushBrushIntersections;
+                        if (intersections.Count == 0)
                         {
-                            if (type == IntersectionType.AInsideB) type = IntersectionType.BInsideA;
-                            else if (type == IntersectionType.BInsideA) type = IntersectionType.AInsideB;
-                            brush0.brushNodeID = intersection.brushNodeID1;
-                            brush1.brushNodeID = intersection.brushNodeID0;
-                        } else
-                        {
-                            brush0.brushNodeID = intersection.brushNodeID0;
-                            brush1.brushNodeID = intersection.brushNodeID1;
+                            brushDataList.Add(BrushData.Default);
+                            continue;
                         }
 
-                        intersectingBrushes.Add(intersection); // uses hashset to ensure this is unique
+                        // Find all intersections between brushes
+                        foreach (var intersection in intersections)
+                        {
+                            Debug.Assert(intersection.brushNodeID0 != intersection.brushNodeID1);
+                            var reverseOrder = intersection.brushNodeID0 > intersection.brushNodeID1; // ensures we do calculations exactly the same for each brush pair
+                            var type = intersection.type;
+
+                            CSGTreeBrush brush0, brush1;
+                            if (reverseOrder)
+                            {
+                                if (type == IntersectionType.AInsideB) type = IntersectionType.BInsideA;
+                                else if (type == IntersectionType.BInsideA) type = IntersectionType.AInsideB;
+                                brush0.brushNodeID = intersection.brushNodeID1;
+                                brush1.brushNodeID = intersection.brushNodeID0;
+                            }
+                            else
+                            {
+                                brush0.brushNodeID = intersection.brushNodeID0;
+                                brush1.brushNodeID = intersection.brushNodeID1;
+                            }
+
+                            intersectingBrushes.Add(intersection); // uses hashset to ensure this is unique
+                        }
+
+                        var intersectingBrush = new CSGTreeBrush() { brushNodeID = treeBrushes[b0] };
+                        var newBrushData = new BrushData()
+                        {
+                            meshBlob = BrushMeshManager.GetBrushMeshBlob(intersectingBrush.BrushMesh.BrushMeshID),
+                            treeToNodeSpaceMatrix = intersectingBrush.TreeToNodeSpaceMatrix,
+                            nodeToTreeSpaceMatrix = intersectingBrush.NodeToTreeSpaceMatrix,
+
+                            outputLoops = brushInfo.brushOutputLoops
+                        };
+                        totalPlanes += newBrushData.meshBlob.Value.localPlanes.Length;
+                        brushDataList.Add(newBrushData);
                     }
-                    
-                    var intersectingBrush   = new CSGTreeBrush() { brushNodeID = treeBrushes[b0] };
-                    var newBrushData = new BrushData()
-                    {
-                        meshBlob                = BrushMeshManager.GetBrushMeshBlob(intersectingBrush.BrushMesh.BrushMeshID),
-                        treeToNodeSpaceMatrix   = intersectingBrush.TreeToNodeSpaceMatrix,
-                        nodeToTreeSpaceMatrix   = intersectingBrush.NodeToTreeSpaceMatrix,
 
-                        outputLoops             = brushInfo.brushOutputLoops
-                    };
-                    totalPlanes += newBrushData.meshBlob.Value.planes.Length;
-                    brushDataList.Add(newBrushData);
+                    allWorldSpacePlanes.Capacity = totalPlanes;
                 }
-
-                allWorldSpacePlanes.Capacity = totalPlanes;
+                finally
+                {
+                    UnityEngine.Profiling.Profiler.EndSample();
+                }
             }
 
             public void Execute()
             {
-                var indexLookup = new Dictionary<int, int>();
-                for (int b0 = 0; b0 < treeBrushes.Count; b0++)
+                UnityEngine.Profiling.Profiler.BeginSample("Temporaries.Execute");
+                try
                 {
-                    indexLookup[treeBrushes[b0]] = b0;
-                    var newBrushData = brushDataList[b0];
-                    if (newBrushData.meshBlob == BlobAssetReference<BrushMeshBlob>.Null)
-                        continue;
-
-                    var treeToNodeSpaceTransposed = math.transpose(newBrushData.treeToNodeSpaceMatrix);
-                    var meshPlanes          = (float4*)newBrushData.meshBlob.Value.planes.GetUnsafePtr();
-                    var startIndex          = allWorldSpacePlanes.Length;
-                    allWorldSpacePlanes.AddRange(meshPlanes, newBrushData.meshBlob.Value.planes.Length);
-                    var segment             = new int2(startIndex, allWorldSpacePlanes.Length - startIndex);
-                    brushPlaneSegments.Add(segment);
-                    var worldSpacePlanesPtr = ((float4*)allWorldSpacePlanes.GetUnsafePtr()) + segment.x;
-                    TransformByTransposedInversedMatrix(worldSpacePlanesPtr, segment.y, treeToNodeSpaceTransposed);
-                    newBrushData.planeSegment = segment;
-                }
-
-                for (int b0 = 0; b0 < treeBrushes.Count; b0++)
-                {
-                    var newBrushData = brushDataList[b0];
-                    if (newBrushData.meshBlob == BlobAssetReference<BrushMeshBlob>.Null)
-                        continue;
-
-                    var basePolygons = newBrushData.outputLoops.basePolygons;
-
-                    newBrushData.basePolygonLoops       = new IntersectionLoop[basePolygons.Count];
-                    newBrushData.intersectionSurfaces   = new List<int>[newBrushData.meshBlob.Value.planes.Length];
-                    for (int i = 0; i < newBrushData.intersectionSurfaces.Length; i++)
-                        newBrushData.intersectionSurfaces[i] = new List<int>(16);
-
-                    for (int s = 0; s < newBrushData.basePolygonLoops.Length; s++)
+                    var indexLookup = new Dictionary<int, int>();
+                    for (int b0 = 0; b0 < treeBrushes.Count; b0++)
                     {
-                        var loop = basePolygons[s];
-                        var intersectionLoop = new IntersectionLoop()
-                        {
-                            segment         = newBrushData.planeSegment,
-                            indices         = new NativeList<ushort>(loop.indices.Count, Allocator.Persistent),
-                            surfaceIndex    = s,
-                            brushNodeID     = treeBrushes[b0]
-                        };
+                        indexLookup[treeBrushes[b0]] = b0;
+                        var newBrushData = brushDataList[b0];
+                        if (newBrushData.meshBlob == BlobAssetReference<BrushMeshBlob>.Null)
+                            continue;
 
-                        for (int i = 0; i < loop.indices.Count; i++)
-                            intersectionLoop.indices.Add(loop.indices[i]);
-
-                        this.allIntersectionLoops.Add(intersectionLoop);
-                        newBrushData.basePolygonLoops[s] = intersectionLoop;
+                        var treeToNodeSpaceTransposed = math.transpose(newBrushData.treeToNodeSpaceMatrix);
+                        var meshPlanes          = (float4*)newBrushData.meshBlob.Value.localPlanes.GetUnsafePtr();
+                        var startIndex          = allWorldSpacePlanes.Length;
+                        allWorldSpacePlanes.AddRange(meshPlanes, newBrushData.meshBlob.Value.localPlanes.Length);
+                        var segment             = new int2(startIndex, allWorldSpacePlanes.Length - startIndex);
+                        brushPlaneSegments.Add(segment);
+                        var worldSpacePlanesPtr = ((float4*)allWorldSpacePlanes.GetUnsafePtr()) + segment.x;
+                        TransformByTransposedInversedMatrix(worldSpacePlanesPtr, segment.y, treeToNodeSpaceTransposed);
+                        newBrushData.planeSegment = segment;
                     }
+
+                    for (int b0 = 0; b0 < treeBrushes.Count; b0++)
+                    {
+                        var newBrushData = brushDataList[b0];
+                        if (newBrushData.meshBlob == BlobAssetReference<BrushMeshBlob>.Null)
+                            continue;
+
+                        var basePolygons = newBrushData.outputLoops.basePolygons;
+
+                        newBrushData.basePolygonLoops       = new IntersectionLoop[basePolygons.Count];
+                        newBrushData.intersectionSurfaces   = new List<int>[newBrushData.meshBlob.Value.localPlanes.Length];
+                        for (int i = 0; i < newBrushData.intersectionSurfaces.Length; i++)
+                            newBrushData.intersectionSurfaces[i] = new List<int>(16);
+
+                        for (int s = 0; s < newBrushData.basePolygonLoops.Length; s++)
+                        {
+                            var loop = basePolygons[s];
+                            var intersectionLoop = new IntersectionLoop()
+                            {
+                                segment         = newBrushData.planeSegment,
+                                indices         = new NativeList<ushort>(loop.indices.Count, Allocator.Persistent),
+                                surfaceIndex    = s,
+                                brushNodeID     = treeBrushes[b0]
+                            };
+
+                            for (int i = 0; i < loop.indices.Count; i++)
+                                intersectionLoop.indices.Add(loop.indices[i]);
+
+                            this.allIntersectionLoops.Add(intersectionLoop);
+                            newBrushData.basePolygonLoops[s] = intersectionLoop;
+                        }
+                    }
+                }
+                finally
+                {
+                    UnityEngine.Profiling.Profiler.EndSample();
                 }
             }
         }
@@ -407,13 +446,21 @@ namespace Chisel.Core
                         // TODO: get all the above from "temporaries"
 
                         // TODO: put this in a burstable data structure
-                        var loops01 = new SurfaceLoops(blobMesh0.Value.planes.Length);
-                        var loops10 = new SurfaceLoops(blobMesh1.Value.planes.Length);
+                        var loops01 = new SurfaceLoops(blobMesh0.Value.localPlanes.Length);
+                        var loops10 = new SurfaceLoops(blobMesh1.Value.localPlanes.Length);
 
 
                         using (var sharedPlaneData = new SharedPlaneData(brushInfo0, brushInfo1, brush0, blobMesh0, brush1, blobMesh1, type, Allocator.TempJob))
                         {
-                            sharedPlaneData.Run();
+                            UnityEngine.Profiling.Profiler.BeginSample("SharedPlaneData.Run");
+                            try
+                            {
+                                sharedPlaneData.Run();
+                            }
+                            finally
+                            {
+                                UnityEngine.Profiling.Profiler.EndSample();
+                            }
                             if (sharedPlaneData.intersectingPlanes0.Length == 0 && sharedPlaneData.intersectingPlanes1.Length == 0)
                                 continue;
 
@@ -421,6 +468,7 @@ namespace Chisel.Core
                             var handleDep = new JobHandle();
 
                             // TODO: allocate per intersection, perform all calculations/sorts, THEN create ALL surface-loops and assign indices
+                            UnityEngine.Profiling.Profiler.BeginSample("SharedPlaneData_Allocations");
                             using (var insideVerticesStream0    = new NativeStream(math.max(1, sharedPlaneData.usedVertices0.Length), Allocator.TempJob))
                             using (var insideVerticesStream1    = new NativeStream(math.max(1, sharedPlaneData.usedVertices1.Length), Allocator.TempJob))
                             using (var intersectionStream0      = new NativeStream(sharedPlaneData.intersectingPlaneIndices0.Length, Allocator.TempJob))
@@ -432,6 +480,7 @@ namespace Chisel.Core
                             using (var uniqueIndices0           = new NativeList<ushort>(sharedPlaneData.intersectingPlaneIndices0.Length, Allocator.TempJob))
                             using (var uniqueIndices1           = new NativeList<ushort>(sharedPlaneData.intersectingPlaneIndices1.Length, Allocator.TempJob))
                             {
+                                UnityEngine.Profiling.Profiler.EndSample();
                                 // First find vertices from other brush that are inside the other brush, so that any vertex we 
                                 // find during the intersection part will be snapped to those vertices and not the other way around
 
@@ -604,7 +653,7 @@ namespace Chisel.Core
                         var meshBlob = BrushMeshManager.GetBrushMeshBlob(brush0.BrushMesh.BrushMeshID);
                         Debug.Assert(meshBlob != null);
 
-                        if (meshBlob.Value.planes.Length == 0)
+                        if (meshBlob.Value.localPlanes.Length == 0)
                             continue;
 
                         var vertexSoup = outputLoops.vertexSoup;
@@ -613,7 +662,7 @@ namespace Chisel.Core
                         {
                             intersectionData.Execute();
 
-                            UnityEngine.Profiling.Profiler.BeginSample("Find intersection-loop/intersection-loop intersections");
+                            UnityEngine.Profiling.Profiler.BeginSample("Find_intersectionLoop_intersectionLoop_intersections");
                             try
                             {
                                 for (int s = 0; s < intersectionData.intersectionSurfaces.Length; s++)
@@ -648,7 +697,7 @@ namespace Chisel.Core
                             finally { UnityEngine.Profiling.Profiler.EndSample(); }
 
 
-                            UnityEngine.Profiling.Profiler.BeginSample("Find base-loop/intersection-loop intersections");
+                            UnityEngine.Profiling.Profiler.BeginSample("Find_baseLoop_intersectionLoop_intersections");
                             try
                             {
                                 // TODO: should only intersect with all brushes that each particular basepolygon intersects with
@@ -673,7 +722,7 @@ namespace Chisel.Core
                             }
                             finally { UnityEngine.Profiling.Profiler.EndSample(); }
 
-                            UnityEngine.Profiling.Profiler.BeginSample("Find intersection-loop/base-loop intersections");
+                            UnityEngine.Profiling.Profiler.BeginSample("Find_intersectionLoop_baseLoop_intersections");
                             try
                             {
                                 for (int s = 0; s < intersectionData.intersectionSurfaces.Length; s++)

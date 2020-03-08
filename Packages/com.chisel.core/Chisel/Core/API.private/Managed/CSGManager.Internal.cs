@@ -633,6 +633,10 @@ namespace Chisel.Core
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static BrushInfo	GetBrushInfo(Int32 brushNodeID)										{ if (!AssertNodeIDValid(brushNodeID) || !AssertNodeType(brushNodeID, CSGNodeType.Brush)) return null; return nodeHierarchies[brushNodeID - 1].brushInfo; }
+        
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static BrushInfo	GetBrushInfoUnsafe(Int32 brushNodeID)								{ return nodeHierarchies[brushNodeID - 1].brushInfo; }
 
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1314,6 +1318,9 @@ namespace Chisel.Core
 
                 if (CSGTreeNode.IsNodeIDValid(nodeHierarchy.treeNodeID))
                     CSGManager.SetBrushMeshID(nodeHierarchy.treeNodeID, BrushMeshInstance.InvalidInstance.BrushMeshID);
+
+                if (nodeHierarchy.brushInfo.brushWorldPlanes.IsCreated)
+                    nodeHierarchy.brushInfo.brushWorldPlanes.Dispose();
             }
         }
 
@@ -1332,6 +1339,9 @@ namespace Chisel.Core
 
                 if (CSGTreeNode.IsNodeIDValid(nodeHierarchy.treeNodeID))
                     CSGTreeNode.SetDirty(nodeHierarchy.treeNodeID);
+
+                if (nodeHierarchy.brushInfo.brushWorldPlanes.IsCreated)
+                    nodeHierarchy.brushInfo.brushWorldPlanes.Dispose();
             }
         }
 

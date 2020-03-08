@@ -103,7 +103,7 @@ namespace Chisel.Core
         #region GenerateBasePolygons
 
         //static readonly List<ushort> s_Indices = new List<ushort>(32);
-        public static Bounds GenerateBasePolygons(BrushLoops outputLoops)
+        public static unsafe Bounds GenerateBasePolygons(BrushLoops outputLoops)
         {
             if (!BrushMeshManager.IsBrushMeshIDValid(outputLoops.brush.BrushMesh.BrushMeshID))
                 return new Bounds();
@@ -114,19 +114,21 @@ namespace Chisel.Core
                 Debug.Log("mesh == null");
                 return new Bounds();
             }
-
             ref var vertices   = ref mesh.Value.vertices;
-            ref var planes     = ref mesh.Value.planes;
+            ref var planes     = ref mesh.Value.localPlanes;
             ref var polygons   = ref mesh.Value.polygons;
-            var nodeToTreeSpaceMatrix   = outputLoops.brush.NodeToTreeSpaceMatrix;
+            var nodeToTreeSpaceMatrix   = (float4x4)outputLoops.brush.NodeToTreeSpaceMatrix;
+            var nodeToTreeSpaceInvertedTransposedMatrix = math.transpose(math.inverse(nodeToTreeSpaceMatrix));
             outputLoops.basePolygons.Clear(); 
             if (outputLoops.basePolygons.Capacity < polygons.Length)
                 outputLoops.basePolygons.Capacity = polygons.Length;
 
             outputLoops.vertexSoup.Initialize(vertices.Length);
 
-            var min = new Vector3(float.PositiveInfinity, float.PositiveInfinity, float.PositiveInfinity);
-            var max = new Vector3(float.NegativeInfinity, float.NegativeInfinity, float.NegativeInfinity);
+            var min = new float3(float.PositiveInfinity, float.PositiveInfinity, float.PositiveInfinity);
+            var max = new float3(float.NegativeInfinity, float.NegativeInfinity, float.NegativeInfinity);
+
+            var aabb = new AABB();
 
             for (int p = 0; p < polygons.Length; p++)
             {
@@ -136,43 +138,41 @@ namespace Chisel.Core
                     p >= planes.Length)
                     continue;
 
-                // TODO: simplify
-                var localPlane          = new Plane(planes[p].xyz, planes[p].w);
-                var worldPlane          = outputLoops.brush.NodeToTreeSpaceMatrix.TransformPlane(localPlane);
-                var worldPlaneVector    = new float4(worldPlane.normal, worldPlane.distance);
-
                 var firstEdge    = polygon.firstEdge;
                 var lastEdge     = firstEdge + polygon.edgeCount;
                 var indexCount   = lastEdge - firstEdge;
 
                 using (var indices = new NativeList<ushort>(indexCount, Allocator.TempJob))
                 {
+                    float4 worldPlane = float4.zero;
                     // THEORY: can end up with duplicate vertices when close enough vertices are snapped together
-                    var removeIdenticalIndicesJob = new CopyPolygonToIndicesJob
+                    var copyPolygonToIndicesJob = new CopyPolygonToIndicesJob
                     {
                         mesh = mesh,
                         polygonIndex = p,
                         nodeToTreeSpaceMatrix = nodeToTreeSpaceMatrix,
+                        nodeToTreeSpaceInvertedTransposedMatrix = nodeToTreeSpaceInvertedTransposedMatrix,
                         vertexSoup = outputLoops.vertexSoup,
                         indices = indices,
 
-                        min = min,
-                        max = max
+                        aabb = &aabb,
+
+                        worldPlane = &worldPlane
                     };
 
-                    removeIdenticalIndicesJob.Run();
-
-                    min = removeIdenticalIndicesJob.min;
-                    max = removeIdenticalIndicesJob.max;
+                    copyPolygonToIndicesJob.Run();
 
                     if (indices.Length == 0)
                         continue;
+
+                    min = aabb.min;
+                    max = aabb.max;
 
                     var surfacePolygon = new Loop()
                     {
                         info = new SurfaceInfo()
                         {
-                            worldPlane          = worldPlaneVector,
+                            worldPlane          = worldPlane,
                             layers              = polygon.layerDefinition,
                             basePlaneIndex      = p,
                             brush               = outputLoops.brush,

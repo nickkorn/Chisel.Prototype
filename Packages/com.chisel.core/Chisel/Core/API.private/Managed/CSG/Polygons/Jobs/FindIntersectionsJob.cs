@@ -124,44 +124,52 @@ namespace Chisel.Core
 
         public SharedPlaneData(CSGManager.BrushInfo brushInfo0, CSGManager.BrushInfo brushInfo1, CSGTreeBrush brush0, BlobAssetReference<BrushMeshBlob> blobMesh0, CSGTreeBrush brush1, BlobAssetReference<BrushMeshBlob> blobMesh1, IntersectionType intersectionType, Allocator allocator)
         {
-            var nodeToTreeSpaceMatrix0 = (float4x4)brush0.NodeToTreeSpaceMatrix;
-            var treeToNodeSpaceMatrix0 = (float4x4)brush0.TreeToNodeSpaceMatrix;
-            var nodeToTreeSpaceMatrix1 = (float4x4)brush1.NodeToTreeSpaceMatrix;
-            var treeToNodeSpaceMatrix1 = (float4x4)brush1.TreeToNodeSpaceMatrix;
+            UnityEngine.Profiling.Profiler.BeginSample("SharedPlaneData_Constructor");
+            try
+            {
+                var nodeToTreeSpaceMatrix0 = (float4x4)brush0.NodeToTreeSpaceMatrix;
+                var treeToNodeSpaceMatrix0 = (float4x4)brush0.TreeToNodeSpaceMatrix;
+                var nodeToTreeSpaceMatrix1 = (float4x4)brush1.NodeToTreeSpaceMatrix;
+                var treeToNodeSpaceMatrix1 = (float4x4)brush1.TreeToNodeSpaceMatrix;
 
-            ref var mesh0 = ref blobMesh0.Value;
-            ref var mesh1 = ref blobMesh1.Value;
+                ref var mesh0 = ref blobMesh0.Value;
+                ref var mesh1 = ref blobMesh1.Value;
 
-            this.treeBrush0                  = brush0;
-            this.treeBrush1                  = brush1;
-            this.blobMesh0                   = blobMesh0;
-            this.blobMesh1                   = blobMesh1;
+                this.treeBrush0                  = brush0;
+                this.treeBrush1                  = brush1;
+                this.blobMesh0                   = blobMesh0;
+                this.blobMesh1                   = blobMesh1;
 
-            this.vertexSoup0                 = brushInfo0.brushOutputLoops.vertexSoup;
-            this.vertexSoup1                 = brushInfo1.brushOutputLoops.vertexSoup;
+                this.vertexSoup0                 = brushInfo0.brushOutputLoops.vertexSoup;
+                this.vertexSoup1                 = brushInfo1.brushOutputLoops.vertexSoup;
 
-            this.nodeToTreeSpaceMatrix0      = nodeToTreeSpaceMatrix0;
-            this.treeToNodeSpaceMatrix0      = treeToNodeSpaceMatrix0;
-            this.nodeToTreeSpaceMatrix1      = nodeToTreeSpaceMatrix1;
-            this.treeToNodeSpaceMatrix1      = treeToNodeSpaceMatrix1;
-            this.node1ToNode0                = math.mul(treeToNodeSpaceMatrix0, nodeToTreeSpaceMatrix1);
+                this.nodeToTreeSpaceMatrix0      = nodeToTreeSpaceMatrix0;
+                this.treeToNodeSpaceMatrix0      = treeToNodeSpaceMatrix0;
+                this.nodeToTreeSpaceMatrix1      = nodeToTreeSpaceMatrix1;
+                this.treeToNodeSpaceMatrix1      = treeToNodeSpaceMatrix1;
+                this.node1ToNode0                = math.mul(treeToNodeSpaceMatrix0, nodeToTreeSpaceMatrix1);
 
-            this.intersectionType            = intersectionType;
+                this.intersectionType            = intersectionType;
 
-            this.intersectingPlaneIndices0   = new NativeList<int>(mesh0.planes.Length, allocator);
-            this.intersectingPlaneIndices1   = new NativeList<int>(mesh1.planes.Length, allocator);
+                this.intersectingPlaneIndices0   = new NativeList<int>(mesh0.localPlanes.Length, allocator);
+                this.intersectingPlaneIndices1   = new NativeList<int>(mesh1.localPlanes.Length, allocator);
 
-            this.usedPlanePairs0             = new NativeList<PlanePair>(mesh0.halfEdges.Length, allocator);
-            this.usedPlanePairs1             = new NativeList<PlanePair>(mesh1.halfEdges.Length, allocator);
+                this.usedPlanePairs0             = new NativeList<PlanePair>(mesh0.halfEdges.Length, allocator);
+                this.usedPlanePairs1             = new NativeList<PlanePair>(mesh1.halfEdges.Length, allocator);
 
-            this.surfaceCategory0            = new NativeArray<SurfaceInfo>(mesh0.planes.Length, allocator, NativeArrayOptions.ClearMemory); // all set to Inside (0)
-            this.surfaceCategory1            = new NativeArray<SurfaceInfo>(mesh1.planes.Length, allocator, NativeArrayOptions.ClearMemory); // all set to Inside (0)
+                this.surfaceCategory0            = new NativeArray<SurfaceInfo>(mesh0.localPlanes.Length, allocator, NativeArrayOptions.ClearMemory); // all set to Inside (0)
+                this.surfaceCategory1            = new NativeArray<SurfaceInfo>(mesh1.localPlanes.Length, allocator, NativeArrayOptions.ClearMemory); // all set to Inside (0)
 
-            this.usedVertices0               = new NativeList<int>(mesh0.vertices.Length, allocator);
-            this.usedVertices1               = new NativeList<int>(mesh1.vertices.Length, allocator);
+                this.usedVertices0               = new NativeList<int>(mesh0.vertices.Length, allocator);
+                this.usedVertices1               = new NativeList<int>(mesh1.vertices.Length, allocator);
 
-            this.intersectingPlanes0         = new NativeList<float4>(mesh0.planes.Length, allocator);
-            this.intersectingPlanes1         = new NativeList<float4>(mesh1.planes.Length, allocator);
+                this.intersectingPlanes0         = new NativeList<float4>(mesh0.localPlanes.Length, allocator);
+                this.intersectingPlanes1         = new NativeList<float4>(mesh1.localPlanes.Length, allocator);
+            }
+            finally
+            {
+                UnityEngine.Profiling.Profiler.EndSample();
+            }
         }
 
         public void Dispose()
@@ -264,7 +272,7 @@ namespace Chisel.Core
             var intersectingPlanesPtr       = (int*)intersectingPlanes.GetUnsafeReadOnlyPtr();
 
             var vertexUsed = stackalloc byte[mesh.vertices.Length];
-            var planeAvailable = stackalloc byte[mesh.planes.Length];
+            var planeAvailable = stackalloc byte[mesh.localPlanes.Length];
             {
                 {
                     for (int p = 0; p < intersectingPlanesLength; p++)
@@ -317,7 +325,7 @@ namespace Chisel.Core
 
             for (int i = 0; i < surfaceCategory0.Length; i++)
             {
-                var localPlaneVector = mesh0.planes[i];
+                var localPlaneVector = mesh0.localPlanes[i];
                 var worldPlaneVector = math.mul(inverseNodeToTreeSpaceMatrix0, localPlaneVector);
                 var length = math.length(worldPlaneVector);
                 worldPlaneVector /= length;
@@ -333,7 +341,7 @@ namespace Chisel.Core
             }
             for (int i = 0; i < surfaceCategory1.Length; i++)
             {
-                var localPlaneVector = mesh1.planes[i];
+                var localPlaneVector = mesh1.localPlanes[i];
                 var worldPlaneVector = math.mul(inverseNodeToTreeSpaceMatrix1, localPlaneVector);
                 var length = math.length(worldPlaneVector);
                 worldPlaneVector /= length;
@@ -350,23 +358,23 @@ namespace Chisel.Core
 
             if (intersectionType == IntersectionType.Intersection)
             {
-                GetIntersectingPlanes(ref mesh1.planes, ref mesh0.vertices, mesh0.localBounds, inversedNode1ToNode0, intersectingPlaneIndices1);
-                GetIntersectingPlanes(ref mesh0.planes, ref mesh1.vertices, mesh1.localBounds, inversedNode0ToNode1, intersectingPlaneIndices0);
+                GetIntersectingPlanes(ref mesh1.localPlanes, ref mesh0.vertices, mesh0.localBounds, inversedNode1ToNode0, intersectingPlaneIndices1);
+                GetIntersectingPlanes(ref mesh0.localPlanes, ref mesh1.vertices, mesh1.localBounds, inversedNode0ToNode1, intersectingPlaneIndices0);
             }
 
 
             // TODO: we don't actually use ALL of these planes .. Optimize this
-            var localSpacePlanes0Length = mesh0.planes.Length;
+            var localSpacePlanes0Length = mesh0.localPlanes.Length;
             var localSpacePlanes0 = stackalloc float4[localSpacePlanes0Length];
             for (int p = 0; p < localSpacePlanes0Length; p++)
-                localSpacePlanes0[p] = mesh0.planes[p];
+                localSpacePlanes0[p] = mesh0.localPlanes[p];
 
             // TODO: we don't actually use ALL of these planes .. Optimize this
-            var localSpacePlanes1Length = mesh1.planes.Length;
+            var localSpacePlanes1Length = mesh1.localPlanes.Length;
             var localSpacePlanes1 = stackalloc float4[localSpacePlanes1Length];
             for (int p = 0; p < localSpacePlanes1Length; p++)
             {
-                var transformedPlane = math.mul(inversedNode1ToNode0, mesh1.planes[p]);
+                var transformedPlane = math.mul(inversedNode1ToNode0, mesh1.localPlanes[p]);
                 localSpacePlanes1[p] = transformedPlane / math.length(transformedPlane.xyz);
             }
 
@@ -383,8 +391,8 @@ namespace Chisel.Core
                     intersectionType = IntersectionType.NoIntersection;
                 }
 
-                intersectingPlaneIndices0.ResizeUninitialized(mesh0.planes.Length);
-                intersectingPlaneIndices1.ResizeUninitialized(mesh1.planes.Length);
+                intersectingPlaneIndices0.ResizeUninitialized(mesh0.localPlanes.Length);
+                intersectingPlaneIndices1.ResizeUninitialized(mesh1.localPlanes.Length);
 
                 for (int i = 0; i < intersectingPlaneIndices0.Length; i++) intersectingPlaneIndices0[i] = i;
                 for (int i = 0; i < intersectingPlaneIndices1.Length; i++) intersectingPlaneIndices1[i] = i;
@@ -742,8 +750,10 @@ namespace Chisel.Core
                 planeIndex = previousPlaneIndex
             });
 
+
             // TODO: do in separate pass?
 
+            
             // For each segment, we now sort our vertices within each segment, 
             // making the assumption that they are convex
             var indicesPtr = (ushort*)uniqueIndices.GetUnsafeReadOnlyPtr();
@@ -758,7 +768,8 @@ namespace Chisel.Core
                 }
 
                 var offset      = planeIndexOffset.offset;
-                var planeIndex = planeIndexOffset.planeIndex;
+                var planeIndex  = planeIndexOffset.planeIndex;
+                // TODO: use plane information instead
                 SortIndices(indicesPtr, offset, length, surfaceCategory[planeIndex].worldPlane.xyz);
             }
         }

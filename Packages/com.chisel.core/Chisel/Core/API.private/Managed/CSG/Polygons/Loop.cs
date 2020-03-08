@@ -208,20 +208,6 @@ namespace Chisel.Core
             inverted = false;
             return -1;
         }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public EdgeCategory CategorizeEdge(in VertexSoup soup, Edge edge)
-        {
-            if (IndexOf(edge, out bool inverted) != -1)
-                return (inverted) ? EdgeCategory.ReverseAligned : EdgeCategory.Aligned;
-            var vertices = soup.vertices;
-            var midPoint = (vertices[edge.index1] + vertices[edge.index2]) * 0.5f;
-            
-            MathExtensions.CalculateTangents(info.worldPlane.xyz, out float3 right, out float3 forward);
-            if (CSGManagerPerformCSG.IsPointInPolygon(right, forward, indices, soup, midPoint))
-                return EdgeCategory.Inside;
-            return EdgeCategory.Outside;
-        }
     }
 #endif
     }

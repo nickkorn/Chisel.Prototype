@@ -77,29 +77,44 @@ namespace Chisel.Core
         }
     }
 
+    public struct AABB { public float3 min, max; }
+
+
+    // TODO: probably makes sense to break this up into multiple pieces/multiple jobs that can run parallel,
+    //      but requires that change some storage formats first
     [BurstCompile]
     public unsafe struct CopyPolygonToIndicesJob : IJob
     {
         [ReadOnly] public BlobAssetReference<BrushMeshBlob> mesh;
         [ReadOnly] public int       polygonIndex;
         [ReadOnly] public float4x4  nodeToTreeSpaceMatrix;
+        [ReadOnly] public float4x4  nodeToTreeSpaceInvertedTransposedMatrix;
 
         public VertexSoup           vertexSoup;
         public NativeList<ushort>   indices;
 
-        public float3               min, max;
+        // TODO: do this in separate loop so we don't need to rely on pointers to make this work
+        [NativeDisableUnsafePtrRestriction] public AABB* aabb;
+        [WriteOnly] [NativeDisableUnsafePtrRestriction] public float4* worldPlane;
 
         public void Execute()
         {
             ref var halfEdges = ref mesh.Value.halfEdges;
             ref var vertices  = ref mesh.Value.vertices;
+            ref var planes     = ref mesh.Value.localPlanes;
 
             ref var polygon   = ref mesh.Value.polygons[polygonIndex];
+
+            var localPlane = planes[polygonIndex];
+
             var firstEdge = polygon.firstEdge;
             var lastEdge  = firstEdge + polygon.edgeCount;
             var indexCount = lastEdge - firstEdge;
 
             vertexSoup.Reserve(indexCount); // ensure we have at least this many extra vertices in capacity
+
+            var min = aabb->min;
+            var max = aabb->max;
 
             // TODO: put in job so we can burstify this, maybe join with RemoveIdenticalIndicesJob & IsDegenerate?
             for (int e = firstEdge; e < lastEdge; e++)
@@ -107,6 +122,8 @@ namespace Chisel.Core
                 var vertexIndex = halfEdges[e].vertexIndex;
                 var localVertex = new float4(vertices[vertexIndex], 1);
                 var worldVertex = math.mul(nodeToTreeSpaceMatrix, localVertex);
+
+                // TODO: could do this in separate loop on vertexSoup vertices
                 min.x = math.min(min.x, worldVertex.x); max.x = math.max(max.x, worldVertex.x);
                 min.y = math.min(min.y, worldVertex.y); max.y = math.max(max.y, worldVertex.y);
                 min.z = math.min(min.z, worldVertex.z); max.z = math.max(max.z, worldVertex.z);
@@ -122,6 +139,18 @@ namespace Chisel.Core
                 CSGManagerPerformCSG.IsDegenerate(vertexSoup, indices))
             {
                 indices.Clear();
+            }
+
+            if (indices.Length > 0)
+            {
+                aabb->min = min;
+                aabb->max = max;
+
+                localPlane = math.mul(nodeToTreeSpaceInvertedTransposedMatrix, localPlane);
+                var length = math.length(localPlane.xyz);
+                if (length > 0)
+                    localPlane /= length;
+                *worldPlane = localPlane;
             }
         }
     }

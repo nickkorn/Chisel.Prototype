@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using Unity.Collections.LowLevel.Unsafe;
+using Unity.Entities;
 using Unity.Mathematics;
 using UnityEngine;
 
@@ -203,6 +204,8 @@ namespace Chisel.Core
 
             public BrushOutline             brushOutline        = new BrushOutline();
 
+            // TODO: put somewhere else
+            public BlobAssetReference<BrushWorldPlanes> brushWorldPlanes;
 
             public readonly List<BrushBrushIntersection> brushBrushIntersections = new List<BrushBrushIntersection>();
 
@@ -210,6 +213,9 @@ namespace Chisel.Core
 
             public void Dispose()
             {
+                if (brushWorldPlanes.IsCreated)
+                    brushWorldPlanes.Dispose();
+                brushWorldPlanes = BlobAssetReference<BrushWorldPlanes>.Null;
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -223,6 +229,9 @@ namespace Chisel.Core
                 renderBuffers.surfaceRenderBuffers.Clear();
                 brushBrushIntersections.Clear();
                 routingTable.Clear();
+                if (brushWorldPlanes.IsCreated)
+                    brushWorldPlanes.Dispose();
+                brushWorldPlanes = BlobAssetReference<BrushWorldPlanes>.Null;
             }
         }
 
