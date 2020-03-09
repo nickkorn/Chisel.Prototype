@@ -246,8 +246,7 @@ namespace Chisel.Core
             public List<IntersectionLoop>           allIntersectionLoops;
             public Temporaries(List<int> treeBrushes)
             {
-                UnityEngine.Profiling.Profiler.BeginSample("Temporaries_Constructor");
-                try
+                using (new ProfileSample("Temporaries_Constructor"))
                 {
                     this.treeBrushes            = treeBrushes;
                     this.allWorldSpacePlanes    = new NativeList<float4>(4, Allocator.Persistent);
@@ -255,10 +254,6 @@ namespace Chisel.Core
                 
                     this.brushDataList          = new List<BrushData>();
                     this.allIntersectionLoops   = new List<IntersectionLoop>();
-                }
-                finally
-                {
-                    UnityEngine.Profiling.Profiler.EndSample();
                 }
             }
 
@@ -292,8 +287,7 @@ namespace Chisel.Core
 
             public void Init()
             {
-                UnityEngine.Profiling.Profiler.BeginSample("Temporaries.Init");
-                try
+                using (new ProfileSample("Temporaries.Init"))
                 {
                     int totalPlanes = 0;
 
@@ -347,16 +341,11 @@ namespace Chisel.Core
 
                     allWorldSpacePlanes.Capacity = totalPlanes;
                 }
-                finally
-                {
-                    UnityEngine.Profiling.Profiler.EndSample();
-                }
             }
 
             public void Execute()
             {
-                UnityEngine.Profiling.Profiler.BeginSample("Temporaries.Execute");
-                try
+                using (new ProfileSample("Temporaries.Execute"))
                 {
                     var indexLookup = new Dictionary<int, int>();
                     for (int b0 = 0; b0 < treeBrushes.Count; b0++)
@@ -409,10 +398,6 @@ namespace Chisel.Core
                         }
                     }
                 }
-                finally
-                {
-                    UnityEngine.Profiling.Profiler.EndSample();
-                }
             }
         }
 
@@ -428,8 +413,7 @@ namespace Chisel.Core
                 temporaries.Execute();
 
                 // Create unique loops between brush intersections
-                UnityEngine.Profiling.Profiler.BeginSample("CreateIntersectionLoops");
-                try
+                using (new ProfileSample("CreateIntersectionLoops"))
                 {
                     foreach (var intersection in temporaries.intersectingBrushes)
                     {
@@ -452,14 +436,9 @@ namespace Chisel.Core
 
                         using (var sharedPlaneData = new SharedPlaneData(brushInfo0, brushInfo1, brush0, blobMesh0, brush1, blobMesh1, type, Allocator.TempJob))
                         {
-                            UnityEngine.Profiling.Profiler.BeginSample("SharedPlaneData.Run");
-                            try
+                            using (new ProfileSample("SharedPlaneData.Run"))
                             {
                                 sharedPlaneData.Run();
-                            }
-                            finally
-                            {
-                                UnityEngine.Profiling.Profiler.EndSample();
                             }
                             if (sharedPlaneData.intersectingPlanes0.Length == 0 && sharedPlaneData.intersectingPlanes1.Length == 0)
                                 continue;
@@ -636,10 +615,9 @@ namespace Chisel.Core
                         brushInfo0.brushOutputLoops.intersectionSurfaceLoops[brush1.brushNodeID] = loops01;
                         brushInfo1.brushOutputLoops.intersectionSurfaceLoops[brush0.brushNodeID] = loops10;
                     }
-                } finally { UnityEngine.Profiling.Profiler.EndSample(); }
+                }
 
-                UnityEngine.Profiling.Profiler.BeginSample("FindLoopOverlapIntersections");
-                try
+                using (new ProfileSample("FindLoopOverlapIntersections"))
                 {
                     for (int b0 = 0; b0 < treeBrushes.Count; b0++)
                     {
@@ -662,8 +640,7 @@ namespace Chisel.Core
                         {
                             intersectionData.Execute();
 
-                            UnityEngine.Profiling.Profiler.BeginSample("Find_intersectionLoop_intersectionLoop_intersections");
-                            try
+                            using (new ProfileSample("Find_intersectionLoop_intersectionLoop_intersections"))
                             {
                                 for (int s = 0; s < intersectionData.intersectionSurfaces.Length; s++)
                                 {
@@ -694,11 +671,8 @@ namespace Chisel.Core
                                     }
                                 }
                             }
-                            finally { UnityEngine.Profiling.Profiler.EndSample(); }
 
-
-                            UnityEngine.Profiling.Profiler.BeginSample("Find_baseLoop_intersectionLoop_intersections");
-                            try
+                            using (new ProfileSample("Find_baseLoop_intersectionLoop_intersections"))
                             {
                                 // TODO: should only intersect with all brushes that each particular basepolygon intersects with
                                 //       but also need adjency information between basePolygons to ensure that intersections exist on 
@@ -720,10 +694,8 @@ namespace Chisel.Core
                                     }
                                 }
                             }
-                            finally { UnityEngine.Profiling.Profiler.EndSample(); }
 
-                            UnityEngine.Profiling.Profiler.BeginSample("Find_intersectionLoop_baseLoop_intersections");
-                            try
+                            using (new ProfileSample("Find_intersectionLoop_baseLoop_intersections"))
                             {
                                 for (int s = 0; s < intersectionData.intersectionSurfaces.Length; s++)
                                 {
@@ -746,10 +718,8 @@ namespace Chisel.Core
                                     }
                                 }
                             }
-                            finally { UnityEngine.Profiling.Profiler.EndSample(); }
 
-                            UnityEngine.Profiling.Profiler.BeginSample("Cleanup");
-                            try
+                            using (new ProfileSample("Cleanup"))
                             {
                                 for (int i = intersectionData.allIntersectionLoops.Count - 1; i >= 0; i--)
                                 {
@@ -769,11 +739,9 @@ namespace Chisel.Core
 
                                 intersectionData.StoreOutput(outputLoops.intersectionSurfaceLoops, outputLoops.intersectionLoops, outputLoops.basePolygons);
                             }
-                            finally { UnityEngine.Profiling.Profiler.EndSample(); }
                         }
                     }
                 }
-                finally { UnityEngine.Profiling.Profiler.EndSample(); }
             }
         }        
         #endregion

@@ -41,8 +41,7 @@ namespace Chisel.Core
 
         public OverlapIntersectionData(CSGTreeBrush brush0, BlobAssetReference<BrushMeshBlob> meshBlob0, Dictionary<int, SurfaceLoops> intersectionSurfaceLoops, List<Loop> basePolygons)
         {
-            UnityEngine.Profiling.Profiler.BeginSample("OverlapIntersectionData_Constructor");
-            try
+            using (new ProfileSample("OverlapIntersectionData_Constructor"))
             {
                 this.brush0 = brush0;
                 this.meshBlob0 = meshBlob0;
@@ -58,10 +57,6 @@ namespace Chisel.Core
                 this.intersectionSurfaces = new List<int>[meshBlob0.Value.localPlanes.Length];
                 for (int i = 0; i < this.intersectionSurfaces.Length; i++)
                     this.intersectionSurfaces[i] = new List<int>(16);
-            }
-            finally
-            {
-                UnityEngine.Profiling.Profiler.EndSample();
             }
         }
 
@@ -86,8 +81,7 @@ namespace Chisel.Core
 
         public void StoreOutput(Dictionary<int, SurfaceLoops> intersectionSurfaceLoops, Dictionary<int, Loop[]> intersectionLoops, List<Loop> basePolygons)
         {
-            UnityEngine.Profiling.Profiler.BeginSample("StoreOutput");
-            try
+            using (new ProfileSample("StoreOutput"))
             {
                 foreach (var intersectionLoop in allIntersectionLoops)
                 {
@@ -148,10 +142,6 @@ namespace Chisel.Core
                     }
                 }
             }
-            finally
-            {
-                UnityEngine.Profiling.Profiler.EndSample();
-            }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -181,8 +171,7 @@ namespace Chisel.Core
 
         public void Execute()
         {
-            UnityEngine.Profiling.Profiler.BeginSample("OverlapIntersectionData.Execute");
-            try
+            using (new ProfileSample("OverlapIntersectionData.Execute"))
             {
                 var treeToNodeSpaceTransposed = math.transpose(treeToNodeSpaceMatrix0);            
                 {
@@ -257,10 +246,6 @@ namespace Chisel.Core
                         allIntersectionLoops.Add(intersectionLoop);
                     }
                 }
-            }
-            finally
-            {
-                UnityEngine.Profiling.Profiler.EndSample();
             }
         }
     }

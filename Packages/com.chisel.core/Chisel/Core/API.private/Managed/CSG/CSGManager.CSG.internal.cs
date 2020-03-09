@@ -53,28 +53,17 @@ namespace Chisel.Core
 
             var treeBrushes = treeInfo.treeBrushes;
 
-            UnityEngine.Profiling.Profiler.BeginSample("UpdateBrushTransformations");
-            try { UpdateBrushTransformations(treeBrushes); } finally { UnityEngine.Profiling.Profiler.EndSample(); }
-
-            UnityEngine.Profiling.Profiler.BeginSample("UpdateBrushWorldPlanes");
-            try { UpdateBrushWorldPlanes(treeBrushes); } finally { UnityEngine.Profiling.Profiler.EndSample(); }
+            using (new ProfileSample("UpdateBrushTransformations"))         UpdateBrushTransformations(treeBrushes);
+            using (new ProfileSample("UpdateBrushWorldPlanes"))             UpdateBrushWorldPlanes(treeBrushes);
 
             // TODO: should only do this at creation time + when moved
-            UnityEngine.Profiling.Profiler.BeginSample("FindIntersectingBrushes");
-            try { FindIntersectingBrushes(treeBrushes); } finally { UnityEngine.Profiling.Profiler.EndSample(); }
+            using (new ProfileSample("FindIntersectingBrushes"))            FindIntersectingBrushes(treeBrushes); 
 
             // TODO: should only do this once at creation time
-            UnityEngine.Profiling.Profiler.BeginSample("GenerateBasePolygonLoops"); 
-            try { GenerateBasePolygonLoops(treeBrushes); } finally { UnityEngine.Profiling.Profiler.EndSample(); }
-
-            UnityEngine.Profiling.Profiler.BeginSample("FindAllIntersectionLoops");
-            try { CSGManagerPerformCSG.FindAllIntersectionLoops(treeBrushes); } finally { UnityEngine.Profiling.Profiler.EndSample(); }
-
-            UnityEngine.Profiling.Profiler.BeginSample("UpdateBrushCategorizationTables");
-            try { UpdateBrushCategorizationTables(treeBrushes); } finally { UnityEngine.Profiling.Profiler.EndSample(); }
-
-            UnityEngine.Profiling.Profiler.BeginSample("PerformAllCSG");
-            try { PerformAllCSG(treeBrushes); } finally { UnityEngine.Profiling.Profiler.EndSample(); }
+            using (new ProfileSample("GenerateBasePolygonLoops"))           GenerateBasePolygonLoops(treeBrushes);
+            using (new ProfileSample("FindAllIntersectionLoops"))           CSGManagerPerformCSG.FindAllIntersectionLoops(treeBrushes);
+            using (new ProfileSample("UpdateBrushCategorizationTables"))    UpdateBrushCategorizationTables(treeBrushes);
+            using (new ProfileSample("PerformAllCSG"))                      PerformAllCSG(treeBrushes);
 
 
             {
@@ -371,41 +360,20 @@ namespace Chisel.Core
                             if (intersectionCategory == surfaceLoop.info.interiorCategory)
                                 continue;
 
-                            UnityEngine.Profiling.Profiler.BeginSample("Intersect");
-                            try
-                            {
+                            using (new ProfileSample("Intersect"))
                                 CSGManagerPerformCSG.Intersect(brushVertices, loopsOnBrushSurface, surfaceLoop, intersectionLoop, intersectionCategory);
-                            }
-                            finally
-                            {
-                                UnityEngine.Profiling.Profiler.EndSample();
-                            }
                         }
                         
                     }
 
                     // TODO: remove the need for this (check on insertion)
-                    UnityEngine.Profiling.Profiler.BeginSample("RemoveEmptyLoops");
-                    try
-                    {
+                    using (new ProfileSample("RemoveEmptyLoops"))
                         CSGManagerPerformCSG.RemoveEmptyLoops(loopsOnBrushSurface);
-                    }
-                    finally
-                    {
-                        UnityEngine.Profiling.Profiler.EndSample();
-                    }
                 }
             }
 
-            UnityEngine.Profiling.Profiler.BeginSample("CleanUp");
-            try
-            {
+            using (new ProfileSample("CleanUp"))
                 CSGManagerPerformCSG.CleanUp(brushVertices, allBrushSurfaces);
-            }
-            finally
-            {
-                UnityEngine.Profiling.Profiler.EndSample();
-            }
             return true;
         }
 

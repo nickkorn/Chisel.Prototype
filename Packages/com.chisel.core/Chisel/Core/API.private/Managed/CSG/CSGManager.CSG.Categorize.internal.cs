@@ -59,8 +59,7 @@ namespace Chisel.Core
         // Note: Assumes polygons are convex
         public unsafe static OperationResult PerformBooleanIntersection(in VertexSoup soup, Loop polygon1, Loop polygon2, List<Loop> resultLoops)
         {
-            UnityEngine.Profiling.Profiler.BeginSample("PerformBooleanOperation");
-            try
+            using (new ProfileSample("PerformBooleanOperation"))
             {
                 Loop newPolygon = null;
                 //if (AreLoopsOverlapping(polygon1, polygon2))
@@ -158,7 +157,6 @@ namespace Chisel.Core
                 resultLoops.Add(newPolygon);
                 return CSGManagerPerformCSG.OperationResult.Cut;
             }
-            finally { UnityEngine.Profiling.Profiler.EndSample(); }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

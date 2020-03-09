@@ -60,6 +60,7 @@ namespace Chisel.Core
         {
             if (brushMesh == null)
                 return BlobAssetReference<BrushMeshBlob>.Null;
+            using (new ProfileSample("BrushMeshBlob.Build"))
             using (var builder = new BlobBuilder(Allocator.Temp))
             {
                 ref var root = ref builder.ConstructRoot<BrushMeshBlob>();

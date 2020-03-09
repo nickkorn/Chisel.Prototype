@@ -515,36 +515,15 @@ namespace Chisel.Core
 
             if (nodeFlags[treeNodeIndex].IsNodeFlagSet(NodeStatusFlags.TreeNeedsUpdate))
             {
-                UnityEngine.Profiling.Profiler.BeginSample("UpdateTreeMesh");
-                try
-                {
+                using (new ProfileSample("UpdateTreeMesh"))
                     UpdateTreeMesh(treeNodeID);
-                }
-                finally
-                {
-                    UnityEngine.Profiling.Profiler.EndSample();
-                }
             }
 
-            UnityEngine.Profiling.Profiler.BeginSample("CombineSubMeshes");
-            try
-            {
+            using (new ProfileSample("CombineSubMeshes"))
                 CombineSubMeshes(treeInfo, meshQueries, vertexChannelMask);
-            }
-            finally
-            {
-                UnityEngine.Profiling.Profiler.EndSample();
-            }
 
-            UnityEngine.Profiling.Profiler.BeginSample("Clean");
-            try
-            {
+            using (new ProfileSample("Clean"))
                 CleanTree(treeNodeID);
-            }
-            finally
-            {
-                UnityEngine.Profiling.Profiler.EndSample();
-            }
 
 
             {
@@ -790,43 +769,41 @@ namespace Chisel.Core
                 
                 Int32[] surfaceIndices = null;
 
-                UnityEngine.Profiling.Profiler.BeginSample("Triangulate");
-                try
-                {
-                    // Ensure we have the rotation properly calculated, and have a valid normal
-                    quaternion rotation;
-                    if (((Vector3)info.worldPlane.xyz) == Vector3.forward)
-                        rotation = quaternion.identity;
-                    else
-                        rotation = (quaternion)Quaternion.FromToRotation(info.worldPlane.xyz, Vector3.forward);
+                using (new ProfileSample("Triangulate"))
+                { 
+                    try
+                    {
+                        // Ensure we have the rotation properly calculated, and have a valid normal
+                        quaternion rotation;
+                        if (((Vector3)info.worldPlane.xyz) == Vector3.forward)
+                            rotation = quaternion.identity;
+                        else
+                            rotation = (quaternion)Quaternion.FromToRotation(info.worldPlane.xyz, Vector3.forward);
 
-                    // TODO: all separate loops on same surface should be put in same OutputSurfaceMesh!                    
+                        // TODO: all separate loops on same surface should be put in same OutputSurfaceMesh!                    
 
-                    surfaceIndices = context.TriangulateLoops(loop, brushVertices.vertices, loop.edges, rotation);
+                        surfaceIndices = context.TriangulateLoops(loop, brushVertices.vertices, loop.edges, rotation);
 
                     
-                    #if false
-                    var builder = new System.Text.StringBuilder();
-                    //builder.AppendLine($"{surfaceLoopList[l].loopIndex}: {s}/{l}/{surfaceLoopList[l].info.worldPlane}");
-                    builder.AppendLine($"{loop.info.basePlaneIndex}/{l}/{interiorCategory}/{loop.indices.Count}/{loop.edges.Count}");
-                    CSGManagerPerformCSG.Dump(builder, loop, brushVertices, Quaternion.FromToRotation(loop.info.worldPlane.normal, Vector3.forward));
-                    for (int i = 0; i < surfaceIndices.Length; i++)
-                    {
-                        builder.Append(i);
-                        builder.Append(", ");
+                        #if false
+                        var builder = new System.Text.StringBuilder();
+                        //builder.AppendLine($"{surfaceLoopList[l].loopIndex}: {s}/{l}/{surfaceLoopList[l].info.worldPlane}");
+                        builder.AppendLine($"{loop.info.basePlaneIndex}/{l}/{interiorCategory}/{loop.indices.Count}/{loop.edges.Count}");
+                        CSGManagerPerformCSG.Dump(builder, loop, brushVertices, Quaternion.FromToRotation(loop.info.worldPlane.normal, Vector3.forward));
+                        for (int i = 0; i < surfaceIndices.Length; i++)
+                        {
+                            builder.Append(i);
+                            builder.Append(", ");
+                        }
+                        builder.AppendLine();
+                        Debug.Log(builder.ToString());
+                        #endif
                     }
-                    builder.AppendLine();
-                    Debug.Log(builder.ToString());
-                    #endif
-                }
-                catch (System.Exception e)
-                {
-                    Debug.LogException(e);
-                    //Debug.Log($"BrushNodeID: {loop.info.brush.brushNodeID} / BasePlaneIndex: {loop.info.basePlaneIndex} / WorldPlane: {loop.info.worldPlane}");// / LoopIndex: {loop.loopIndex}");
-                }
-                finally
-                {
-                    UnityEngine.Profiling.Profiler.EndSample();
+                    catch (System.Exception e)
+                    {
+                        Debug.LogException(e);
+                        //Debug.Log($"BrushNodeID: {loop.info.brush.brushNodeID} / BasePlaneIndex: {loop.info.basePlaneIndex} / WorldPlane: {loop.info.worldPlane}");// / LoopIndex: {loop.loopIndex}");
+                    }
                 }
 
                 if (surfaceIndices == null ||

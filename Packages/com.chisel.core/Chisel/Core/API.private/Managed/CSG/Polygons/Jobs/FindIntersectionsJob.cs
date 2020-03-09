@@ -124,8 +124,7 @@ namespace Chisel.Core
 
         public SharedPlaneData(CSGManager.BrushInfo brushInfo0, CSGManager.BrushInfo brushInfo1, CSGTreeBrush brush0, BlobAssetReference<BrushMeshBlob> blobMesh0, CSGTreeBrush brush1, BlobAssetReference<BrushMeshBlob> blobMesh1, IntersectionType intersectionType, Allocator allocator)
         {
-            UnityEngine.Profiling.Profiler.BeginSample("SharedPlaneData_Constructor");
-            try
+            using (new ProfileSample("SharedPlaneData_Constructor"))
             {
                 var nodeToTreeSpaceMatrix0 = (float4x4)brush0.NodeToTreeSpaceMatrix;
                 var treeToNodeSpaceMatrix0 = (float4x4)brush0.TreeToNodeSpaceMatrix;
@@ -165,10 +164,6 @@ namespace Chisel.Core
 
                 this.intersectingPlanes0         = new NativeList<float4>(mesh0.localPlanes.Length, allocator);
                 this.intersectingPlanes1         = new NativeList<float4>(mesh1.localPlanes.Length, allocator);
-            }
-            finally
-            {
-                UnityEngine.Profiling.Profiler.EndSample();
             }
         }
 
