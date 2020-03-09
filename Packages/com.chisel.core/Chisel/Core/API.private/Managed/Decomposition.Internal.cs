@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using Vector2 = UnityEngine.Vector2;
 using Debug = UnityEngine.Debug;
 using System.Linq;
+using Unity.Mathematics;
 
 namespace Chisel.Core
 {
@@ -41,7 +42,7 @@ namespace Chisel.Core
             /// If the area is less than 0, it indicates that the polygon is clockwise winded.
             /// </summary>
             /// <returns>The signed area</returns>
-            static float GetSignedArea(List<Vector2> vertices)
+            static float GetSignedArea(List<float2> vertices)
             {
                 //The simplest polygon which can exist in the Euclidean plane has 3 sides.
                 if (vertices.Count < 3)
@@ -54,8 +55,8 @@ namespace Chisel.Core
                 {
                     int j = (i + 1) % vertices.Count;
 
-                    Vector2 vi = vertices[i];
-                    Vector2 vj = vertices[j];
+                    float2 vi = vertices[i];
+                    float2 vj = vertices[j];
 
                     area += vi.x * vj.y;
                     area -= vi.y * vj.x;
@@ -68,7 +69,7 @@ namespace Chisel.Core
             /// Indicates if the vertices are in counter clockwise order.
             /// Warning: If the area of the polygon is 0, it is unable to determine the winding.
             /// </summary>
-            static bool IsCounterClockWise(List<Vector2> vertices)
+            static bool IsCounterClockWise(List<float2> vertices)
             {
                 //The simplest polygon which can exist in the Euclidean plane has 3 sides.
                 if (vertices.Count < 3)
@@ -81,7 +82,7 @@ namespace Chisel.Core
             /// Decompose the polygon into several smaller non-concave polygon.
             /// If the polygon is already convex, it will return the original polygon, unless it is over MaxPolygonVertices.
             /// </summary>
-            public static Vector2[][] ConvexPartition(List<Vector2> vertices)
+            public static float2[][] ConvexPartition(List<float2> vertices)
             {
                 Debug.Assert(vertices.Count > 3);
 
@@ -91,13 +92,13 @@ namespace Chisel.Core
                 return TriangulatePolygon(vertices);
             }
 
-            private static Vector2[][] TriangulatePolygon(List<Vector2> vertices)
+            private static float2[][] TriangulatePolygon(List<float2> vertices)
             {
-                List<Vector2[]> list = new List<Vector2[]>();
-                Vector2 lowerInt = new Vector2();
-                Vector2 upperInt = new Vector2(); // intersection points
+                List<float2[]> list = new List<float2[]>();
+                float2 lowerInt = new float2();
+                float2 upperInt = new float2(); // intersection points
                 int lowerIndex = 0, upperIndex = 0;
-                List<Vector2> lowerPoly, upperPoly;
+                List<float2> lowerPoly, upperPoly;
 
                 for (int i = 0; i < vertices.Count; ++i)
                 {
@@ -109,7 +110,7 @@ namespace Chisel.Core
                         {
                             // if line intersects with an edge
                             float d;
-                            Vector2 p;
+                            float2 p;
                             if (Left(At(i - 1, vertices), At(i, vertices), At(j, vertices)) && RightOn(At(i - 1, vertices), At(i, vertices), At(j - 1, vertices)))
                             {
                                 // find the point of intersection
@@ -149,7 +150,7 @@ namespace Chisel.Core
                         // if there are no vertices to connect to, choose a point in the middle
                         if (lowerIndex == (upperIndex + 1) % vertices.Count)
                         {
-                            Vector2 p = ((lowerInt + upperInt) / 2);
+                            float2 p = ((lowerInt + upperInt) / 2);
 
                             lowerPoly = Copy(i, upperIndex, vertices);
                             lowerPoly.Add(p);
@@ -210,18 +211,18 @@ namespace Chisel.Core
                 return list.ToArray();
             }
 
-            private static Vector2 At(int i, List<Vector2> vertices)
+            private static float2 At(int i, List<float2> vertices)
             {
                 int s = vertices.Count;
                 return vertices[i < 0 ? s - 1 - ((-i - 1) % s) : i % s];
             }
 
-            private static List<Vector2> Copy(int i, int j, List<Vector2> vertices)
+            private static List<float2> Copy(int i, int j, List<float2> vertices)
             {
                 while (j < i)
                     j += vertices.Count;
 
-                List<Vector2> p = new List<Vector2>(j);
+                List<float2> p = new List<float2>(j);
 
                 for (; i <= j; ++i)
                 {
@@ -236,9 +237,9 @@ namespace Chisel.Core
             }
 
             //From Mark Bayazit's convex decomposition algorithm
-            static Vector2 LineIntersect(Vector2 p1, Vector2 p2, Vector2 q1, Vector2 q2)
+            static float2 LineIntersect(float2 p1, float2 p2, float2 q1, float2 q2)
             {
-                Vector2 i = Vector2.zero;
+                float2 i = float2.zero;
                 float a1 = p2.y - p1.y;
                 float b1 = p1.x - p2.x;
                 float c1 = a1 * p1.x + b1 * p1.y;
@@ -280,9 +281,9 @@ namespace Chisel.Core
             /// <param name="secondIsSegment">Set this to true to require that the
             /// intersection point be on the second line segment.</param>
             /// <returns>True if an intersection is detected, false otherwise.</returns>
-            static bool LineIntersect(ref Vector2 point1, ref Vector2 point2, ref Vector2 point3, ref Vector2 point4, bool firstIsSegment, bool secondIsSegment, out Vector2 point)
+            static bool LineIntersect(ref float2 point1, ref float2 point2, ref float2 point3, ref float2 point4, bool firstIsSegment, bool secondIsSegment, out float2 point)
             {
-                point = new Vector2();
+                point = new float2();
 
                 // these are reused later.
                 // each lettered sub-calculation is used twice, except
@@ -347,13 +348,13 @@ namespace Chisel.Core
             /// <param name="intersectionPoint">This is set to the intersection
             /// point if an intersection is detected.</param>
             /// <returns>True if an intersection is detected, false otherwise.</returns>
-            static bool LineIntersect(Vector2 point1, Vector2 point2, Vector2 point3, Vector2 point4, out Vector2 intersectionPoint)
+            static bool LineIntersect(float2 point1, float2 point2, float2 point3, float2 point4, out float2 intersectionPoint)
             {
                 return LineIntersect(ref point1, ref point2, ref point3, ref point4, true, true, out intersectionPoint);
             }
 
 
-            private static bool CanSee(int i, int j, List<Vector2> vertices)
+            private static bool CanSee(int i, int j, List<float2> vertices)
             {
                 if (Reflex(i, vertices))
                 {
@@ -380,7 +381,7 @@ namespace Chisel.Core
                     if ((k + 1) % vertices.Count == i || k == i || (k + 1) % vertices.Count == j || k == j)
                         continue; // ignore incident edges
 
-                    Vector2 intersectionPoint;
+                    float2 intersectionPoint;
 
                     if (LineIntersect(At(i, vertices), At(j, vertices), At(k, vertices), At(k + 1, vertices), out intersectionPoint))
                         return false;
@@ -388,12 +389,12 @@ namespace Chisel.Core
                 return true;
             }
 
-            private static bool Reflex(int i, List<Vector2> vertices)
+            private static bool Reflex(int i, List<float2> vertices)
             {
                 return Right(i, vertices);
             }
 
-            private static bool Right(int i, List<Vector2> vertices)
+            private static bool Right(int i, List<float2> vertices)
             {
                 return Right(At(i - 1, vertices), At(i, vertices), At(i + 1, vertices));
             }
@@ -403,7 +404,7 @@ namespace Chisel.Core
             /// </summary>
             /// <returns>Positive number if point is left, negative if point is right, 
             /// and 0 if points are collinear.</returns>
-            public static float Area(Vector2 a, Vector2 b, Vector2 c)
+            public static float Area(float2 a, float2 b, float2 c)
             {
                 return Area(ref a, ref b, ref c);
             }
@@ -413,32 +414,32 @@ namespace Chisel.Core
             /// </summary>
             /// <returns>Positive number if point is left, negative if point is right, 
             /// and 0 if points are collinear.</returns>
-            public static float Area(ref Vector2 a, ref Vector2 b, ref Vector2 c)
+            public static float Area(ref float2 a, ref float2 b, ref float2 c)
             {
                 return a.x * (b.y - c.y) + b.x * (c.y - a.y) + c.x * (a.y - b.y);
             }
 
-            private static bool Left(Vector2 a, Vector2 b, Vector2 c)
+            private static bool Left(float2 a, float2 b, float2 c)
             {
                 return Area(ref a, ref b, ref c) > 0;
             }
 
-            private static bool LeftOn(Vector2 a, Vector2 b, Vector2 c)
+            private static bool LeftOn(float2 a, float2 b, float2 c)
             {
                 return Area(ref a, ref b, ref c) >= 0;
             }
 
-            private static bool Right(Vector2 a, Vector2 b, Vector2 c)
+            private static bool Right(float2 a, float2 b, float2 c)
             {
                 return Area(ref a, ref b, ref c) < 0;
             }
 
-            private static bool RightOn(Vector2 a, Vector2 b, Vector2 c)
+            private static bool RightOn(float2 a, float2 b, float2 c)
             {
                 return Area(ref a, ref b, ref c) <= 0;
             }
 
-            private static float SquareDist(Vector2 a, Vector2 b)
+            private static float SquareDist(float2 a, float2 b)
             {
                 float dx = b.x - a.x;
                 float dy = b.y - a.y;
@@ -447,7 +448,7 @@ namespace Chisel.Core
         }
 
 
-        static Vector2[][] ConvexPartitionInternal(Vector2[] inputVertices2D)
+        static float2[][] ConvexPartitionInternal(float2[] inputVertices2D)
         {
             var output = BayazitDecomposer.ConvexPartition(inputVertices2D.ToList());
             //for (int i = 0; i < output.Length; i++) output[i].Reverse();

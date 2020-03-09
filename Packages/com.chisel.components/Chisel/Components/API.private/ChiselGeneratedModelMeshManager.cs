@@ -47,7 +47,7 @@ namespace Chisel.Components
         public static event Action<ChiselModel> PostUpdateModel;
         public static event Action              PostUpdateModels;
         
-        const int MaxVertexCount = 65000;
+        const int kMaxVertexCount = VertexSoup.kMaxVertexCount;
 
         static HashSet<ChiselNode>  registeredNodeLookup    = new HashSet<ChiselNode>();
         static List<ChiselModel>    registeredModels        = new List<ChiselModel>();
@@ -255,9 +255,9 @@ namespace Chisel.Components
                     continue;
                 
                 // Make sure the mesh is valid
-                if (meshDescription.vertexCount >= MaxVertexCount)
+                if (meshDescription.vertexCount >= kMaxVertexCount)
                 {
-                    Debug.LogError("Mesh has too many vertices (" + meshDescription.vertexCount + " > " + MaxVertexCount + ")");
+                    Debug.LogError("Mesh has too many vertices (" + meshDescription.vertexCount + " > " + kMaxVertexCount + ")");
                     continue;
                 }
 

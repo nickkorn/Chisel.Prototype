@@ -24,16 +24,10 @@ namespace Chisel.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public SurfaceLoops(int surfaceCount)
         {
-            EnsureSize(surfaceCount);
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void EnsureSize(int length)
-        {
             if (surfaces == null ||
-                surfaces.Length != length)
-                surfaces = new List<Loop>[length];
-            for (int i = 0; i < length; i++)
+                surfaces.Length != surfaceCount)
+                surfaces = new List<Loop>[surfaceCount];
+            for (int i = 0; i < surfaceCount; i++)
                 surfaces[i] = new List<Loop>();
         }
 

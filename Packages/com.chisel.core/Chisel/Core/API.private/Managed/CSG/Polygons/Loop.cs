@@ -17,42 +17,6 @@ namespace Chisel.Core
 {
 #if USE_MANAGED_CSG_IMPLEMENTATION
     // TODO: rename
-    public struct LoopInfo
-    {
-        [NonSerialized] public Plane            worldPlane;
-        [NonSerialized] public Vector3          right;
-        [NonSerialized] public Vector3          forward;
-        [NonSerialized] public int              basePlaneIndex;
-        [NonSerialized] public CSGTreeBrush     brush;
-        [NonSerialized] public SurfaceLayers    layers;				    // always on owning brush
-    }
-
-    // TODO: rename
-    public sealed class LoopGroup
-    {
-        public Dictionary<int, Loop> loopLookup = new Dictionary<int, Loop>();
-        public List<Loop> loops = new List<Loop>();
-
-        public void Clear()
-        {
-            loopLookup.Clear();
-            loops.Clear();
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Loop FindOrAddLoop(int basePlaneIndex, CSGTreeBrush brush, bool isConvex = true)
-        {
-            if (!loopLookup.TryGetValue(basePlaneIndex, out Loop loop))
-            {
-                loop = new Loop() { info = new LoopInfo() { basePlaneIndex = basePlaneIndex, brush = brush }, convex = isConvex };
-                loopLookup.Add(basePlaneIndex, loop);
-                loops.Add(loop);
-            }
-            return loop;
-        }
-    }
-
-    // TODO: rename
     public sealed class Loop
     {
 #if DebugInfo
@@ -68,75 +32,94 @@ namespace Chisel.Core
         }
 #endif
 
-        public readonly HashSet<ushort>     indexUsed   = new HashSet<ushort>();
         public readonly List<ushort>        indices     = new List<ushort>();
         public List<Edge>                   edges       = new List<Edge>();
         public bool[]                       destroyed;
 
         [NonSerialized] public List<Loop>   holes       = new List<Loop>();
-        [NonSerialized] public LoopInfo     info;
-
-        [NonSerialized] public bool         convex      = false;
-#if DebugInfo
-        CategoryGroupIndex   _interiorCategory    = CategoryGroupIndex.Invalid; // determine if the loop is inside another brush or aligned with another brush
-        public CategoryGroupIndex   interiorCategory
-        {
-            get { return _interiorCategory; }
-            set
-            {
-                if (logLoopIndices.Contains(loopIndex))
-                    Debug.Log($"{loopIndex}: Set {(CategoryIndex)_interiorCategory} => {(CategoryIndex)value}");
-                _interiorCategory = value;
-            }
-        }
-        internal static HashSet<int> logLoopIndices = new HashSet<int>()
-        {
-            245,118
-        };
-#else
-        [NonSerialized] public CategoryGroupIndex   interiorCategory    = CategoryGroupIndex.Invalid; // determine if the loop is inside another brush or aligned with another brush
-#endif
+        [NonSerialized] public SurfaceInfo  info;
 
         public bool Valid { [MethodImpl(MethodImplOptions.AggressiveInlining)] get { return indices.Count >= 3; } }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public Loop()
         {
-#if DebugInfo
-            if (logLoopIndices.Contains(loopIndex))
-                Debug.Log($"new => {loopIndex} {interiorCategory}");
-#endif
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public Loop(Loop original)
         {
-#if DebugInfo
-            if (logLoopIndices.Contains(loopIndex))
-                Debug.Log($"copy {original.loopIndex} ({original.holes.Count}/{original.indices.Count}/{original.edges.Count}/{(CategoryIndex)original.interiorCategory}) => {loopIndex}");
-#endif
             this.edges  .AddRange(original.edges);
             this.indices.AddRange(original.indices);
-            this.info               = original.info;
-            this.interiorCategory   = original.interiorCategory;
-            this.convex             = original.convex;
+            this.info = original.info;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public Loop(Loop original, CategoryGroupIndex newHoleCategory)
+        {
+            this.edges.AddRange(original.edges);
+            this.indices.AddRange(original.indices);
+            this.info = original.info;
+            this.info.interiorCategory = newHoleCategory;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        unsafe public Loop(in SurfaceInfo surfaceInfo, ushort* srcIndices, int offset, int length)
+        {
+            indices.Capacity = length;
+            for (int j = 0; j < length; j++, offset++)
+                indices.Add(srcIndices[offset]);
+            this.info = surfaceInfo;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ClearAllIndices()
         {
-            indexUsed.Clear();
             indices.Clear();
             edges.Clear();
         }
 
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void AddIndex(VertexSoup soup, ushort newIndex)
+        internal void SetIndices(NativeList<ushort> srcIndices, int offset, int length)
         {
-            if (indexUsed.Contains(newIndex))
+            indices.Clear();
+            if (indices.Capacity < length)
+                indices.Capacity = length;
+            for (int j = 0; j < length; j++, offset++)
+                indices.Add(srcIndices[offset]);
+        }
+
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal void SetIndices(List<ushort> srcIndices)
+        {
+            if (indices == srcIndices)
                 return;
-            indexUsed.Add(newIndex);
-            indices.Add(newIndex);
+            indices.Clear();
+            if (indices.Capacity < srcIndices.Count)
+                indices.Capacity = srcIndices.Count;
+            for (int j = 0; j < srcIndices.Count; j++)
+                indices.Add(srcIndices[j]);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal void SetIndices(NativeList<ushort> srcIndices)
+        {
+            indices.Clear();
+            if (indices.Capacity < srcIndices.Length)
+                indices.Capacity = srcIndices.Length;
+            for (int j = 0; j < srcIndices.Length; j++)
+                indices.Add(srcIndices[j]);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal unsafe void SetIndices(ushort* srcIndices, int offset, int length)
+        {
+            indices.Clear();
+            indices.Capacity = length;
+            for (int j = 0; j < length; j++, offset++)
+                indices.Add(srcIndices[offset]);
         }
 
 
@@ -145,7 +128,7 @@ namespace Chisel.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void AddEdges(List<ushort> indices)
         {
-            if (indices.Count == 0)
+            if (indices.Count < 3)
                 return;
 
             s_UniqueEdges.Clear();
@@ -153,10 +136,10 @@ namespace Chisel.Core
                 edges.Capacity = edges.Count + indices.Count;
             for (int i = 0; i < indices.Count - 1; i++)
             {
-                Debug.Assert(indices[i] != indices[i + 1]);
+                Debug.Assert(indices[i] != indices[i + 1], "indices[i] != indices[i + 1]");
                 s_UniqueEdges.Add(new Edge() { index1 = indices[i], index2 = indices[i + 1] });
             }
-            Debug.Assert(indices[indices.Count - 1] != indices[0]);
+            Debug.Assert(indices[indices.Count - 1] != indices[0], "indices[indices.Count - 1] != indices[0]");
             s_UniqueEdges.Add(new Edge() { index1 = indices[indices.Count - 1], index2 = indices[0] });
 
             for (int e = 0; e < edges.Count; e++)
@@ -224,19 +207,6 @@ namespace Chisel.Core
             //Debug.Log(builder.ToString());
             inverted = false;
             return -1;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public EdgeCategory CategorizeEdge(VertexSoup soup, Edge edge)
-        {
-            if (IndexOf(edge, out bool inverted) != -1)
-                return (inverted) ? EdgeCategory.ReverseAligned : EdgeCategory.Aligned;
-            var vertices = soup.vertices;
-            var midPoint = (vertices[edge.index1] + vertices[edge.index2]) * 0.5f;
-
-            if (CSGManagerPerformCSG.IsPointInPolygon(info.right, info.forward, indices, soup, midPoint))
-                return EdgeCategory.Inside;
-            return EdgeCategory.Outside;
         }
     }
 #endif

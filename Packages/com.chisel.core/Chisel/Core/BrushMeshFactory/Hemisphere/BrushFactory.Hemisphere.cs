@@ -9,6 +9,7 @@ using Matrix4x4 = UnityEngine.Matrix4x4;
 using Mathf = UnityEngine.Mathf;
 using Plane = UnityEngine.Plane;
 using Debug = UnityEngine.Debug;
+using Unity.Mathematics;
 
 namespace Chisel.Core
 {
@@ -32,14 +33,14 @@ namespace Chisel.Core
             return GenerateHemisphereSubMesh(ref brushMesh, definition.diameterXYZ, transform, definition.horizontalSegments, definition.verticalSegments, definition.surfaceDefinition);
         }
 
-        public static bool GenerateHemisphereVertices(ref ChiselHemisphereDefinition definition, ref Vector3[] vertices)
+        public static bool GenerateHemisphereVertices(ref ChiselHemisphereDefinition definition, ref float3[] vertices)
         {
             definition.Validate();
             var transform = Matrix4x4.TRS(Vector3.zero, Quaternion.AngleAxis(definition.rotation, Vector3.up), Vector3.one);
             return GenerateHemisphereVertices(definition.diameterXYZ, transform, definition.horizontalSegments, definition.verticalSegments, ref vertices);
         }
 
-        public static bool GenerateHemisphereVertices(Vector3 diameterXYZ, Matrix4x4 transform, int horzSegments, int vertSegments, ref Vector3[] vertices)
+        public static bool GenerateHemisphereVertices(float3 diameterXYZ, Matrix4x4 transform, int horzSegments, int vertSegments, ref float3[] vertices)
         {
             var bottomCap		= true;
             var topCap			= false;
@@ -50,13 +51,13 @@ namespace Chisel.Core
 
             var topVertex		= 0;
             var bottomVertex	= (!topCap) ? 1 : 0;
-            var radius			= new Vector3(diameterXYZ.x * 0.5f, 
-                                              diameterXYZ.y, 
-                                              diameterXYZ.z * 0.5f);
+            var radius			= new float3(diameterXYZ.x * 0.5f, 
+                                             diameterXYZ.y, 
+                                             diameterXYZ.z * 0.5f);
             
             if (vertices == null || 
                 vertices.Length != vertexCount)
-                vertices = new Vector3[vertexCount];
+                vertices = new float3[vertexCount];
             if (!topCap   ) vertices[topVertex   ] = transform.MultiplyPoint(Vector3.up * radius.y); // top
             if (!bottomCap) vertices[bottomVertex] = transform.MultiplyPoint(Vector3.zero);          // bottom
             var degreePerSegment	= (360.0f / horzSegments) * Mathf.Deg2Rad;
@@ -66,9 +67,9 @@ namespace Chisel.Core
                 for (int h = 0; h < horzSegments; h++, vertexIndex++)
                 {
                     var hRad = (h * degreePerSegment) + angleOffset;
-                    vertices[vertexIndex] = transform.MultiplyPoint(new Vector3(Mathf.Cos(hRad) * radius.x,  
-                                                                                0.0f, 
-                                                                                Mathf.Sin(hRad) * radius.z));
+                    vertices[vertexIndex] = transform.MultiplyPoint(new float3(math.cos(hRad) * radius.x,  
+                                                                               0.0f, 
+                                                                               math.sin(hRad) * radius.z));
                 }
             }
             for (int v = 1; v < rings; v++)
@@ -87,7 +88,7 @@ namespace Chisel.Core
             return true;
         }
 
-        public static bool GenerateHemisphereSubMesh(ref BrushMesh brushMesh, Vector3 diameterXYZ, Matrix4x4 transform, int horzSegments, int vertSegments, in ChiselSurfaceDefinition surfaceDefinition)
+        public static bool GenerateHemisphereSubMesh(ref BrushMesh brushMesh, float3 diameterXYZ, Matrix4x4 transform, int horzSegments, int vertSegments, in ChiselSurfaceDefinition surfaceDefinition)
         {
             if (diameterXYZ.x == 0 ||
                 diameterXYZ.y == 0 ||
@@ -106,12 +107,12 @@ namespace Chisel.Core
 
             var topVertex		= 0;
             var bottomVertex	= (!topCap) ? 1 : 0;
-            var radius			= new Vector3(diameterXYZ.x * 0.5f, 
-                                              diameterXYZ.y, 
-                                              diameterXYZ.z * 0.5f);
+            var radius			= new float3(diameterXYZ.x * 0.5f, 
+                                             diameterXYZ.y, 
+                                             diameterXYZ.z * 0.5f);
 
             var heightY = radius.y;
-            var vertices = new Vector3[vertexCount];
+            var vertices = new float3[vertexCount];
             if (!topCap   ) vertices[topVertex   ] = transform.MultiplyPoint(Vector3.up * heightY); // top
             if (!bottomCap) vertices[bottomVertex] = transform.MultiplyPoint(Vector3.zero);         // bottom
             var degreePerSegment	= (360.0f / horzSegments) * Mathf.Deg2Rad;
@@ -122,18 +123,18 @@ namespace Chisel.Core
                 for (int h = horzSegments - 1; h >= 0; h--, vertexIndex++)
                 {
                     var hRad = (h * degreePerSegment) + angleOffset;
-                    vertices[vertexIndex] = transform.MultiplyPoint(new Vector3(Mathf.Cos(hRad) * radius.x,
-                                                                                0.0f,
-                                                                                Mathf.Sin(hRad) * radius.z));
+                    vertices[vertexIndex] = transform.MultiplyPoint(new float3(math.cos(hRad) * radius.x,
+                                                                               0.0f,
+                                                                               math.sin(hRad) * radius.z));
                 }
             } else
             {
                 for (int h = 0; h < horzSegments; h++, vertexIndex++)
                 {
                     var hRad = (h * degreePerSegment) + angleOffset;
-                    vertices[vertexIndex] = transform.MultiplyPoint(new Vector3(Mathf.Cos(hRad) * radius.x,  
-                                                                                0.0f, 
-                                                                                Mathf.Sin(hRad) * radius.z));
+                    vertices[vertexIndex] = transform.MultiplyPoint(new float3(math.cos(hRad) * radius.x,  
+                                                                               0.0f, 
+                                                                               math.sin(hRad) * radius.z));
                 }
             }
             for (int v = 1; v < rings; v++)

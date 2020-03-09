@@ -21,6 +21,7 @@ namespace Chisel.Core
         public List<Loop>   basePolygons = new List<Loop>();
 
         // TODO: Have list of surfaceloops, dictionary holds index into list
+        // TODO: Actually, do not need lookups?
         public Dictionary<int, SurfaceLoops>    intersectionSurfaceLoops    = new Dictionary<int, SurfaceLoops>();
         public Dictionary<int, Loop[]>          intersectionLoops           = new Dictionary<int, Loop[]>();
 

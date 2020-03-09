@@ -15,9 +15,10 @@ namespace Chisel.Core
 {
 #if USE_MANAGED_CSG_IMPLEMENTATION
     
-    [BurstCompile(FloatPrecision = FloatPrecision.Medium, FloatMode = FloatMode.Fast, CompileSynchronously = true, Debug = false)]
+    [BurstCompile]
     public struct MergeLoopVerticesJob : IJob
     {
+        // Add [NativeDisableContainerSafetyRestriction] when done, for performance
         [ReadOnly] public NativeArray<float4> verticesSrc;
         //readwrite
         public NativeArray<float4> verticesDst;

@@ -9,6 +9,7 @@ using Matrix4x4 = UnityEngine.Matrix4x4;
 using Mathf = UnityEngine.Mathf;
 using Plane = UnityEngine.Plane;
 using Debug = UnityEngine.Debug;
+using Unity.Mathematics;
 
 namespace Chisel.Core
 {
@@ -19,7 +20,7 @@ namespace Chisel.Core
         {
             definition.Validate();
 
-            var shapeVertices		= new List<Vector2>();
+            var shapeVertices		= new List<float2>();
             var shapeSegmentIndices = new List<int>();
             GetPathVertices(definition.shape, definition.curveSegments, shapeVertices, shapeSegmentIndices);
 
@@ -67,29 +68,29 @@ namespace Chisel.Core
                 var d1 = (v2 - v1);
                 var d2 = (v3 - v2);
 
-                var maxWidth0 = d0.magnitude;
-                var maxWidth1 = d1.magnitude;
-                var maxWidth2 = d2.magnitude;
+                var maxWidth0 = math.length(d0);
+                var maxWidth1 = math.length(d1);
+                var maxWidth2 = math.length(d2);
                 var halfWidth1 = d1 * 0.5f;
 
                 d0 /= maxWidth0;
                 d1 /= maxWidth1;
                 d2 /= maxWidth2;
 
-                var depthVector = new Vector3(d1.y, 0, -d1.x);
-                var lineCenter  = new Vector3(m1.x, halfHeight, m1.y) - (depthVector * halfDepth);
+                var depthVector = new float3(d1.y, 0, -d1.x);
+                var lineCenter  = new float3(m1.x, halfHeight, m1.y) - (depthVector * halfDepth);
 
-                var depthVector0 = new Vector2(d0.y, -d0.x) * depth;
-                var depthVector1 = new Vector2(d1.y, -d1.x) * depth;
-                var depthVector2 = new Vector2(d2.y, -d2.x) * depth;
+                var depthVector0 = new float2(d0.y, -d0.x) * depth;
+                var depthVector1 = new float2(d1.y, -d1.x) * depth;
+                var depthVector2 = new float2(d2.y, -d2.x) * depth;
 
                 m0 -= depthVector0;
                 m1 -= depthVector1;
                 m2 -= depthVector2;
 
-                Vector2 output;
-                var leftShear	= Intersect(m1, d1, m0, d0, out output) ?  Vector2.Dot(d1, (output - (m1 - halfWidth1))) : 0;
-                var rightShear	= Intersect(m1, d1, m2, d2, out output) ? -Vector2.Dot(d1, (output - (m1 + halfWidth1))) : 0;
+                float2 output;
+                var leftShear	= Intersect(m1, d1, m0, d0, out output) ?  math.dot(d1, (output - (m1 - halfWidth1))) : 0;
+                var rightShear	= Intersect(m1, d1, m2, d2, out output) ? -math.dot(d1, (output - (m1 + halfWidth1))) : 0;
 
                 var transform = Matrix4x4.TRS(lineCenter, // move to center of line
                                               Quaternion.LookRotation(depthVector, Vector3.up),	// rotate to align with line
@@ -121,9 +122,9 @@ namespace Chisel.Core
                         var scale		= (vertices[v].x / halfWidth);
 
                         // lerp the stairs width depending on if it's on the left or right side of the stairs
-                        vertices[v].x = Mathf.Lerp( scale * (halfWidth - (rightShear * depthFactor)),
-                                                    scale * (halfWidth - (leftShear  * depthFactor)),
-                                                    wideFactor);
+                        vertices[v].x = math.lerp( scale * (halfWidth - (rightShear * depthFactor)),
+                                                   scale * (halfWidth - (leftShear  * depthFactor)),
+                                                   wideFactor);
                         vertices[v] = transform.MultiplyPoint(vertices[v]);
                     }
                 }
@@ -135,8 +136,8 @@ namespace Chisel.Core
 
 
         // TODO: move somewhere else
-        static bool Intersect(Vector2 p1, Vector2 d1,
-                                     Vector2 p2, Vector2 d2, out Vector2 intersection)
+        static bool Intersect(float2 p1, float2 d1,
+                              float2 p2, float2 d2, out float2 intersection)
         {
             const float kEpsilon = 0.0001f;
 
@@ -144,7 +145,7 @@ namespace Chisel.Core
             // check if the rays are parallel
             if (f >= -kEpsilon && f <= kEpsilon)
             {
-                intersection = Vector2.zero;
+                intersection = float2.zero;
                 return false;
             }
 

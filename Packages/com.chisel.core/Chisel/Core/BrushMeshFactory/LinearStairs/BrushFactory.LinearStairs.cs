@@ -10,6 +10,7 @@ using Plane = UnityEngine.Plane;
 using Debug = UnityEngine.Debug;
 using UnitySceneExtensions;
 using System.Collections.Generic;
+using Unity.Mathematics;
 
 namespace Chisel.Core
 {
@@ -45,7 +46,7 @@ namespace Chisel.Core
         {
             public bool enabled;
             public int  subMeshCount;
-            public LinearStairsSideData(ChiselLinearStairsDefinition definition, int stepCount, float sideDepth, Vector3 boundsMin, Vector3 boundsMax, StairsRiserType riserType, float riserDepth, StairsSideType sideDefinition, StairsSideType sideType)
+            public LinearStairsSideData(ChiselLinearStairsDefinition definition, int stepCount, float sideDepth, float3 boundsMin, float3 boundsMax, StairsRiserType riserType, float riserDepth, StairsSideType sideDefinition, StairsSideType sideType)
             {
                 enabled = sideType != StairsSideType.None;
 
@@ -95,8 +96,8 @@ namespace Chisel.Core
 
         private static void GenerateStairsSide(ref ChiselBrushContainer brushContainer, int startIndex, int stepCount, float minX, float maxX, StairsSideType sideType, ChiselLinearStairsDefinition definition, in LineairStairsData description, in LinearStairsSideData side)
         {
-            var min = new Vector3(minX, description.boundsMax.y - definition.treadHeight - definition.stepHeight, description.boundsMin.z + definition.StepDepthOffset);
-            var max = new Vector3(maxX, description.boundsMax.y - definition.treadHeight                        , description.boundsMin.z + definition.StepDepthOffset + definition.stepDepth);
+            var min = new float3(minX, description.boundsMax.y - definition.treadHeight - definition.stepHeight, description.boundsMin.z + definition.StepDepthOffset);
+            var max = new float3(maxX, description.boundsMax.y - definition.treadHeight                        , description.boundsMin.z + definition.StepDepthOffset + definition.stepDepth);
 
             var maxZ = description.boundsMax.z - description.riserDepth;
 
@@ -104,7 +105,7 @@ namespace Chisel.Core
 
             if (sideType == StairsSideType.DownAndUp)
             {
-                var extrusion = new Vector3(max.x - min.x, 0, 0);
+                var extrusion = new float3(max.x - min.x, 0, 0);
                 // Top "wall"
                 if (definition.StepDepthOffset > description.sideDepth)
                 {
@@ -117,10 +118,10 @@ namespace Chisel.Core
                     var z0 = description.boundsMin.z;
                     var z1 = min.z - description.sideDepth;
                     var vertices = new[] {
-                                        new Vector3( min.x, y0, z0), // 0
-                                        new Vector3( min.x, y1, z0), // 1
-                                        new Vector3( min.x, y1, z1), // 2
-                                        new Vector3( min.x, y0, z1), // 3
+                                        new float3( min.x, y0, z0), // 0
+                                        new float3( min.x, y1, z0), // 1
+                                        new float3( min.x, y1, z1), // 2
+                                        new float3( min.x, y0, z1), // 3
                                     };
 
                     BrushMeshFactory.CreateExtrudedSubMesh(ref brushContainer.brushMeshes[startIndex], vertices, extrusion,
@@ -156,10 +157,10 @@ namespace Chisel.Core
                     //              * z1 y2 
 
                     var vertices = new[] {
-                                        new Vector3( min.x, y0, z0), // 0
-                                        new Vector3( min.x, y1, z0), // 1
-                                        new Vector3( min.x, y2, z1), // 2
-                                        new Vector3( min.x, y3, z1), // 3
+                                        new float3( min.x, y0, z0), // 0
+                                        new float3( min.x, y1, z0), // 1
+                                        new float3( min.x, y2, z1), // 2
+                                        new float3( min.x, y3, z1), // 3
                                     };
 
                     BrushMeshFactory.CreateExtrudedSubMesh(ref brushContainer.brushMeshes[startIndex + 1], vertices, extrusion,
@@ -201,11 +202,11 @@ namespace Chisel.Core
                         // y2 z2 *----------* y2 z1 
 
                         var vertices = new[] {
-                                            new Vector3( min.x, y0, z2), // 0
-                                            new Vector3( min.x, y2, z2), // 1
-                                            new Vector3( min.x, y2, z1), // 2
-                                            new Vector3( min.x, y3, z1), // 3
-                                            new Vector3( min.x, y0, z0), // 4
+                                            new float3( min.x, y0, z2), // 0
+                                            new float3( min.x, y2, z2), // 1
+                                            new float3( min.x, y2, z1), // 2
+                                            new float3( min.x, y3, z1), // 3
+                                            new float3( min.x, y0, z0), // 4
                                         };
 
                         BrushMeshFactory.CreateExtrudedSubMesh(ref brushContainer.brushMeshes[startIndex + 1], vertices, extrusion,
@@ -230,11 +231,11 @@ namespace Chisel.Core
                         //              * y5 z4 
 
                         var vertices = new[] {
-                                            new Vector3( min.x, y0, z2), // 0
-                                            new Vector3( min.x, y1, z2), // 1
-                                            new Vector3( min.x, y5, z4), // 3
-                                            new Vector3( min.x, y6, z4), // 4
-                                            new Vector3( min.x, y0, z0), // 5
+                                            new float3( min.x, y0, z2), // 0
+                                            new float3( min.x, y1, z2), // 1
+                                            new float3( min.x, y5, z4), // 3
+                                            new float3( min.x, y6, z4), // 4
+                                            new float3( min.x, y0, z0), // 5
                                         };
 
                         BrushMeshFactory.CreateExtrudedSubMesh(ref brushContainer.brushMeshes[startIndex + 1], vertices, extrusion,
@@ -253,10 +254,10 @@ namespace Chisel.Core
                             // y7 z4 *----* y7 z1 
 
                             vertices = new[] {
-                                        new Vector3( min.x, y6, z4), // 0
-                                        new Vector3( min.x, y7, z4), // 1
-                                        new Vector3( min.x, y7, z1), // 2
-                                        new Vector3( min.x, y3, z1), // 3
+                                        new float3( min.x, y6, z4), // 0
+                                        new float3( min.x, y7, z4), // 1
+                                        new float3( min.x, y7, z1), // 2
+                                        new float3( min.x, y3, z1), // 3
                                     };
 
                             BrushMeshFactory.CreateExtrudedSubMesh(ref brushContainer.brushMeshes[startIndex + 2], vertices, extrusion,
@@ -282,12 +283,12 @@ namespace Chisel.Core
                         //        y2 z3 *---* y2 z1 
 
                         var vertices = new[] {
-                                            new Vector3( min.x, y0, z2), // 0
-                                            new Vector3( min.x, y1, z2), // 1
-                                            new Vector3( min.x, y2, z3), // 2
-                                            new Vector3( min.x, y2, z1), // 3
-                                            new Vector3( min.x, y3, z1), // 4
-                                            new Vector3( min.x, y0, z0), // 5
+                                            new float3( min.x, y0, z2), // 0
+                                            new float3( min.x, y1, z2), // 1
+                                            new float3( min.x, y2, z3), // 2
+                                            new float3( min.x, y2, z1), // 3
+                                            new float3( min.x, y3, z1), // 4
+                                            new float3( min.x, y0, z0), // 5
                                         };
 
                         BrushMeshFactory.CreateExtrudedSubMesh(ref brushContainer.brushMeshes[startIndex + 1], vertices, extrusion,
@@ -298,7 +299,7 @@ namespace Chisel.Core
             } else
             if (sideType == StairsSideType.Up)
             {
-                var extrusion = new Vector3(max.x - min.x, 0, 0);
+                var extrusion = new float3(max.x - min.x, 0, 0);
                 // Top "wall"
                 if ((min.z - description.boundsMin.z) > 0)
                 {
@@ -311,10 +312,10 @@ namespace Chisel.Core
                     var z0 = description.boundsMin.z;
                     var z1 = min.z;
                     var vertices = new[] {
-                                        new Vector3( min.x, y0, z0), // 0
-                                        new Vector3( min.x, y1, z0), // 1
-                                        new Vector3( min.x, y1, z1), // 2
-                                        new Vector3( min.x, y0, z1), // 3
+                                        new float3( min.x, y0, z0), // 0
+                                        new float3( min.x, y1, z0), // 1
+                                        new float3( min.x, y1, z1), // 2
+                                        new float3( min.x, y0, z1), // 3
                                     };
 
                     BrushMeshFactory.CreateExtrudedSubMesh(ref brushContainer.brushMeshes[startIndex], vertices, extrusion,
@@ -342,10 +343,10 @@ namespace Chisel.Core
                     // z0 y1 *----* z1 y2 
 
                     var vertices = new[] {
-                                        new Vector3( min.x, y0, z0), // 0
-                                        new Vector3( min.x, y1, z0), // 1
-                                        new Vector3( min.x, y1, z1), // 2
-                                        new Vector3( min.x, y3, z1), // 3
+                                        new float3( min.x, y0, z0), // 0
+                                        new float3( min.x, y1, z0), // 1
+                                        new float3( min.x, y1, z1), // 2
+                                        new float3( min.x, y3, z1), // 3
                                     };
 
                     BrushMeshFactory.CreateExtrudedSubMesh(ref brushContainer.brushMeshes[j], vertices, extrusion,
@@ -360,8 +361,8 @@ namespace Chisel.Core
             } else
             if (sideType == StairsSideType.Down)
             {
-                Vector3[] vertices;
-                var extrusion = new Vector3(max.x - min.x, 0, 0);
+                float3[] vertices;
+                var extrusion = new float3(max.x - min.x, 0, 0);
                 if (description.sideDepth == 0)
                 {
                     for (int i = 0, j = startIndex; i < stepCount - 1; i++, j++)
@@ -380,9 +381,9 @@ namespace Chisel.Core
                         //             \|
                         //              * z1 y1 
                         vertices = new[] {
-                                        new Vector3( min.x, y0, z0), // 0
-                                        new Vector3( min.x, y1, z1), // 1
-                                        new Vector3( min.x, y0, z1), // 2
+                                        new float3( min.x, y0, z0), // 0
+                                        new float3( min.x, y1, z1), // 1
+                                        new float3( min.x, y0, z1), // 2
                                     };
 
                         BrushMeshFactory.CreateExtrudedSubMesh(ref brushContainer.brushMeshes[j], vertices, extrusion,
@@ -417,10 +418,10 @@ namespace Chisel.Core
                                 //       |         |
                                 // z3 y2 *---------* z1 y2 
                                 vertices = new[] {
-                                                new Vector3( min.x, y0, z3), // 0
-                                                new Vector3( min.x, y2, z3), // 1
-                                                new Vector3( min.x, y2, z1), // 2
-                                                new Vector3( min.x, y0, z1), // 3
+                                                new float3( min.x, y0, z3), // 0
+                                                new float3( min.x, y2, z3), // 1
+                                                new float3( min.x, y2, z1), // 2
+                                                new float3( min.x, y0, z1), // 3
                                             };
 
                                 BrushMeshFactory.CreateExtrudedSubMesh(ref brushContainer.brushMeshes[startIndex], vertices, extrusion,
@@ -449,11 +450,11 @@ namespace Chisel.Core
                                 //             \   |
                                 //        y2 z2 *--* z1 y2
                                 vertices = new[] {
-                                                new Vector3( min.x, y0, z3), // 0
-                                                new Vector3( min.x, y3, z3), // 1
-                                                new Vector3( min.x, y2, z2), // 2
-                                                new Vector3( min.x, y2, z1), // 2
-                                                new Vector3( min.x, y0, z1), // 3
+                                                new float3( min.x, y0, z3), // 0
+                                                new float3( min.x, y3, z3), // 1
+                                                new float3( min.x, y2, z2), // 2
+                                                new float3( min.x, y2, z1), // 2
+                                                new float3( min.x, y0, z1), // 3
                                             };
 
                                 BrushMeshFactory.CreateExtrudedSubMesh(ref brushContainer.brushMeshes[startIndex], vertices, extrusion,
@@ -475,10 +476,10 @@ namespace Chisel.Core
                                 //             \   |
                                 //        z2 y2 *--* z1 y2 
                                 vertices = new[] {
-                                                new Vector3( min.x, y0, z0), // 0
-                                                new Vector3( min.x, y2, z2), // 1
-                                                new Vector3( min.x, y2, z1), // 2
-                                                new Vector3( min.x, y0, z1), // 3
+                                                new float3( min.x, y0, z0), // 0
+                                                new float3( min.x, y2, z2), // 1
+                                                new float3( min.x, y2, z1), // 2
+                                                new float3( min.x, y0, z1), // 3
                                             };
 
                                 BrushMeshFactory.CreateExtrudedSubMesh(ref brushContainer.brushMeshes[startIndex], vertices, extrusion,
@@ -508,10 +509,10 @@ namespace Chisel.Core
                             //             \|
                             //              * z1 y1 
                             vertices = new[] {
-                                            new Vector3( min.x, y0, z2), // 0
-                                            new Vector3( min.x, y2, z2), // 1
-                                            new Vector3( min.x, y1, z1), // 2
-                                            new Vector3( min.x, y0, z1), // 3
+                                            new float3( min.x, y0, z2), // 0
+                                            new float3( min.x, y2, z2), // 1
+                                            new float3( min.x, y1, z1), // 2
+                                            new float3( min.x, y0, z1), // 3
                                         };
 
                             BrushMeshFactory.CreateExtrudedSubMesh(ref brushContainer.brushMeshes[startIndex], vertices, extrusion,
@@ -533,9 +534,9 @@ namespace Chisel.Core
                             //             \|
                             //              * z1 y1 
                             vertices = new[] {
-                                            new Vector3( min.x, y0, z0), // 0
-                                            new Vector3( min.x, y1, z1), // 1
-                                            new Vector3( min.x, y0, z1), // 2
+                                            new float3( min.x, y0, z0), // 0
+                                            new float3( min.x, y1, z1), // 1
+                                            new float3( min.x, y0, z1), // 2
                                         };
 
                             BrushMeshFactory.CreateExtrudedSubMesh(ref brushContainer.brushMeshes[startIndex], vertices, extrusion,
@@ -565,10 +566,10 @@ namespace Chisel.Core
                             //       |      |
                             // z0 y3 *------* z1 y3 
                             vertices = new[] {
-                                            new Vector3( min.x, y0, z0), // 0
-                                            new Vector3( min.x, y3, z0), // 1
-                                            new Vector3( min.x, y3, z1), // 2
-                                            new Vector3( min.x, y0, z1), // 3
+                                            new float3( min.x, y0, z0), // 0
+                                            new float3( min.x, y3, z0), // 1
+                                            new float3( min.x, y3, z1), // 2
+                                            new float3( min.x, y0, z1), // 3
                                         };
                         } else
                         if (y1 < description.boundsMin.y)
@@ -588,11 +589,11 @@ namespace Chisel.Core
                             //             \   |
                             //        y3 z2 *--* z1 y3
                             vertices = new[] {
-                                            new Vector3( min.x, y0, z0), // 0
-                                            new Vector3( min.x, y2, z0), // 1
-                                            new Vector3( min.x, y3, z2), // 2
-                                            new Vector3( min.x, y3, z1), // 2
-                                            new Vector3( min.x, y0, z1), // 3
+                                            new float3( min.x, y0, z0), // 0
+                                            new float3( min.x, y2, z0), // 1
+                                            new float3( min.x, y3, z2), // 2
+                                            new float3( min.x, y3, z1), // 2
+                                            new float3( min.x, y0, z1), // 3
                                         };
                         } else
                         {
@@ -609,10 +610,10 @@ namespace Chisel.Core
                             //             \|
                             //              * z1 y1 
                             vertices = new[] {
-                                            new Vector3( min.x, y0, z0), // 0
-                                            new Vector3( min.x, y2, z0), // 1
-                                            new Vector3( min.x, y1, z1), // 2
-                                            new Vector3( min.x, y0, z1), // 3
+                                            new float3( min.x, y0, z0), // 0
+                                            new float3( min.x, y2, z0), // 1
+                                            new float3( min.x, y1, z1), // 2
+                                            new float3( min.x, y0, z1), // 3
                                         };
                         }
 
@@ -647,9 +648,9 @@ namespace Chisel.Core
                             //       |  \
                             // y3 z0 *---* y3 z1 
                             vertices = new[] {
-                                                new Vector3( min.x, y1, z0), // 0
-                                                new Vector3( min.x, y3, z0), // 1
-                                                new Vector3( min.x, y3, z1), // 2
+                                                new float3( min.x, y1, z0), // 0
+                                                new float3( min.x, y3, z0), // 1
+                                                new float3( min.x, y3, z1), // 2
                                             };
 
                             BrushMeshFactory.CreateExtrudedSubMesh(ref brushContainer.brushMeshes[startIndex + stepCount], vertices, extrusion,
@@ -665,10 +666,10 @@ namespace Chisel.Core
                             //       |   |
                             // y3 z0 *---* y3 z1 
                             vertices = new[] {
-                                                new Vector3( min.x, y1, z0), // 0
-                                                new Vector3( min.x, y3, z0), // 1
-                                                new Vector3( min.x, y3, z1), // 2
-                                                new Vector3( min.x, y2, z1), // 3
+                                                new float3( min.x, y1, z0), // 0
+                                                new float3( min.x, y3, z0), // 1
+                                                new float3( min.x, y3, z1), // 2
+                                                new float3( min.x, y2, z1), // 3
                                             };
 
                             BrushMeshFactory.CreateExtrudedSubMesh(ref brushContainer.brushMeshes[startIndex + stepCount], vertices, extrusion,
@@ -689,10 +690,10 @@ namespace Chisel.Core
                     //       |      |
                     // z0 y3 *------* z1 y3 
                     vertices = new[] {
-                                        new Vector3( min.x, y0, z0), // 0
-                                        new Vector3( min.x, y3, z0), // 1
-                                        new Vector3( min.x, y3, z1), // 2
-                                        new Vector3( min.x, y0, z1), // 3
+                                        new float3( min.x, y0, z0), // 0
+                                        new float3( min.x, y3, z0), // 1
+                                        new float3( min.x, y3, z1), // 2
+                                        new float3( min.x, y0, z1), // 3
                                     };
 
                     BrushMeshFactory.CreateExtrudedSubMesh(ref brushContainer.brushMeshes[startIndex + stepCount - 1], vertices, extrusion,
@@ -710,8 +711,8 @@ namespace Chisel.Core
             public StairsSideType leftSideType;
             public StairsSideType rightSideType;
 
-            public Vector3 boundsMin;
-            public Vector3 boundsMax;
+            public float3 boundsMin;
+            public float3 boundsMax;
 
             public bool haveRiser;
 
@@ -809,7 +810,7 @@ namespace Chisel.Core
                 thickRiser          = riserType == StairsRiserType.ThickRiser || riserType == StairsRiserType.Smooth;
                 riserDepth          = (haveRiser && !thickRiser) ? definition.riserDepth : 0;
 
-                sideDepth           = riserDepth + Mathf.Max(definition.sideDepth, thickRiser ? definition.stepDepth : 0);
+                sideDepth           = riserDepth + math.max(definition.sideDepth, thickRiser ? definition.stepDepth : 0);
                 
                 stepCount           = definition.StepCount;
                 offsetZ             = (definition.StepDepthOffset < kEpsilon) ? 0 : definition.StepDepthOffset;
@@ -849,7 +850,7 @@ namespace Chisel.Core
 
             var description = new LineairStairsData(definition, leftSideDefinition, rightSideDefinition);
 
-            var stepOffset = new Vector3(0, -definition.stepHeight, definition.stepDepth);
+            var stepOffset = new float3(0, -definition.stepHeight, definition.stepDepth);
             if (description.stepCount > 0)
             {
                 if (description.haveRiser)
@@ -872,7 +873,7 @@ namespace Chisel.Core
                     min.x += description.haveRightSideDown ? description.sideWidth : 0;
                     max.x -= description.haveLeftSideDown  ? description.sideWidth : 0;
                     
-                    var extrusion = new Vector3(max.x - min.x, 0, 0);
+                    var extrusion = new float3(max.x - min.x, 0, 0);
                     for (int i = 0; i < description.stepCount; i++)
                     {
                         if (i == 1 &&
@@ -885,25 +886,25 @@ namespace Chisel.Core
                             min.y += description.treadHeight - description.offsetY;
                         }
 
-                        var minZ = Mathf.Max(description.boundsMin.z, min.z);
-                        var maxZ = Mathf.Min(description.boundsMax.z, max.z);
+                        var minZ = math.max(description.boundsMin.z, min.z);
+                        var maxZ = math.min(description.boundsMax.z, max.z);
 
-                        Vector3[] vertices;
+                        float3[] vertices;
                         if (i == 0 || description.riserType != StairsRiserType.Smooth)
                         {
                             vertices = new[] {
-                                                new Vector3( min.x, min.y, minZ),	// 0
-                                                new Vector3( min.x, min.y, maxZ),	// 1
-                                                new Vector3( min.x, max.y, maxZ),  // 2
-                                                new Vector3( min.x, max.y, minZ),	// 3
+                                                new float3( min.x, min.y, minZ),	// 0
+                                                new float3( min.x, min.y, maxZ),	// 1
+                                                new float3( min.x, max.y, maxZ),  // 2
+                                                new float3( min.x, max.y, minZ),	// 3
                                             };
                         } else
                         {
                             vertices = new[] {
-                                                new Vector3( min.x, min.y, minZ),	// 0
-                                                new Vector3( min.x, min.y, maxZ),	// 1
-                                                new Vector3( min.x, max.y, maxZ),  // 2
-                                                new Vector3( min.x, max.y, minZ - definition.stepDepth),	// 3
+                                                new float3( min.x, min.y, minZ),	// 0
+                                                new float3( min.x, min.y, maxZ),	// 1
+                                                new float3( min.x, max.y, maxZ),  // 2
+                                                new float3( min.x, max.y, minZ - definition.stepDepth),	// 3
                                             };
                         }
 
@@ -920,8 +921,8 @@ namespace Chisel.Core
                 }
                 if (description.haveTread)
                 {
-                    var min = new Vector3(description.boundsMin.x + description.sideWidth, description.boundsMax.y - definition.treadHeight, description.boundsMin.z);
-                    var max = new Vector3(description.boundsMax.x - description.sideWidth, description.boundsMax.y, description.boundsMin.z + definition.StepDepthOffset + definition.stepDepth + description.nosingDepth);
+                    var min = new float3(description.boundsMin.x + description.sideWidth, description.boundsMax.y - definition.treadHeight, description.boundsMin.z);
+                    var max = new float3(description.boundsMax.x - description.sideWidth, description.boundsMax.y, description.boundsMin.z + definition.StepDepthOffset + definition.stepDepth + description.nosingDepth);
                     for (int i = 0; i < description.stepCount; i++)
                     {
                         min.x = description.boundsMin.x - ((i == 0) ? description.rightTopNosingWidth : description.rightNosingWidth);
@@ -931,12 +932,12 @@ namespace Chisel.Core
                             min.z = max.z - (definition.stepDepth + description.nosingDepth);
                         }
                         var vertices = new[] {
-                                                new Vector3( min.x, min.y, min.z),	// 0
-                                                new Vector3( min.x, min.y, max.z),	// 1
-                                                new Vector3( min.x, max.y, max.z),  // 2
-                                                new Vector3( min.x, max.y, min.z),	// 3
+                                                new float3( min.x, min.y, min.z),	// 0
+                                                new float3( min.x, min.y, max.z),	// 1
+                                                new float3( min.x, max.y, max.z),  // 2
+                                                new float3( min.x, max.y, min.z),	// 3
                                             };
-                        var extrusion = new Vector3(max.x - min.x, 0, 0);
+                        var extrusion = new float3(max.x - min.x, 0, 0);
                         BrushMeshFactory.CreateExtrudedSubMesh(ref brushContainer.brushMeshes[subMeshOffset + description.startTread + i], vertices, extrusion,
                                         new int[] { 0, 1, 2, 2, 2, 2 }, // TODO: fix this
                                         definition.surfaceDefinition);

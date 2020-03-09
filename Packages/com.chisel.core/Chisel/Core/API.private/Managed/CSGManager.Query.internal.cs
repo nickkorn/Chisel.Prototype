@@ -45,8 +45,8 @@ namespace Chisel.Core
             var brushMeshInstanceID = brush.BrushMesh.brushMeshID;
             var brushMesh           = BrushMeshManager.GetBrushMesh(brushMeshInstanceID);
 
-            if (brushMesh.surfaces == null ||
-                brushMesh.surfaces.Length == 0)
+            if (brushMesh.planes == null ||
+                brushMesh.planes.Length == 0)
 		        return false;
 
             var treeToNodeSpace = brush.TreeToNodeSpaceMatrix;
@@ -66,9 +66,9 @@ namespace Chisel.Core
             var brush_ray_start	= brushRayStart;
             var brush_ray_end	= brushRayEnd;
 
-	        for (var s = 0; s < brushMesh.surfaces.Length; s++)
+	        for (var s = 0; s < brushMesh.planes.Length; s++)
 	        {
-                var plane       = (Plane)brushMesh.surfaces[s];
+                var plane       = new Plane(brushMesh.planes[s].xyz, brushMesh.planes[s].w);
                 var s_dist      = plane.GetDistanceToPoint(brush_ray_start);
                 var e_dist	    = plane.GetDistanceToPoint(brush_ray_end);
                 var length	    = s_dist - e_dist;
@@ -88,13 +88,13 @@ namespace Chisel.Core
 
 		        // make sure the point is on the brush
 		        bool skipSurface = false;
-		        for (var s2 = 0; s2 < brushMesh.surfaces.Length; s2++)
+		        for (var s2 = 0; s2 < brushMesh.planes.Length; s2++)
 		        {
 			        if (s == s2)
 				        continue;
 
-                    var plane2       = (Plane)brushMesh.surfaces[s2];
-                    var pl_dist      = plane2.GetDistanceToPoint(intersection);
+                    var plane2  = new Plane(brushMesh.planes[s2].xyz, brushMesh.planes[s2].w);
+                    var pl_dist = plane2.GetDistanceToPoint(intersection);
 			        if (pl_dist > MathExtensions.kDistanceEpsilon) { skipSurface = true; break; }
 		        }
 		        if (skipSurface)

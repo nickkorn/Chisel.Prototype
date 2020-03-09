@@ -9,6 +9,7 @@ using Chisel.Core;
 using Chisel.Components;
 using UnitySceneExtensions;
 using Snapping = UnitySceneExtensions.Snapping;
+using Unity.Mathematics;
 
 namespace Chisel.Editors
 {
@@ -92,11 +93,11 @@ namespace Chisel.Editors
             return snappedAngle;
         }
 
-        
 
 
-        Vector3[] innerVertices;
-        Vector3[] outerVertices;
+
+        float3[] innerVertices;
+        float3[] outerVertices;
 
         
         protected override void OnScene(SceneView sceneView, ChiselSpiralStairs generator)

@@ -8,16 +8,6 @@ using System.Threading.Tasks;
 namespace Chisel.Core
 {
 #if USE_MANAGED_CSG_IMPLEMENTATION
-    internal enum IntersectionType
-    {
-        NoIntersection,
-        Intersection,
-        AInsideB,
-        BInsideA,
-
-        InvalidValue
-    };
-
     internal class BrushIntersectionLookup
     {
         const int bits = 2;

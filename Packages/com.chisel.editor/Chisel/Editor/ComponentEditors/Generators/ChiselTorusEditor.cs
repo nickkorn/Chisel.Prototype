@@ -8,6 +8,7 @@ using Chisel;
 using Chisel.Core;
 using Chisel.Components;
 using UnitySceneExtensions;
+using Unity.Mathematics;
 
 namespace Chisel.Editors
 {
@@ -24,12 +25,8 @@ namespace Chisel.Editors
         const float kCapLineThickness			= 2.0f;
         const float kCapLineThicknessSelected   = 2.5f;
 
-        static void DrawOutline(ChiselTorusDefinition definition, Vector3[] vertices, LineMode lineMode)
+        static void DrawOutline(ChiselTorusDefinition definition, float3[] vertices, LineMode lineMode)
         {
-            //var baseColor		= UnityEditor.Handles.yAxisColor;
-            //var isDisabled		= UnitySceneExtensions.Handles.disabled;
-            var normal			= Vector3.up;
-
             var horzSegments	= definition.horizontalSegments;
             var vertSegments	= definition.verticalSegments;
             
@@ -68,9 +65,9 @@ namespace Chisel.Editors
             var baseColor		= UnityEditor.Handles.yAxisColor;
             var isDisabled		= UnitySceneExtensions.SceneHandles.disabled;
             var focusControl	= UnitySceneExtensions.SceneHandleUtility.focusControl;
-            var normal			= Vector3.up;
+            var normal			= new float3(0,1,0);
 
-            Vector3[] vertices = null;
+            float3[] vertices = null;
             if (!BrushMeshFactory.GenerateTorusVertices(generator.definition, ref vertices))
                 return;
             

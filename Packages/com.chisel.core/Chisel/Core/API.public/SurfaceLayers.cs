@@ -111,7 +111,7 @@ namespace Chisel.Core
     /// <seealso cref="Chisel.Core.MeshQuery"/>
     /// <seealso cref="Chisel.Core.LayerUsageFlags"/>
     /// <seealso cref="Chisel.Core.LayerParameterIndex"/>
-    [Serializable, StructLayout(LayoutKind.Sequential, Pack = 4)]
+    [Serializable, StructLayout(LayoutKind.Sequential)]
     public struct SurfaceLayers
     {
         /// <value>Describe to what layers this surface belongs.</value>

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using Unity.Collections.LowLevel.Unsafe;
+using Unity.Entities;
 using Unity.Mathematics;
 using UnityEngine;
 
@@ -49,22 +50,112 @@ namespace Chisel.Core
     {
         public Outline      brushOutline   = new Outline();
         public Outline[]    surfaceOutlines;
-        public Vector3[]    vertices;
+        public float3[]     vertices;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Reset()
         {
             brushOutline.Reset();
             surfaceOutlines = new Outline[0];
-            vertices = new Vector3[0];
+            vertices = new float3[0];
         }
     };
 #endif
+    public enum IntersectionType
+    {
+        NoIntersection,
+        Intersection,
+        AInsideB,
+        BInsideA,
+
+        InvalidValue
+    };
+
+    public struct BrushBrushIntersection : IComparable<BrushBrushIntersection>, IComparer<BrushBrushIntersection>, IEqualityComparer<BrushBrushIntersection>, IEquatable<BrushBrushIntersection>
+    {
+        public int brushNodeID0;
+        public int brushNodeID1;
+        public IntersectionType type;
+
+        #region Equals
+        public override bool Equals(object obj)
+        {
+            if (obj == null || !(obj is BrushBrushIntersection))
+                return false;
+
+            var other = (BrushBrushIntersection)obj;
+            return  ((brushNodeID0 == other.brushNodeID0) && (brushNodeID1 == other.brushNodeID1)) ||
+                    ((brushNodeID0 == other.brushNodeID1) && (brushNodeID1 == other.brushNodeID0));
+        }
+
+        public bool Equals(BrushBrushIntersection x, BrushBrushIntersection y)
+        {
+            return ((x.brushNodeID0 == y.brushNodeID0) && (x.brushNodeID1 == y.brushNodeID1)) ||
+                    ((x.brushNodeID0 == y.brushNodeID1) && (x.brushNodeID1 == y.brushNodeID0));
+        }
+
+        public bool Equals(BrushBrushIntersection other)
+        {
+            return ((brushNodeID0 == other.brushNodeID0) && (brushNodeID1 == other.brushNodeID1)) ||
+                   ((brushNodeID0 == other.brushNodeID1) && (brushNodeID1 == other.brushNodeID0));
+        }
+        #endregion
+
+        #region Compare
+        public int Compare(BrushBrushIntersection x, BrushBrushIntersection y)
+        {
+            if (x.brushNodeID0 < y.brushNodeID0)
+                return -1;
+            if (x.brushNodeID0 > y.brushNodeID0)
+                return 1;
+            if (x.brushNodeID1 < y.brushNodeID1)
+                return -1;
+            if (x.brushNodeID1 > y.brushNodeID1)
+                return 1;
+            if (x.type < y.type)
+                return -1;
+            if (x.type > y.type)
+                return 1;
+            return 0;
+        }
+        public int CompareTo(BrushBrushIntersection other)
+        {
+            if (brushNodeID0 < other.brushNodeID0)
+                return -1;
+            if (brushNodeID0 > other.brushNodeID0)
+                return 1;
+            if (brushNodeID1 < other.brushNodeID1)
+                return -1;
+            if (brushNodeID1 > other.brushNodeID1)
+                return 1;
+            if (type < other.type)
+                return -1;
+            if (type > other.type)
+                return 1;
+            return 0;
+        }
+        #endregion
+
+        #region GetHashCode
+        public override int GetHashCode()
+        {
+            return GetHashCode(this);
+        }
+
+        public int GetHashCode(BrushBrushIntersection obj)
+        {
+            if (obj.brushNodeID0 < obj.brushNodeID1)
+                return ((ulong)obj.brushNodeID0 + ((ulong)obj.brushNodeID1 << 32)).GetHashCode();
+            else
+                return ((ulong)obj.brushNodeID1 + ((ulong)obj.brushNodeID0 << 32)).GetHashCode();
+        }
+        #endregion
+    }
 
     static partial class CSGManager
     {
 #if USE_MANAGED_CSG_IMPLEMENTATION
-        const int kMaxVertexCount = 65000;
+        const int kMaxVertexCount = VertexSoup.kMaxVertexCount;
         internal sealed class ChiselBrushRenderBuffer
         {
             public readonly List<ChiselSurfaceRenderBuffer> surfaceRenderBuffers = new List<ChiselSurfaceRenderBuffer>();
@@ -102,7 +193,7 @@ namespace Chisel.Core
             public override int GetHashCode() { return surfaceParameter.GetHashCode() ^ meshQuery.GetHashCode(); }
         };
 
-        internal sealed class BrushInfo
+        internal sealed class BrushInfo : IDisposable
         {
             public int					    brushMeshInstanceID;
             public UInt64                   brushOutlineGeneration;
@@ -113,11 +204,19 @@ namespace Chisel.Core
 
             public BrushOutline             brushOutline        = new BrushOutline();
 
+            // TODO: put somewhere else
+            public BlobAssetReference<BrushWorldPlanes> brushWorldPlanes;
 
-            // TODO: rename
-            public readonly Dictionary<CSGTreeBrush, IntersectionType> brushTouch = new Dictionary<CSGTreeBrush, IntersectionType>();
+            public readonly List<BrushBrushIntersection> brushBrushIntersections = new List<BrushBrushIntersection>();
 
             public readonly RoutingTable    routingTable        = new RoutingTable();
+
+            public void Dispose()
+            {
+                if (brushWorldPlanes.IsCreated)
+                    brushWorldPlanes.Dispose();
+                brushWorldPlanes = BlobAssetReference<BrushWorldPlanes>.Null;
+            }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void Reset()
@@ -128,8 +227,11 @@ namespace Chisel.Core
                     brushSurfaceLoops.Clear();
                 brushOutputLoops.Clear();
                 renderBuffers.surfaceRenderBuffers.Clear();
-                brushTouch.Clear();
+                brushBrushIntersections.Clear();
                 routingTable.Clear();
+                if (brushWorldPlanes.IsCreated)
+                    brushWorldPlanes.Dispose();
+                brushWorldPlanes = BlobAssetReference<BrushWorldPlanes>.Null;
             }
         }
 
@@ -434,6 +536,17 @@ namespace Chisel.Core
                 UnityEngine.Profiling.Profiler.EndSample();
             }
 
+            UnityEngine.Profiling.Profiler.BeginSample("Clean");
+            try
+            {
+                CleanTree(treeNodeID);
+            }
+            finally
+            {
+                UnityEngine.Profiling.Profiler.EndSample();
+            }
+
+
             {
                 var flags = nodeFlags[treeNodeIndex];
                 flags.UnSetNodeFlag(NodeStatusFlags.TreeMeshNeedsUpdate);
@@ -597,8 +710,7 @@ namespace Chisel.Core
             }
 
             var meshPolygons	= mesh.polygons;
-            var meshSurfaces	= mesh.surfaces;
-
+            var meshPlanes	    = mesh.planes;
             var brushVertices   = output.brushOutputLoops.vertexSoup;
 
             CSGManager.GetTreeToNodeSpaceMatrix(brushNodeID, out Matrix4x4 worldToLocal);
@@ -614,7 +726,7 @@ namespace Chisel.Core
                 var surfaceLoopList = surfaceLoops[s];
                 for (int l = 0; l < surfaceLoopList.Count; l++)
                 {
-                    var interiorCategory = (CategoryIndex)surfaceLoopList[l].interiorCategory;
+                    var interiorCategory = (CategoryIndex)surfaceLoopList[l].info.interiorCategory;
                     if (interiorCategory > CategoryIndex.LastCategory)
                         Debug.Assert(false, $"Invalid final category {interiorCategory}");
 
@@ -644,7 +756,13 @@ namespace Chisel.Core
                     #endif
                     //*/
 
+                    //if (brushNodeID != 3)// || s!=5)
+                    //    continue;
+
                     var loop = surfaceLoopList[l];
+                    if (loop.edges.Count < 3)
+                        continue;
+
                     loops.Add(loop);
                 }
             }
@@ -654,12 +772,7 @@ namespace Chisel.Core
             for (int l = 0; l < loops.Count; l++)
             {
                 var loop            = loops[l];
-                if (loop.edges.Count < 3)
-                {
-                    continue;
-                }
-
-                var interiorCategory = (CategoryIndex)loop.interiorCategory;
+                var interiorCategory = (CategoryIndex)loop.info.interiorCategory;
 
 
                 var info            = loop.info;
@@ -668,7 +781,7 @@ namespace Chisel.Core
                 var surfaceIndex	= meshPolygon.surfaceID;    // TODO: fix this
 
                 // TODO: why are we doing this in tree-space? better to do this in brush-space, then we can more easily cache this
-                var localSpaceToPlaneSpace	= MathExtensions.GenerateLocalToPlaneSpaceMatrix(meshSurfaces[surfaceIndex].localPlane);
+                var localSpaceToPlaneSpace	= MathExtensions.GenerateLocalToPlaneSpaceMatrix(meshPlanes[surfaceIndex]);
                 var uv0Matrix				= meshPolygon.surface.surfaceDescription.UV0.ToMatrix() * (localSpaceToPlaneSpace * worldToLocal);
 
                 var anySurfaceTargetHasNormals  = true; // TODO: actually determine this
@@ -682,14 +795,14 @@ namespace Chisel.Core
                 {
                     // Ensure we have the rotation properly calculated, and have a valid normal
                     quaternion rotation;
-                    if (info.worldPlane.normal == Vector3.forward)
+                    if (((Vector3)info.worldPlane.xyz) == Vector3.forward)
                         rotation = quaternion.identity;
                     else
-                        rotation = (quaternion)Quaternion.FromToRotation(info.worldPlane.normal, Vector3.forward);
+                        rotation = (quaternion)Quaternion.FromToRotation(info.worldPlane.xyz, Vector3.forward);
 
-                    // TODO: all separate loops on same surface should be put in same OutputSurfaceMesh!
+                    // TODO: all separate loops on same surface should be put in same OutputSurfaceMesh!                    
 
-                    surfaceIndices = context.Triangulate(brushVertices.vertices, loop.edges, rotation);
+                    surfaceIndices = context.TriangulateLoops(loop, brushVertices.vertices, loop.edges, rotation);
 
                     
                     #if false
@@ -743,7 +856,7 @@ namespace Chisel.Core
                 Vector3[] surfaceNormals = null;
                 if (anySurfaceTargetHasNormals)
                 {
-                    var normal = (interiorCategory == CategoryIndex.ValidReverseAligned || interiorCategory == CategoryIndex.ReverseAligned) ? -info.worldPlane.normal : info.worldPlane.normal;
+                    var normal = (interiorCategory == CategoryIndex.ValidReverseAligned || interiorCategory == CategoryIndex.ReverseAligned) ? -info.worldPlane.xyz : info.worldPlane.xyz;
 
                     surfaceNormals = surfaceVertices == null ? null : new Vector3[surfaceVertices.Length];
                     if (surfaceVertices != null)
@@ -838,6 +951,8 @@ namespace Chisel.Core
                 }
             }
 
+            // TODO: implement
+            /*
             var foundOperations = new List<int>();
             for (var i = 0; i < branches.Count; i++)
             {
@@ -851,9 +966,9 @@ namespace Chisel.Core
 
             for (int i = 0; i < foundOperations.Count; i++)
             {
-                // TODO: implement
                 //UpdateChildOperationTouching(foundOperations[i]);
             }
+            */
 
             for (var i = 0; i < branches.Count; i++)
             {

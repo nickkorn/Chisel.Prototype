@@ -3,6 +3,11 @@ using System.Collections.Generic;
 using System.Linq;
 using System.ComponentModel;
 using UnityEngine;
+using Unity.Mathematics;
+using Unity.Jobs;
+using Unity.Collections;
+using Unity.Collections.LowLevel.Unsafe;
+using Unity.Entities;
 
 namespace Chisel.Core
 {
@@ -51,13 +56,16 @@ namespace Chisel.Core
             UnityEngine.Profiling.Profiler.BeginSample("UpdateBrushTransformations");
             try { UpdateBrushTransformations(treeBrushes); } finally { UnityEngine.Profiling.Profiler.EndSample(); }
 
-            // TODO: should only do this once at creation time
-            UnityEngine.Profiling.Profiler.BeginSample("GenerateBasePolygonLoops"); 
-            try { GenerateBasePolygonLoops(treeBrushes); } finally { UnityEngine.Profiling.Profiler.EndSample(); }
+            UnityEngine.Profiling.Profiler.BeginSample("UpdateBrushWorldPlanes");
+            try { UpdateBrushWorldPlanes(treeBrushes); } finally { UnityEngine.Profiling.Profiler.EndSample(); }
 
             // TODO: should only do this at creation time + when moved
             UnityEngine.Profiling.Profiler.BeginSample("FindIntersectingBrushes");
             try { FindIntersectingBrushes(treeBrushes); } finally { UnityEngine.Profiling.Profiler.EndSample(); }
+
+            // TODO: should only do this once at creation time
+            UnityEngine.Profiling.Profiler.BeginSample("GenerateBasePolygonLoops"); 
+            try { GenerateBasePolygonLoops(treeBrushes); } finally { UnityEngine.Profiling.Profiler.EndSample(); }
 
             UnityEngine.Profiling.Profiler.BeginSample("FindAllIntersectionLoops");
             try { CSGManagerPerformCSG.FindAllIntersectionLoops(treeBrushes); } finally { UnityEngine.Profiling.Profiler.EndSample(); }
@@ -68,19 +76,33 @@ namespace Chisel.Core
             UnityEngine.Profiling.Profiler.BeginSample("PerformAllCSG");
             try { PerformAllCSG(treeBrushes); } finally { UnityEngine.Profiling.Profiler.EndSample(); }
 
-            for (int b0 = 0; b0 < treeBrushes.Count; b0++)
-            {
-                var brush0NodeID = treeBrushes[b0];
-                var output = CSGManager.GetBrushInfo(brush0NodeID);
-                var outputLoops = output.brushOutputLoops;
-                outputLoops.vertexSoup.CleanUp();
-            } 
 
             {
                 var flags = nodeFlags[treeNodeIndex];
                 flags.UnSetNodeFlag(NodeStatusFlags.TreeNeedsUpdate);
                 flags.SetNodeFlag(NodeStatusFlags.TreeMeshNeedsUpdate);
                 nodeFlags[treeNodeIndex] = flags;
+            }
+            return true;
+        }
+
+        internal static bool CleanTree(int treeNodeID)
+        {
+            if (!IsValidNodeID(treeNodeID) || !AssertNodeType(treeNodeID, CSGNodeType.Tree))
+                return false;
+
+            var treeNodeIndex = treeNodeID - 1;
+            var treeInfo = CSGManager.nodeHierarchies[treeNodeIndex].treeInfo;
+            if (treeInfo == null)
+                return false;
+
+            var treeBrushes = treeInfo.treeBrushes;
+            for (int b0 = 0; b0 < treeBrushes.Count; b0++)
+            {
+                var brush0NodeID = treeBrushes[b0];
+                var output = CSGManager.GetBrushInfo(brush0NodeID);
+                var outputLoops = output.brushOutputLoops;
+                outputLoops.vertexSoup.Dispose();
             }
             return true;
         }
@@ -114,6 +136,24 @@ namespace Chisel.Core
             }
         }
 
+        static void UpdateBrushWorldPlanes(int brushNodeID)
+        {
+            var brushNodeIndex	= brushNodeID - 1;
+            var brushInfo       = nodeHierarchies[brushNodeIndex].brushInfo;
+            if (brushInfo.brushWorldPlanes.IsCreated)
+                brushInfo.brushWorldPlanes.Dispose();
+            brushInfo.brushWorldPlanes = BrushWorldPlanes.BuildPlanes(BrushMeshManager.GetBrushMeshBlob(brushInfo.brushMeshInstanceID), nodeTransforms[brushNodeIndex].nodeToTree);
+        }
+
+        static void UpdateBrushWorldPlanes(List<int> treeBrushes)
+        {
+            // TODO: optimize, only do this when necessary
+            for (int i = 0; i < treeBrushes.Count; i++)
+            {
+                UpdateBrushWorldPlanes(treeBrushes[i]);
+            }
+        }
+
         static void GenerateBasePolygonLoops(List<int> treeBrushes)
         {
             // TODO: cache this
@@ -129,54 +169,81 @@ namespace Chisel.Core
             }
         }
 
-        static void FindIntersectingBrushes(List<int> treeBrushes)
+        unsafe static void FillBrushIntersectionTestData(List<int> treeBrushes, NativeArray<BrushIntersectionTestData> brushData)
         {
-            // Find intersecting brushes
-            // TODO: do this at insertion/removal time (grouped, in update loop)
-            // TODO: optimize, use hashed grid
             for (int b0 = 0; b0 < treeBrushes.Count; b0++)
             {
                 var brush0NodeID    = treeBrushes[b0];
                 var brush0          = new CSGTreeBrush { brushNodeID = brush0NodeID };
-                var output0         = CSGManager.GetBrushInfo(brush0NodeID);
                 var bounds0         = nodeBounds[brush0NodeID - 1];
 
-                for (int b1 = b0 + 1; b1 < treeBrushes.Count; b1++)
+                var treeToNode0SpaceMatrix = (float4x4)brush0.TreeToNodeSpaceMatrix;
+                var nodeToTree0SpaceMatrix = (float4x4)brush0.NodeToTreeSpaceMatrix;
+
+                var brushMesh0 = BrushMeshManager.GetBrushMeshBlob(brush0.BrushMesh.brushMeshID);
+                brushData[b0] = new BrushIntersectionTestData()
                 {
-                    var brush1NodeID    = treeBrushes[b1];
-                    var brush1          = new CSGTreeBrush { brushNodeID = brush1NodeID };
-                    var bounds1         = nodeBounds[brush1NodeID - 1];
+                    bounds                  = bounds0,
+                    treeToNodeSpaceMatrix   = treeToNode0SpaceMatrix,
+                    nodeToTreeSpaceMatrix   = nodeToTree0SpaceMatrix,
+                    brushMesh               = brushMesh0
+                };
+            }
+        }
 
-                    if (!bounds0.Intersects(bounds1, CSGManagerPerformCSG.kEpsilon))
-                        continue;
+        unsafe static void FindIntersectingBrushes(List<int> treeBrushes)
+        {
+            // Find intersecting brushes
+            // TODO: do this at insertion/removal time (grouped, in update loop)
+            // TODO: optimize, use hashed grid
 
-                    var intersectionType = BrushIntersection.ConvexPolytopeTouching(brush0, brush1, CSGManagerPerformCSG.kEpsilon);
+            using (var brushData            = new NativeArray<BrushIntersectionTestData>(treeBrushes.Count, Allocator.TempJob))
+            using (var intersectionResults  = new NativeStream(treeBrushes.Count * treeBrushes.Count, Allocator.TempJob))
+            {
+                FillBrushIntersectionTestData(treeBrushes, brushData);
 
-                    //Debug.Log($"{brush0.NodeID}/{brush1.NodeID} {intersectionType}");
+                int maxIndex = brushData.Length * brushData.Length;
 
+                var intersectionTestJob = new IntersectionTestJob()
+                {
+                    brushData = brushData,
+                    output = intersectionResults.AsWriter()
+                };
+                intersectionTestJob.Run(maxIndex); // FIXME: When I use "Run", it fails?
+
+                var reader = intersectionResults.AsReader();
+
+                int index = 0;
+                reader.BeginForEachIndex(index++);
+                while (reader.RemainingItemCount == 0 && index < maxIndex)
+                    reader.BeginForEachIndex(index++);
+                while (reader.RemainingItemCount > 0)
+                {
+                    var result = reader.Read<BrushBrushIntersection>();
+                    var brush0NodeID = treeBrushes[result.brushNodeID0];
+                    var brush1NodeID = treeBrushes[result.brushNodeID1];
+                    var output0 = CSGManager.GetBrushInfo(brush0NodeID);
                     var output1 = CSGManager.GetBrushInfo(brush1NodeID);
-                    if (intersectionType == IntersectionType.NoIntersection)
+                    if (result.type == IntersectionType.Intersection)
                     {
-                        output0.brushTouch[brush1] = IntersectionType.NoIntersection;
-                        output1.brushTouch[brush0] = IntersectionType.NoIntersection;
-                        continue;
+                        output0.brushBrushIntersections.Add(new BrushBrushIntersection() { brushNodeID0 = brush0NodeID, brushNodeID1 = brush1NodeID, type = IntersectionType.Intersection });
+                        output1.brushBrushIntersections.Add(new BrushBrushIntersection() { brushNodeID0 = brush1NodeID, brushNodeID1 = brush0NodeID, type = IntersectionType.Intersection });
+                    }
+                    else
+                    if (result.type == IntersectionType.AInsideB)
+                    {
+                        output0.brushBrushIntersections.Add(new BrushBrushIntersection() { brushNodeID0 = brush0NodeID, brushNodeID1 = brush1NodeID, type = IntersectionType.AInsideB });
+                        output1.brushBrushIntersections.Add(new BrushBrushIntersection() { brushNodeID0 = brush1NodeID, brushNodeID1 = brush0NodeID, type = IntersectionType.BInsideA });
+                    }
+                    else
+                    //if (intersectionType == IntersectionType.BInsideA)
+                    {
+                        output0.brushBrushIntersections.Add(new BrushBrushIntersection() { brushNodeID0 = brush0NodeID, brushNodeID1 = brush1NodeID, type = IntersectionType.BInsideA });
+                        output1.brushBrushIntersections.Add(new BrushBrushIntersection() { brushNodeID0 = brush1NodeID, brushNodeID1 = brush0NodeID, type = IntersectionType.AInsideB });
                     }
 
-                    if (intersectionType == IntersectionType.Intersection)
-                    {
-                        output0.brushTouch[brush1] = IntersectionType.Intersection;
-                        output1.brushTouch[brush0] = IntersectionType.Intersection;
-                    } else
-                    if (intersectionType == IntersectionType.AInsideB)
-                    {
-                        output0.brushTouch[brush1] = IntersectionType.AInsideB;
-                        output1.brushTouch[brush0] = IntersectionType.BInsideA;
-                    } else
-                    if (intersectionType == IntersectionType.BInsideA)
-                    {
-                        output0.brushTouch[brush1] = IntersectionType.BInsideA;
-                        output1.brushTouch[brush0] = IntersectionType.AInsideB;
-                    }
+                    while (reader.RemainingItemCount == 0 && index < maxIndex)
+                        reader.BeginForEachIndex(index++);
                 }
             }
         }
@@ -256,7 +323,7 @@ namespace Chisel.Core
             for (int p = 0; p < outputLoops.basePolygons.Count; p++)
             {
                 // Don't want to change the original loops so we copy them
-                var newLoop = new Loop(outputLoops.basePolygons[p]) { interiorCategory = CategoryGroupIndex.First };
+                var newLoop = new Loop(outputLoops.basePolygons[p], CategoryGroupIndex.First);
                 allBrushSurfaces[p].Add(newLoop);
             }
 
@@ -275,7 +342,7 @@ namespace Chisel.Core
                         if (!surfaceLoop.Valid)
                             continue;
 
-                        if (!routingLookup.TryGetRoute(routingTable, surfaceLoop.interiorCategory, out CategoryRoutingRow routingRow))
+                        if (!routingLookup.TryGetRoute(routingTable, surfaceLoop.info.interiorCategory, out CategoryRoutingRow routingRow))
                         {
                             Debug.Assert(false, "Could not find route");
                             continue;
@@ -287,34 +354,58 @@ namespace Chisel.Core
                         if (overlap)
                         {
                             // If we overlap don't bother with creating a new polygon + hole and reuse existing one
-                            surfaceLoop.interiorCategory = routingRow[intersectionLoop.interiorCategory];
+                            surfaceLoop.info.interiorCategory = routingRow[intersectionLoop.info.interiorCategory];
                             continue;
                         } else
                         {
-                            surfaceLoop.interiorCategory = routingRow[CategoryIndex.Outside];
+                            surfaceLoop.info.interiorCategory = routingRow[CategoryIndex.Outside];
                         }
 
                         // Add all holes that share the same plane to the polygon
                         if (intersectionLoop != null)
                         {
                             // Categorize between original surface & intersection
-                            var intersectionCategory = routingRow[intersectionLoop.interiorCategory];
+                            var intersectionCategory = routingRow[intersectionLoop.info.interiorCategory];
 
                             // If the intersection polygon would get the same category, we don't need to do a pointless intersection
-                            if (intersectionCategory == surfaceLoop.interiorCategory)
+                            if (intersectionCategory == surfaceLoop.info.interiorCategory)
                                 continue;
 
-                            CSGManagerPerformCSG.Intersect(brushVertices, loopsOnBrushSurface, surfaceLoop, intersectionLoop, intersectionCategory);
+                            UnityEngine.Profiling.Profiler.BeginSample("Intersect");
+                            try
+                            {
+                                CSGManagerPerformCSG.Intersect(brushVertices, loopsOnBrushSurface, surfaceLoop, intersectionLoop, intersectionCategory);
+                            }
+                            finally
+                            {
+                                UnityEngine.Profiling.Profiler.EndSample();
+                            }
                         }
                         
                     }
 
                     // TODO: remove the need for this (check on insertion)
-                    CSGManagerPerformCSG.RemoveEmptyLoops(loopsOnBrushSurface);
+                    UnityEngine.Profiling.Profiler.BeginSample("RemoveEmptyLoops");
+                    try
+                    {
+                        CSGManagerPerformCSG.RemoveEmptyLoops(loopsOnBrushSurface);
+                    }
+                    finally
+                    {
+                        UnityEngine.Profiling.Profiler.EndSample();
+                    }
                 }
             }
 
-            CSGManagerPerformCSG.CleanUp(brushVertices, allBrushSurfaces);
+            UnityEngine.Profiling.Profiler.BeginSample("CleanUp");
+            try
+            {
+                CSGManagerPerformCSG.CleanUp(brushVertices, allBrushSurfaces);
+            }
+            finally
+            {
+                UnityEngine.Profiling.Profiler.EndSample();
+            }
             return true;
         }
 

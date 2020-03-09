@@ -8,6 +8,7 @@ using Quaternion = UnityEngine.Quaternion;
 using Mathf = UnityEngine.Mathf;
 using UnityEngine;
 using System.Runtime.CompilerServices;
+using Unity.Burst;
 
 namespace Chisel.Core
 {
@@ -29,6 +30,7 @@ namespace Chisel.Core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [BurstCompile]
         public static bool Intersects(this Bounds left, Bounds right, double epsilon)
         {
             return  ((right.max.x - left.min.x) >= -epsilon) && ((left.max.x - right.min.x) >= -epsilon) &&

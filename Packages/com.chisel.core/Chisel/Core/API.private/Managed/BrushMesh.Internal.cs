@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using Unity.Mathematics;
 using UnityEngine;
 
 namespace Chisel.Core
@@ -11,17 +12,20 @@ namespace Chisel.Core
     public sealed partial class BrushMesh
     {
 #if USE_MANAGED_CSG_IMPLEMENTATION
-        internal bool Set(Vector3[]			   inVertices, 
+        internal bool Set(float3[]			   inVertices, 
                           BrushMesh.HalfEdge[] inHalfEdges, 
                           BrushMesh.Polygon[]  inPolygons)
         {
-            this.vertices = new Vector3[inVertices.Length];
+            if (this.vertices == null || this.vertices.Length != inVertices.Length)
+                this.vertices = new float3[inVertices.Length];
             Array.Copy(inVertices, this.vertices, inVertices.Length);
 
-            this.halfEdges = new HalfEdge[inHalfEdges.Length];
+            if (this.halfEdges == null || this.halfEdges.Length != inHalfEdges.Length)
+                this.halfEdges = new HalfEdge[inHalfEdges.Length];
             Array.Copy(inHalfEdges, this.halfEdges, inHalfEdges.Length);
 
-            this.polygons = new Polygon[inPolygons.Length];
+            if (this.polygons == null || this.polygons.Length != inPolygons.Length)
+                this.polygons = new Polygon[inPolygons.Length];
             Array.Copy(inPolygons, this.polygons, inPolygons.Length);
 
             UpdateHalfEdgePolygonIndices();

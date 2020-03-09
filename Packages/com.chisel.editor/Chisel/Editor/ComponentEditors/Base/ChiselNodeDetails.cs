@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using System;
@@ -30,7 +30,9 @@ namespace Chisel.Editors
         const string kAdditiveIconName          = "csg_" + nameof(CSGOperationType.Additive);
         const string kSubtractiveIconName       = "csg_" + nameof(CSGOperationType.Subtractive);
         const string kIntersectingIconName      = "csg_" + nameof(CSGOperationType.Intersecting);
+#if USE_MANAGED_CSG_IMPLEMENTATION
         const string kCopyIconName              = "csg_" + nameof(CSGOperationType.Copy);
+#endif
 
         public override GUIContent GetHierarchyIcon(T node)
         {
@@ -40,7 +42,9 @@ namespace Chisel.Editors
                 case CSGOperationType.Additive:         return ChiselEditorResources.GetIconContent(kAdditiveIconName,     $"Additive {node.NodeTypeName}")[0];
                 case CSGOperationType.Subtractive:      return ChiselEditorResources.GetIconContent(kSubtractiveIconName,  $"Subtractive {node.NodeTypeName}")[0];
                 case CSGOperationType.Intersecting:     return ChiselEditorResources.GetIconContent(kIntersectingIconName, $"Intersecting {node.NodeTypeName}")[0];
+#if USE_MANAGED_CSG_IMPLEMENTATION
                 case CSGOperationType.Copy:             return ChiselEditorResources.GetIconContent(kCopyIconName,         $"Copy {node.NodeTypeName}")[0];
+#endif
             }
         }
     }

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Runtime.CompilerServices;
+using Unity.Mathematics;
 using UnityEngine;
 
 namespace Chisel.Core
@@ -8,8 +9,8 @@ namespace Chisel.Core
     {
 #if USE_MANAGED_CSG_IMPLEMENTATION
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static Int32 CreateBrushMesh(Int32					userID,   
-                                             Vector3[]				vertices,
+        private static Int32 CreateBrushMesh(Int32					userID,
+                                             float3[]				vertices,
                                              BrushMesh.HalfEdge[]	halfEdges,
                                              BrushMesh.Polygon[]	polygons)
         {
@@ -24,7 +25,7 @@ namespace Chisel.Core
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static bool UpdateBrushMesh(Int32				 brushMeshID,
-                                            Vector3[]            vertices,
+                                            float3[]             vertices,
                                             BrushMesh.HalfEdge[] halfEdges,
                                             BrushMesh.Polygon[]  polygons)
         {

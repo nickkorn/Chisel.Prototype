@@ -9,6 +9,7 @@ using Matrix4x4 = UnityEngine.Matrix4x4;
 using Mathf = UnityEngine.Mathf;
 using Plane = UnityEngine.Plane;
 using Debug = UnityEngine.Debug;
+using Unity.Mathematics;
 
 namespace Chisel.Core
 {
@@ -18,7 +19,7 @@ namespace Chisel.Core
         public static bool GenerateStadium(ref ChiselBrushContainer brushContainer, ref ChiselStadiumDefinition definition)
         {
             definition.Validate();
-            Vector3[] vertices = null;
+            float3[] vertices = null;
             if (!GenerateStadiumVertices(definition, ref vertices))
                 return false;
 
@@ -31,7 +32,7 @@ namespace Chisel.Core
         public static bool GenerateStadium(ref BrushMesh brushMesh, ref ChiselStadiumDefinition definition)
         {
             definition.Validate();
-            Vector3[] vertices = null;
+            float3[] vertices = null;
             if (!GenerateStadiumVertices(definition, ref vertices))
             {
                 brushMesh.Clear();
@@ -48,7 +49,7 @@ namespace Chisel.Core
             return true;
         }
 
-        public static bool GenerateStadiumVertices(ChiselStadiumDefinition definition, ref Vector3[] vertices)
+        public static bool GenerateStadiumVertices(ChiselStadiumDefinition definition, ref float3[] vertices)
         {
             definition.Validate();
             
@@ -64,7 +65,7 @@ namespace Chisel.Core
 
             if (vertices == null ||
                 vertices.Length != sides * 2)
-                vertices		= new Vector3[sides * 2];
+                vertices		= new float3[sides * 2];
             
             var firstTopSide	= definition.firstTopSide;
             var lastTopSide		= definition.lastTopSide;
@@ -76,22 +77,22 @@ namespace Chisel.Core
             int vertexIndex = 0;
             if (!definition.haveRoundedTop)
             {
-                vertices[vertexIndex] = new Vector3(-radius, 0, length * -0.5f); vertexIndex++;
-                vertices[vertexIndex] = new Vector3( radius, 0, length * -0.5f); vertexIndex++;
+                vertices[vertexIndex] = new float3(-radius, 0, length * -0.5f); vertexIndex++;
+                vertices[vertexIndex] = new float3( radius, 0, length * -0.5f); vertexIndex++;
             } else
             {
                 var degreeOffset		= -180.0f * Mathf.Deg2Rad;
                 var degreePerSegment	= (180.0f / topSides) * Mathf.Deg2Rad;
-                var center				= new Vector3(0, 0, (length * -0.5f) + topLength);
+                var center				= new float3(0, 0, (length * -0.5f) + topLength);
                 for (int s = 0; s <= topSides; s++)
                 {
                     var hRad = (s * degreePerSegment) + degreeOffset;
 
-                    var x = center.x + (Mathf.Cos(hRad) * radius);
+                    var x = center.x + (math.cos(hRad) * radius);
                     var y = center.y;
-                    var z = center.z + (Mathf.Sin(hRad) * topLength);
+                    var z = center.z + (math.sin(hRad) * topLength);
 
-                    vertices[vertexIndex] = new Vector3(x, y, z);
+                    vertices[vertexIndex] = new float3(x, y, z);
                     vertexIndex++;
                 }
             }
@@ -102,27 +103,27 @@ namespace Chisel.Core
             //vertexIndex = definition.firstBottomSide;
             if (!definition.haveRoundedBottom)
             {
-                vertices[vertexIndex] = new Vector3( radius, 0, length * 0.5f); vertexIndex++;
-                vertices[vertexIndex] = new Vector3(-radius, 0, length * 0.5f); vertexIndex++;
+                vertices[vertexIndex] = new float3( radius, 0, length * 0.5f); vertexIndex++;
+                vertices[vertexIndex] = new float3(-radius, 0, length * 0.5f); vertexIndex++;
             } else
             {
                 var degreeOffset		= 0.0f * Mathf.Deg2Rad;
                 var degreePerSegment	= (180.0f / bottomSides) * Mathf.Deg2Rad;
-                var center				= new Vector3(0, 0, (length * 0.5f) - bottomLength);
+                var center				= new float3(0, 0, (length * 0.5f) - bottomLength);
                 for (int s = 0; s <= bottomSides; s++)
                 {
                     var hRad = (s * degreePerSegment) + degreeOffset;
 
-                    var x = center.x + (Mathf.Cos(hRad) * radius);
+                    var x = center.x + (math.cos(hRad) * radius);
                     var y = center.y;
-                    var z = center.z + (Mathf.Sin(hRad) * bottomLength);
+                    var z = center.z + (math.sin(hRad) * bottomLength);
 
-                    vertices[vertexIndex] = new Vector3(x, y, z);
+                    vertices[vertexIndex] = new float3(x, y, z);
                     vertexIndex++;
                 }
             }
-            
-            var extrusion = Vector3.up *  definition.height;
+
+            var extrusion = new float3(0, 1, 0) * definition.height;
             for (int s = 0; s < sides; s++)
                 vertices[s + sides] = vertices[s] + extrusion;
             return true;

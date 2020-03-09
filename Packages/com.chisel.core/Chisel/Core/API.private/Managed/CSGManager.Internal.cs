@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
@@ -416,10 +416,10 @@ namespace Chisel.Core
         }
 
 
-        internal static Dictionary<CSGTreeBrush, IntersectionType> GetTouchingBrushes(CSGTreeNode brush)
+        internal static List<BrushBrushIntersection> GetTouchingBrushes(CSGTreeNode brush)
         {
             var brushInfo = GetBrushInfo(brush.nodeID);
-            return brushInfo.brushTouch;
+            return brushInfo.brushBrushIntersections;
         }
 
         internal static bool		IsValidNodeID					(Int32 nodeID)	{ return (nodeID > 0 && nodeID <= nodeHierarchies.Count) && nodeFlags[nodeID - 1].nodeType != CSGNodeType.None; }
@@ -633,6 +633,10 @@ namespace Chisel.Core
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static BrushInfo	GetBrushInfo(Int32 brushNodeID)										{ if (!AssertNodeIDValid(brushNodeID) || !AssertNodeType(brushNodeID, CSGNodeType.Brush)) return null; return nodeHierarchies[brushNodeID - 1].brushInfo; }
+        
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static BrushInfo	GetBrushInfoUnsafe(Int32 brushNodeID)								{ return nodeHierarchies[brushNodeID - 1].brushInfo; }
 
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1301,23 +1305,43 @@ namespace Chisel.Core
 
         internal static void NotifyBrushMeshRemoved(int brushMeshID)
         {
-            for (int i = 0; i < brushes.Count; i++)
+            // TODO: have some way to lookup this directly instead of going through list
+            for (int i = 0; i < nodeHierarchies.Count; i++)
             {
-                var brush = new CSGTreeBrush() { brushNodeID = brushes[i] };
-                if (brush.BrushMesh.brushMeshID != brushMeshID)
+                var nodeHierarchy = nodeHierarchies[i];
+                if (nodeHierarchy.brushInfo == null ||
+                    nodeHierarchy.treeNodeID == CSGTreeNode.InvalidNodeID)
                     continue;
-                brush.BrushMesh = BrushMeshInstance.InvalidInstance;
+
+                if (nodeHierarchy.brushInfo.brushMeshInstanceID != brushMeshID)
+                    continue;
+
+                if (CSGTreeNode.IsNodeIDValid(nodeHierarchy.treeNodeID))
+                    CSGManager.SetBrushMeshID(nodeHierarchy.treeNodeID, BrushMeshInstance.InvalidInstance.BrushMeshID);
+
+                if (nodeHierarchy.brushInfo.brushWorldPlanes.IsCreated)
+                    nodeHierarchy.brushInfo.brushWorldPlanes.Dispose();
             }
         }
 
         internal static void NotifyBrushMeshModified(int brushMeshID)
         {
-            for (int i = 0; i < brushes.Count; i++)
+            // TODO: have some way to lookup this directly instead of going through list
+            for (int i = 0; i < nodeHierarchies.Count; i++)
             {
-                var brush = new CSGTreeBrush() { brushNodeID = brushes[i] };
-                if (brush.BrushMesh.brushMeshID != brushMeshID)
+                var nodeHierarchy = nodeHierarchies[i];
+                if (nodeHierarchy.brushInfo == null ||
+                    nodeHierarchy.treeNodeID == CSGTreeNode.InvalidNodeID)
                     continue;
-                brush.SetDirty();
+
+                if (nodeHierarchy.brushInfo.brushMeshInstanceID != brushMeshID)
+                    continue;
+
+                if (CSGTreeNode.IsNodeIDValid(nodeHierarchy.treeNodeID))
+                    CSGTreeNode.SetDirty(nodeHierarchy.treeNodeID);
+
+                if (nodeHierarchy.brushInfo.brushWorldPlanes.IsCreated)
+                    nodeHierarchy.brushInfo.brushWorldPlanes.Dispose();
             }
         }
 

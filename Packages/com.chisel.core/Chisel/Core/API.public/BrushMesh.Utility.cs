@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using Unity.Mathematics;
 using UnityEngine;
 
 namespace Chisel.Core
@@ -37,7 +38,7 @@ namespace Chisel.Core
             // Newell's algorithm to create a plane for concave polygons.
             // NOTE: doesn't work well for self-intersecting polygons
             var lastEdge	= polygon.firstEdge + polygon.edgeCount;
-            var normal		= Vector3.zero;
+            var normal		= float3.zero;
             var prevVertex	= vertices[halfEdges[lastEdge - 1].vertexIndex];
             for (int n = polygon.firstEdge; n < lastEdge; n++)
             {
@@ -47,11 +48,11 @@ namespace Chisel.Core
                 normal.z = normal.z + ((prevVertex.x - currVertex.x) * (prevVertex.y + currVertex.y));
                 prevVertex = currVertex;
             }
-            normal = normal.normalized;
+            normal = math.normalize(normal);
 
             var d = 0.0f;
             for (int n = polygon.firstEdge; n < lastEdge; n++)
-                d -= Vector3.Dot(normal, vertices[halfEdges[n].vertexIndex]);
+                d -= math.dot(normal, vertices[halfEdges[n].vertexIndex]);
             d /= polygon.edgeCount;
 
             return new Plane(normal, d);
@@ -64,16 +65,16 @@ namespace Chisel.Core
             if (polygons == null)
                 return;
 
-            if (surfaces == null ||
-                surfaces.Length != polygons.Length)
-                surfaces = new Surface[polygons.Length];
+            if (planes == null ||
+                planes.Length != polygons.Length)
+                planes = new float4[polygons.Length];
 
             for (int p = 0; p < polygons.Length; p++)
             {
                 var plane       = CalculatePlane(in polygons[p]);
                 var planeVector = (Vector4)plane.normal;
                 planeVector.w = plane.distance;
-                surfaces[p].localPlane = planeVector;
+                planes[p] = planeVector;
             }
         }
 
@@ -400,7 +401,7 @@ namespace Chisel.Core
                 // Create a new vertex
                 var newVertexIndex  = vertices.Length;
                 // TODO: would be nice if we could do allocations just once in CutPolygon
-                var newVertices     = new Vector3[vertices.Length + 1];
+                var newVertices     = new float3[vertices.Length + 1];
                 Array.Copy(vertices, newVertices, newVertexIndex);
                 newVertices[newVertexIndex] = newVertex;
                 vertices = newVertices;
@@ -938,7 +939,7 @@ namespace Chisel.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Clear()
         {
-            surfaces = null;
+            planes = null;
             vertices = null;
             halfEdges = null;
             halfEdgePolygonIndices = null;
@@ -967,7 +968,7 @@ namespace Chisel.Core
 
             CompactHalfEdges();
 
-            if (surfaces == null)
+            if (planes == null)
                 CalculatePlanes();
 
             s_VertexDistances.Clear();
@@ -1175,7 +1176,7 @@ namespace Chisel.Core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Vector3 GetPolygonCenter(int polygonIndex)
+        public float3 GetPolygonCenter(int polygonIndex)
         {
             if (polygonIndex < 0 || polygonIndex >= polygons.Length)
                 throw new IndexOutOfRangeException();
@@ -1184,10 +1185,10 @@ namespace Chisel.Core
             var firstEdge = polygons[polygonIndex].firstEdge;
             var lastEdge = firstEdge + edgeCount;
 
-            var min = new Vector3(float.PositiveInfinity, float.PositiveInfinity, float.PositiveInfinity);
-            var max = new Vector3(float.NegativeInfinity, float.NegativeInfinity, float.NegativeInfinity);
+            var min = new float3(float.PositiveInfinity, float.PositiveInfinity, float.PositiveInfinity);
+            var max = new float3(float.NegativeInfinity, float.NegativeInfinity, float.NegativeInfinity);
 
-            var center = Vector3.zero;
+            var center = float3.zero;
             for (int e = firstEdge; e < lastEdge; e++)
             {
                 var vertexIndex = halfEdges[e].vertexIndex;
@@ -1205,7 +1206,7 @@ namespace Chisel.Core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Vector3 GetPolygonCentroid(int polygonIndex)
+        public float3 GetPolygonCentroid(int polygonIndex)
         {
             const float kMinimumArea = 1E-7f;
 
@@ -1214,7 +1215,7 @@ namespace Chisel.Core
 
             var edgeCount = polygons[polygonIndex].edgeCount;
             if (edgeCount < 3)
-                return Vector3.zero;
+                return float3.zero;
 
             var firstEdge = polygons[polygonIndex].firstEdge;
             var lastEdge  = firstEdge + edgeCount;
@@ -1222,7 +1223,7 @@ namespace Chisel.Core
             var vectorA = vertices[halfEdges[firstEdge    ].vertexIndex];
             var vectorB = vertices[halfEdges[firstEdge + 1].vertexIndex];
 
-            var centroid = Vector3.zero;
+            var centroid = float3.zero;
             float accumulatedArea = 0.0f;
             
             for (int e = firstEdge + 2; e < lastEdge; e++)
@@ -1233,7 +1234,7 @@ namespace Chisel.Core
                 var edgeCA = vectorC - vectorA;
                 var edgeCB = vectorC - vectorB;
                 
-                var area = Vector3.Cross(edgeCA, edgeCB).magnitude;
+                var area = math.length(math.cross(edgeCA, edgeCB));
 
                 centroid.x += area * (vectorA.x + vectorB.x + vectorC.x);
                 centroid.y += area * (vectorA.y + vectorB.y + vectorC.y);
@@ -1244,21 +1245,21 @@ namespace Chisel.Core
             }
 
             if (Math.Abs(accumulatedArea) < kMinimumArea)
-                return Vector3.zero;
+                return float3.zero;
             
             return centroid * (1.0f / (accumulatedArea * 3.0f));
         }
 
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool IsInside(Vector3 localPoint)
+        public bool IsInside(float3 localPoint)
         {
-            if (surfaces == null)
+            if (planes == null)
                 return false;
 
-            for (int s = 0; s < surfaces.Length; s++)
+            for (int s = 0; s < planes.Length; s++)
             {
-                var localPlane = (Plane)surfaces[s];
+                var localPlane = new Plane(planes[s].xyz, planes[s].w);
                 if (localPlane.GetDistanceToPoint(localPoint) > -kDistanceEpsilon)
                     return false;
             }
@@ -1266,14 +1267,14 @@ namespace Chisel.Core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool IsInsideOrOn(Vector3 localPoint)
+        public bool IsInsideOrOn(float3 localPoint)
         {
-            if (surfaces == null)
+            if (planes == null)
                 return false;
 
-            for (int s = 0; s < surfaces.Length; s++)
+            for (int s = 0; s < planes.Length; s++)
             {
-                var localPlane = (Plane)surfaces[s];
+                var localPlane = new Plane(planes[s].xyz, planes[s].w);
                 if (localPlane.GetDistanceToPoint(localPoint) > kDistanceEpsilon)
                     return false;
             }
@@ -1281,7 +1282,7 @@ namespace Chisel.Core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public int FindVertexIndexOfVertex(Vector3 vertex)
+        public int FindVertexIndexOfVertex(float3 vertex)
         {
             for (int v = 0; v < vertices.Length; v++)
             {

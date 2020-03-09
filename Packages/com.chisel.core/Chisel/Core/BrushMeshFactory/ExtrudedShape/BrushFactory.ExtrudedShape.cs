@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using Vector2 = UnityEngine.Vector2;
 using Vector3 = UnityEngine.Vector3;
@@ -10,12 +10,28 @@ using Plane = UnityEngine.Plane;
 using Debug = UnityEngine.Debug;
 using UnitySceneExtensions;
 using System.Collections.Generic;
+using Unity.Mathematics;
 
 namespace Chisel.Core
 {
     // TODO: rename
     public sealed partial class BrushMeshFactory
     {
+        static float CalculateOrientation(float2[] vertices)
+        {        
+            // Newell's algorithm to create a plane for concave polygons.
+            // NOTE: doesn't work well for self-intersecting polygons
+            var direction = 0.0f;
+            var prevVertex	= vertices[vertices.Length - 1];
+            for (int n = 0; n < vertices.Length; n++)
+            {
+                var currVertex = vertices[n];
+                direction += ((prevVertex.x - currVertex.x) * (prevVertex.y + currVertex.y));
+                prevVertex = currVertex;
+            }
+            return direction;
+        }
+
         public static bool GenerateExtrudedShape(ref ChiselBrushContainer brushContainer, ref ChiselExtrudedShapeDefinition definition)
         {
             definition.Validate();
@@ -23,17 +39,24 @@ namespace Chisel.Core
             ref readonly var shape               = ref definition.shape;
             int              curveSegments       = definition.curveSegments;
 
-            var shapeVertices       = new List<Vector2>();
+            var shapeVertices       = new List<float2>();
             var shapeSegmentIndices = new List<int>();
             GetPathVertices(shape, curveSegments, shapeVertices, shapeSegmentIndices);
 
-            Vector2[][] polygonVerticesArray;
+            float2[][]  polygonVerticesArray;
             int[][]     polygonIndicesArray;
+            if (shapeVertices.Count == 3)
+            {
+                polygonVerticesArray = new [] { shapeVertices.ToArray() };
+                polygonIndicesArray = new [] { shapeSegmentIndices.ToArray() };
 
-            if (!Decomposition.ConvexPartition(shapeVertices, shapeSegmentIndices,
-                                                out polygonVerticesArray,
-                                                out polygonIndicesArray))
-                return false;
+            } else
+            { 
+                if (!Decomposition.ConvexPartition(shapeVertices, shapeSegmentIndices,
+                                                    out polygonVerticesArray,
+                                                    out polygonIndicesArray))
+                    return false;
+            }
 
             ref readonly var path                = ref definition.path;
 
@@ -58,6 +81,13 @@ namespace Chisel.Core
                 var segmentIndices = polygonIndicesArray[p];
                 var shapeSegments = polygonVertices.Length;
 
+                if (CalculateOrientation(polygonVertices) < 0)
+                {
+                    Array.Reverse(segmentIndices);
+                    Array.Reverse(polygonVertices);
+                }
+
+
                 for (int s = 0; s < path.segments.Length - 1; s++)
                 {
                     var pathPointA = path.segments[s];
@@ -68,9 +98,9 @@ namespace Chisel.Core
                     if (offsetEuler.x > 180) offsetEuler.x = 360 - offsetEuler.x;
                     if (offsetEuler.y > 180) offsetEuler.y = 360 - offsetEuler.y;
                     if (offsetEuler.z > 180) offsetEuler.z = 360 - offsetEuler.z;
-                    var maxAngle = Mathf.Max(offsetEuler.x, offsetEuler.y, offsetEuler.z);
+                    var maxAngle = math.max(math.max(offsetEuler.x, offsetEuler.y), offsetEuler.z);
                     if (maxAngle != 0)
-                        subSegments = Mathf.Max(1, (int)Mathf.Ceil(maxAngle / 5));
+                        subSegments = math.max(1, (int)math.ceil(maxAngle / 5));
 
                     if ((pathPointA.scale.x / pathPointA.scale.y) != (pathPointB.scale.x / pathPointB.scale.y) &&
                         (subSegments & 1) == 1)
@@ -83,12 +113,12 @@ namespace Chisel.Core
 
                         // TODO: this doesn't work if top and bottom polygons intersect
                         //			=> need to split into two brushes then, invert one of the two brushes
-                        var invertDot = Vector3.Dot(matrix0.MultiplyVector(Vector3.forward).normalized, (matrix1.MultiplyPoint(shapeVertices[0]) - matrix0.MultiplyPoint(shapeVertices[0])).normalized);
+                        var invertDot = math.dot(matrix0.MultiplyVector(new float3(0,0,1)).normalized, (matrix1.MultiplyPoint(new float3(polygonVertices[0], 0)) - matrix0.MultiplyPoint(new float3(polygonVertices[0], 0))).normalized);
 
                         if (invertDot == 0.0f)
                             continue;
 
-                        Vector3[] vertices;
+                        float3[] vertices;
                         if (invertDot < 0) { var m = matrix0; matrix0 = matrix1; matrix1 = m; }
                         if (!GetExtrudedVertices(polygonVertices, matrix0, matrix1, out vertices))
                             continue;
@@ -104,12 +134,12 @@ namespace Chisel.Core
             return true;
         }
         
-        static Vector2 PointOnBezier(Vector2 p0, Vector2 p1, Vector2 p2, Vector2 p3, float t)
+        static float2 PointOnBezier(float2 p0, float2 p1, float2 p2, float2 p3, float t)
         {
             return (1 - t) * (1 - t) * (1 - t) * p0 + 3 * t * (1 - t) * (1 - t) * p1 + 3 * t * t * (1 - t) * p2 + t * t * t * p3;
         }
 
-        public static void GetPathVertices(Curve2D shape, int shapeCurveSegments, List<Vector2> shapeVertices, List<int> shapeSegmentIndices)
+        public static void GetPathVertices(Curve2D shape, int shapeCurveSegments, List<float2> shapeVertices, List<int> shapeSegmentIndices)
         {
             var points = shape.controlPoints;
             var length = points.Length;
@@ -132,7 +162,7 @@ namespace Chisel.Core
                     continue;
                 }
 
-                Vector2 v0, v3;
+                float2 v0, v3;
 
                 if (p1.constraint2 != ControlPointConstraint.Straight)
                     v0 = v1 - p1.tangent2;
@@ -154,17 +184,17 @@ namespace Chisel.Core
             }
         }
 
-        static bool GetExtrudedVertices(Vector2[] shapeVertices, Matrix4x4 matrix0, Matrix4x4 matrix1, out Vector3[] vertices)
+        static bool GetExtrudedVertices(float2[] shapeVertices, Matrix4x4 matrix0, Matrix4x4 matrix1, out float3[] vertices)
         {
             var pathSegments = 2;
             var shapeSegments = shapeVertices.Length;
             var vertexCount = shapeSegments * pathSegments;
-            vertices = new Vector3[vertexCount];
+            vertices = new float3[vertexCount];
 
             for (int s = 0; s < shapeSegments; s++)
             {
-                vertices[s] = matrix0.MultiplyPoint(shapeVertices[s]);
-                vertices[shapeSegments + s] = matrix1.MultiplyPoint(shapeVertices[s]);
+                vertices[s] = matrix0.MultiplyPoint(new float3(shapeVertices[s], 0));
+                vertices[shapeSegments + s] = matrix1.MultiplyPoint(new float3(shapeVertices[s], 0));
             }
             return true;
         }
