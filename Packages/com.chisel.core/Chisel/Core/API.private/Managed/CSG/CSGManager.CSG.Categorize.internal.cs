@@ -578,6 +578,9 @@ namespace Chisel.Core
                 loop2.edges.Count == 0)
                 return;
 
+            var categories1 = new EdgeCategory[loop1.edges.Count];
+            var categories2 = new EdgeCategory[loop2.edges.Count];
+
             var brushInfo2 = CSGManager.GetBrushInfoUnsafe(loop2.info.brush.brushNodeID);
             var worldPlanes2 = brushInfo2.brushWorldPlanes;
 
@@ -598,7 +601,7 @@ namespace Chisel.Core
                 }
                 // 1. there are edges with two identical vertex indices?
                 // 2. all edges should overlap, but some aren't overlapping?
-                
+
                 // *------*......*
                 // |      |      .
                 // |      |      .
@@ -611,37 +614,55 @@ namespace Chisel.Core
                 // | *----*
                 // *------*
 
+                fixed (EdgeCategory* categories1Ptr = &categories1[0])
+                fixed (EdgeCategory* categories2Ptr = &categories2[0])
                 fixed (bool* loop1EdgesDestroyed = &loop1.destroyed[0])
+                fixed (bool* loop2EdgesDestroyed = &loop2.destroyed[0])
                 { 
                     var categorizeEdgesJob1 = new CategorizeEdgesJob()
                     {
                         vertexSoup          = soup,
                         edges1              = loop1Edges,
                         destroyed1          = loop1EdgesDestroyed,
+                        categories1         = categories1Ptr,
                         brushWorldPlanes    = worldPlanes2,
-                        edges2              = loop2Edges,
-                    
-                        // TODO: reversed edges should cancel?
-                        good1           = EdgeCategory.Outside,
-                        good2           = EdgeCategory.Aligned
+                        edges2              = loop2Edges
                     };
                     categorizeEdgesJob1.Run();
-                }
-                 
-                fixed (bool* loop2EdgesDestroyed = &loop2.destroyed[0])
-                { 
+
                     var categorizeEdgesJob2 = new CategorizeEdgesJob()
                     {
                         vertexSoup          = soup,
                         edges1              = loop2Edges,
                         destroyed1          = loop2EdgesDestroyed,
+                        categories1         = categories2Ptr,
                         brushWorldPlanes    = worldPlanes1,
-                        edges2              = loop1Edges,
+                        edges2              = loop1Edges
+                    };
+                    categorizeEdgesJob2.Run();
+                    
+                    var setEdgeDestroyedJob1 = new SetEdgeDestroyedJob()
+                    {
+                        edgeCount       = loop1.edges.Count,
+                        destroyed1      = loop1EdgesDestroyed,
+                        categories1     = categories1Ptr,
+                    
+                        // TODO: reversed edges should cancel?
+                        good1           = EdgeCategory.Outside,
+                        good2           = EdgeCategory.Aligned
+                    };
+                    setEdgeDestroyedJob1.Run();
+
+                    var setEdgeDestroyedJob2 = new SetEdgeDestroyedJob()
+                    {
+                        edgeCount       = loop2.edges.Count,
+                        destroyed1      = loop2EdgesDestroyed,
+                        categories1     = categories2Ptr,
 
                         good1           = EdgeCategory.Inside,
                         good2           = EdgeCategory.Inside
                     };
-                    categorizeEdgesJob2.Run();
+                    setEdgeDestroyedJob2.Run();
                 }
             }
         }
@@ -653,6 +674,9 @@ namespace Chisel.Core
             if (loop1.edges.Count == 0 ||
                 loop2.edges.Count == 0)
                 return;
+
+            var categories1 = new EdgeCategory[loop1.edges.Count];
+            var categories2 = new EdgeCategory[loop2.edges.Count];
 
             var brushInfo2 = CSGManager.GetBrushInfoUnsafe(loop2.info.brush.brushNodeID);
             var worldPlanes2 = brushInfo2.brushWorldPlanes;
@@ -672,36 +696,57 @@ namespace Chisel.Core
                     for (int e = 0; e < loop2.edges.Count; e++)
                         edgePtr[e] = loop2.edges[e];
                 }
-                fixed(bool* loop1EdgesDestroyed = &loop1.destroyed[0])
+                fixed (EdgeCategory* categories1Ptr = &categories1[0])
+                fixed (EdgeCategory* categories2Ptr = &categories2[0])
+                fixed (bool* loop1EdgesDestroyed = &loop1.destroyed[0])
+                fixed (bool* loop2EdgesDestroyed = &loop2.destroyed[0])
                 { 
                     var categorizeEdgesJob1 = new CategorizeEdgesJob()
                     {
                         vertexSoup          = soup,
                         edges1              = loop1Edges,
                         destroyed1          = loop1EdgesDestroyed,
+                        categories1         = categories1Ptr,
                         brushWorldPlanes    = worldPlanes2,
-                        edges2              = loop2Edges,
-
-                        good1           = EdgeCategory.Outside,
-                        good2           = EdgeCategory.Aligned
+                        edges2              = loop2Edges
                     };
                     categorizeEdgesJob1.Run();
-                }
 
-                fixed (bool* loop2EdgesDestroyed = &loop2.destroyed[0])
-                {
                     var categorizeEdgesJob2 = new CategorizeEdgesJob()
                     {
                         vertexSoup          = soup,
                         edges1              = loop2Edges,
                         destroyed1          = loop2EdgesDestroyed,
+                        categories1         = categories2Ptr,
                         brushWorldPlanes    = worldPlanes1,
-                        edges2              = loop1Edges,
+                        edges2              = loop1Edges
+                    };
+                    categorizeEdgesJob2.Run();
+
+                    var setEdgeDestroyedJob1 = new SetEdgeDestroyedJob()
+                    {
+                        edgeCount       = loop1.edges.Count,
+                        destroyed1      = loop1EdgesDestroyed,
+                        categories1     = categories1Ptr,
+
+                        good1           = EdgeCategory.Outside,
+                        good2           = EdgeCategory.Aligned
+                    };
+                    setEdgeDestroyedJob1.Run();
+
+
+
+
+                    var setEdgeDestroyedJob2 = new SetEdgeDestroyedJob()
+                    {
+                        edgeCount       = loop2.edges.Count,
+                        destroyed1      = loop2EdgesDestroyed,
+                        categories1     = categories2Ptr,
 
                         good1           = EdgeCategory.Outside,
                         good2           = EdgeCategory.Outside
                     };
-                    categorizeEdgesJob2.Run();
+                    setEdgeDestroyedJob2.Run();
                 }
             }
         }

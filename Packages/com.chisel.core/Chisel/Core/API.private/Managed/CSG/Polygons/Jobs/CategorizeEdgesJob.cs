@@ -17,16 +17,13 @@ namespace Chisel.Core
     [BurstCompile]
     unsafe struct CategorizeEdgesJob : IJob
     {
-        const float kPlaneDistanceEpsilon = CSGManagerPerformCSG.kPlaneDistanceEpsilon;
-
-        [ReadOnly] public VertexSoup                    vertexSoup;
-        [ReadOnly] public NativeArray<Edge>             edges1;
-        [ReadOnly] public NativeArray<Edge>             edges2;
+        [ReadOnly] public VertexSoup vertexSoup;
+        [ReadOnly] public NativeArray<Edge> edges1;
+        [ReadOnly] public NativeArray<Edge> edges2;
         [ReadOnly] public BlobAssetReference<BrushWorldPlanes> brushWorldPlanes;
-        [ReadOnly] public EdgeCategory good1;
-        [ReadOnly] public EdgeCategory good2;
 
-        [NativeDisableUnsafePtrRestriction] public bool* destroyed1;
+        [NativeDisableUnsafePtrRestriction] [ReadOnly] public bool* destroyed1;
+        [NativeDisableUnsafePtrRestriction] [WriteOnly] public EdgeCategory* categories1;
 
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -57,13 +54,36 @@ namespace Chisel.Core
 
         public void Execute()
         {
-            var edgesPtr    = (Edge*)edges2.GetUnsafeReadOnlyPtr();
+            var edgesPtr = (Edge*)edges2.GetUnsafeReadOnlyPtr();
             var edgesLength = edges2.Length;
             for (int index = 0; index < edges1.Length; index++)
             {
                 if (!destroyed1[index])
                 {
-                    var category = CategorizeEdge(edgesPtr, edgesLength, edges1[index]);
+                    categories1[index] = CategorizeEdge(edgesPtr, edgesLength, edges1[index]);
+                }
+            }
+        }
+    }
+
+
+    [BurstCompile]
+    unsafe struct SetEdgeDestroyedJob : IJob
+    {
+        [ReadOnly] public int edgeCount;
+        [ReadOnly] public EdgeCategory good1;
+        [ReadOnly] public EdgeCategory good2;
+
+        [NativeDisableUnsafePtrRestriction] [ReadOnly] public EdgeCategory* categories1;
+        [NativeDisableUnsafePtrRestriction] [WriteOnly] public bool* destroyed1;
+
+        public void Execute()
+        {
+            for (int index = 0; index < edgeCount; index++)
+            {
+                if (!destroyed1[index])
+                {
+                    var category = categories1[index];
                     if (category == good1 || category == good2)
                         continue;
                     destroyed1[index] = true;
