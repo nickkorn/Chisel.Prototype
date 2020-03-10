@@ -126,47 +126,44 @@ namespace Chisel.Core
 
         public SharedPlaneData(CSGManager.BrushInfo brushInfo0, CSGManager.BrushInfo brushInfo1, CSGTreeBrush brush0, BlobAssetReference<BrushMeshBlob> blobMesh0, CSGTreeBrush brush1, BlobAssetReference<BrushMeshBlob> blobMesh1, IntersectionType intersectionType, Allocator allocator)
         {
-            using (new ProfileSample("SharedPlaneData_Constructor"))
-            {
-                var nodeToTreeSpaceMatrix0 = (float4x4)brush0.NodeToTreeSpaceMatrix;
-                var treeToNodeSpaceMatrix0 = (float4x4)brush0.TreeToNodeSpaceMatrix;
-                var nodeToTreeSpaceMatrix1 = (float4x4)brush1.NodeToTreeSpaceMatrix;
-                var treeToNodeSpaceMatrix1 = (float4x4)brush1.TreeToNodeSpaceMatrix;
+            var nodeToTreeSpaceMatrix0 = (float4x4)brush0.NodeToTreeSpaceMatrix;
+            var treeToNodeSpaceMatrix0 = (float4x4)brush0.TreeToNodeSpaceMatrix;
+            var nodeToTreeSpaceMatrix1 = (float4x4)brush1.NodeToTreeSpaceMatrix;
+            var treeToNodeSpaceMatrix1 = (float4x4)brush1.TreeToNodeSpaceMatrix;
 
-                ref var mesh0 = ref blobMesh0.Value;
-                ref var mesh1 = ref blobMesh1.Value;
+            ref var mesh0 = ref blobMesh0.Value;
+            ref var mesh1 = ref blobMesh1.Value;
 
-                this.treeBrush0                  = brush0;
-                this.treeBrush1                  = brush1;
-                this.blobMesh0                   = blobMesh0;
-                this.blobMesh1                   = blobMesh1;
+            this.treeBrush0                  = brush0;
+            this.treeBrush1                  = brush1;
+            this.blobMesh0                   = blobMesh0;
+            this.blobMesh1                   = blobMesh1;
 
-                this.vertexSoup0                 = brushInfo0.brushOutputLoops.vertexSoup;
-                this.vertexSoup1                 = brushInfo1.brushOutputLoops.vertexSoup;
+            this.vertexSoup0                 = brushInfo0.brushOutputLoops.vertexSoup;
+            this.vertexSoup1                 = brushInfo1.brushOutputLoops.vertexSoup;
 
-                this.nodeToTreeSpaceMatrix0      = nodeToTreeSpaceMatrix0;
-                this.treeToNodeSpaceMatrix0      = treeToNodeSpaceMatrix0;
-                this.nodeToTreeSpaceMatrix1      = nodeToTreeSpaceMatrix1;
-                this.treeToNodeSpaceMatrix1      = treeToNodeSpaceMatrix1;
-                this.node1ToNode0                = math.mul(treeToNodeSpaceMatrix0, nodeToTreeSpaceMatrix1);
+            this.nodeToTreeSpaceMatrix0      = nodeToTreeSpaceMatrix0;
+            this.treeToNodeSpaceMatrix0      = treeToNodeSpaceMatrix0;
+            this.nodeToTreeSpaceMatrix1      = nodeToTreeSpaceMatrix1;
+            this.treeToNodeSpaceMatrix1      = treeToNodeSpaceMatrix1;
+            this.node1ToNode0                = math.mul(treeToNodeSpaceMatrix0, nodeToTreeSpaceMatrix1);
 
-                this.intersectionType            = intersectionType;
+            this.intersectionType            = intersectionType;
 
-                this.intersectingPlaneIndices0   = new NativeList<int>(mesh0.localPlanes.Length, allocator);
-                this.intersectingPlaneIndices1   = new NativeList<int>(mesh1.localPlanes.Length, allocator);
+            this.intersectingPlaneIndices0   = new NativeList<int>(mesh0.localPlanes.Length, allocator);
+            this.intersectingPlaneIndices1   = new NativeList<int>(mesh1.localPlanes.Length, allocator);
 
-                this.usedPlanePairs0             = new NativeList<PlanePair>(mesh0.halfEdges.Length, allocator);
-                this.usedPlanePairs1             = new NativeList<PlanePair>(mesh1.halfEdges.Length, allocator);
+            this.usedPlanePairs0             = new NativeList<PlanePair>(mesh0.halfEdges.Length, allocator);
+            this.usedPlanePairs1             = new NativeList<PlanePair>(mesh1.halfEdges.Length, allocator);
 
-                this.surfaceCategory0            = new NativeArray<SurfaceInfo>(mesh0.localPlanes.Length, allocator, NativeArrayOptions.ClearMemory); // all set to Inside (0)
-                this.surfaceCategory1            = new NativeArray<SurfaceInfo>(mesh1.localPlanes.Length, allocator, NativeArrayOptions.ClearMemory); // all set to Inside (0)
+            this.surfaceCategory0            = new NativeArray<SurfaceInfo>(mesh0.localPlanes.Length, allocator, NativeArrayOptions.ClearMemory); // all set to Inside (0)
+            this.surfaceCategory1            = new NativeArray<SurfaceInfo>(mesh1.localPlanes.Length, allocator, NativeArrayOptions.ClearMemory); // all set to Inside (0)
 
-                this.usedVertices0               = new NativeList<int>(mesh0.vertices.Length, allocator);
-                this.usedVertices1               = new NativeList<int>(mesh1.vertices.Length, allocator);
+            this.usedVertices0               = new NativeList<int>(mesh0.vertices.Length, allocator);
+            this.usedVertices1               = new NativeList<int>(mesh1.vertices.Length, allocator);
 
-                this.intersectingPlanes0         = new NativeList<float4>(mesh0.localPlanes.Length, allocator);
-                this.intersectingPlanes1         = new NativeList<float4>(mesh1.localPlanes.Length, allocator);
-            }
+            this.intersectingPlanes0         = new NativeList<float4>(mesh0.localPlanes.Length, allocator);
+            this.intersectingPlanes1         = new NativeList<float4>(mesh1.localPlanes.Length, allocator);
         }
 
         public void Dispose()

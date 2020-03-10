@@ -515,15 +515,24 @@ namespace Chisel.Core
 
             if (nodeFlags[treeNodeIndex].IsNodeFlagSet(NodeStatusFlags.TreeNeedsUpdate))
             {
-                using (new ProfileSample("UpdateTreeMesh"))
+                UnityEngine.Profiling.Profiler.BeginSample("UpdateTreeMesh");
+                try
+                {
                     UpdateTreeMesh(treeNodeID);
+                } finally { UnityEngine.Profiling.Profiler.EndSample(); }
             }
 
-            using (new ProfileSample("CombineSubMeshes"))
+            UnityEngine.Profiling.Profiler.BeginSample("CombineSubMeshes");
+            try
+            {
                 CombineSubMeshes(treeInfo, meshQueries, vertexChannelMask);
+            } finally { UnityEngine.Profiling.Profiler.EndSample(); }
 
-            using (new ProfileSample("Clean"))
+            UnityEngine.Profiling.Profiler.BeginSample("Clean");
+            try
+            {
                 CleanTree(treeNodeID);
+            } finally { UnityEngine.Profiling.Profiler.EndSample(); }
 
 
             {
@@ -769,8 +778,8 @@ namespace Chisel.Core
                 
                 Int32[] surfaceIndices = null;
 
-                using (new ProfileSample("Triangulate"))
-                { 
+                UnityEngine.Profiling.Profiler.BeginSample("Triangulate");
+                try { 
                     try
                     {
                         // Ensure we have the rotation properly calculated, and have a valid normal
@@ -804,7 +813,7 @@ namespace Chisel.Core
                         Debug.LogException(e);
                         //Debug.Log($"BrushNodeID: {loop.info.brush.brushNodeID} / BasePlaneIndex: {loop.info.basePlaneIndex} / WorldPlane: {loop.info.worldPlane}");// / LoopIndex: {loop.loopIndex}");
                     }
-                }
+                } finally { UnityEngine.Profiling.Profiler.EndSample(); }
 
                 if (surfaceIndices == null ||
                     surfaceIndices.Length < 3)

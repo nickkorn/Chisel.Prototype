@@ -8,6 +8,7 @@ using Unity.Jobs;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Entities;
+using Profiler = UnityEngine.Profiling.Profiler;
 
 namespace Chisel.Core
 {
@@ -53,18 +54,17 @@ namespace Chisel.Core
 
             var treeBrushes = treeInfo.treeBrushes;
 
-            using (new ProfileSample("UpdateBrushTransformations"))         UpdateBrushTransformations(treeBrushes);
-            using (new ProfileSample("UpdateBrushWorldPlanes"))             UpdateBrushWorldPlanes(treeBrushes);
+            Profiler.BeginSample("UpdateBrushTransformations"); try {          UpdateBrushTransformations(treeBrushes); } finally { Profiler.EndSample(); }
+            Profiler.BeginSample("UpdateBrushWorldPlanes"); try {             UpdateBrushWorldPlanes(treeBrushes); } finally { Profiler.EndSample(); }
 
             // TODO: should only do this at creation time + when moved
-            using (new ProfileSample("FindIntersectingBrushes"))            FindIntersectingBrushes(treeBrushes); 
+            Profiler.BeginSample("FindIntersectingBrushes"); try {            FindIntersectingBrushes(treeBrushes); } finally { Profiler.EndSample(); }
 
             // TODO: should only do this once at creation time
-            using (new ProfileSample("GenerateBasePolygonLoops"))           GenerateBasePolygonLoops(treeBrushes);
-            using (new ProfileSample("FindAllIntersectionLoops"))           CSGManagerPerformCSG.FindAllIntersectionLoops(treeBrushes);
-            using (new ProfileSample("UpdateBrushCategorizationTables"))    UpdateBrushCategorizationTables(treeBrushes);
-            using (new ProfileSample("PerformAllCSG"))                      PerformAllCSG(treeBrushes);
-
+            Profiler.BeginSample("GenerateBasePolygonLoops"); try {           GenerateBasePolygonLoops(treeBrushes); } finally { Profiler.EndSample(); }
+            Profiler.BeginSample("FindAllIntersectionLoops"); try {           CSGManagerPerformCSG.FindAllIntersectionLoops(treeBrushes); } finally { Profiler.EndSample(); }
+            Profiler.BeginSample("UpdateBrushCategorizationTables"); try {    UpdateBrushCategorizationTables(treeBrushes); } finally { Profiler.EndSample(); }
+            Profiler.BeginSample("PerformAllCSG"); try {                      PerformAllCSG(treeBrushes); } finally { Profiler.EndSample(); }
 
             {
                 var flags = nodeFlags[treeNodeIndex];
@@ -360,20 +360,16 @@ namespace Chisel.Core
                             if (intersectionCategory == surfaceLoop.info.interiorCategory)
                                 continue;
 
-                            using (new ProfileSample("Intersect"))
-                                CSGManagerPerformCSG.Intersect(brushVertices, loopsOnBrushSurface, surfaceLoop, intersectionLoop, intersectionCategory);
-                        }
-                        
+                            CSGManagerPerformCSG.Intersect(brushVertices, loopsOnBrushSurface, surfaceLoop, intersectionLoop, intersectionCategory);
+                        }                        
                     }
 
                     // TODO: remove the need for this (check on insertion)
-                    using (new ProfileSample("RemoveEmptyLoops"))
-                        CSGManagerPerformCSG.RemoveEmptyLoops(loopsOnBrushSurface);
+                    CSGManagerPerformCSG.RemoveEmptyLoops(loopsOnBrushSurface);
                 }
             }
 
-            using (new ProfileSample("CleanUp"))
-                CSGManagerPerformCSG.CleanUp(brushVertices, allBrushSurfaces);
+            CSGManagerPerformCSG.CleanUp(brushVertices, allBrushSurfaces);
             return true;
         }
 

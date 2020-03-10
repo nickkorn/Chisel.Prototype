@@ -14,7 +14,7 @@ using ReadOnlyAttribute = Unity.Collections.ReadOnlyAttribute;
 namespace Chisel.Core
 {
 #if USE_MANAGED_CSG_IMPLEMENTATION
-    //[BurstCompile(Debug = false)]
+    [BurstCompile(Debug = false)]
     public struct FindLoopVertexOverlapsJob : IJob
     {
         public const int kMaxVertexCount = short.MaxValue;

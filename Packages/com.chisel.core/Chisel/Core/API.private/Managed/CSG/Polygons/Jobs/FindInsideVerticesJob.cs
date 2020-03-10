@@ -41,23 +41,20 @@ namespace Chisel.Core
 
         public OverlapIntersectionData(CSGTreeBrush brush0, BlobAssetReference<BrushMeshBlob> meshBlob0, Dictionary<int, SurfaceLoops> intersectionSurfaceLoops, List<Loop> basePolygons)
         {
-            using (new ProfileSample("OverlapIntersectionData_Constructor"))
-            {
-                this.brush0 = brush0;
-                this.meshBlob0 = meshBlob0;
-                this.treeToNodeSpaceMatrix0 = brush0.TreeToNodeSpaceMatrix;
-                this.allWorldSpacePlanes = new NativeList<float4>(meshBlob0.Value.localPlanes.Length, Allocator.Persistent);
-                this.brushPlaneSegments = new NativeList<int2>(intersectionSurfaceLoops.Count, Allocator.Persistent);
-                this.worldSpacePlanes0Segment = new int2();
+            this.brush0 = brush0;
+            this.meshBlob0 = meshBlob0;
+            this.treeToNodeSpaceMatrix0 = brush0.TreeToNodeSpaceMatrix;
+            this.allWorldSpacePlanes = new NativeList<float4>(meshBlob0.Value.localPlanes.Length, Allocator.Persistent);
+            this.brushPlaneSegments = new NativeList<int2>(intersectionSurfaceLoops.Count, Allocator.Persistent);
+            this.worldSpacePlanes0Segment = new int2();
 
-                this.basePolygons = basePolygons;
-                this.intersectionSurfaceLoops = intersectionSurfaceLoops;
-                this.basePolygonLoops = new IntersectionLoop[basePolygons.Count];
-                this.allIntersectionLoops = new List<IntersectionLoop>();
-                this.intersectionSurfaces = new List<int>[meshBlob0.Value.localPlanes.Length];
-                for (int i = 0; i < this.intersectionSurfaces.Length; i++)
-                    this.intersectionSurfaces[i] = new List<int>(16);
-            }
+            this.basePolygons = basePolygons;
+            this.intersectionSurfaceLoops = intersectionSurfaceLoops;
+            this.basePolygonLoops = new IntersectionLoop[basePolygons.Count];
+            this.allIntersectionLoops = new List<IntersectionLoop>();
+            this.intersectionSurfaces = new List<int>[meshBlob0.Value.localPlanes.Length];
+            for (int i = 0; i < this.intersectionSurfaces.Length; i++)
+                this.intersectionSurfaces[i] = new List<int>(16);
         }
 
         public void Dispose()
@@ -83,57 +80,54 @@ namespace Chisel.Core
 
         public void StoreOutput(Dictionary<int, SurfaceLoops> intersectionSurfaceLoops, Dictionary<int, Loop[]> intersectionLoops, List<Loop> basePolygons)
         {
-            using (new ProfileSample("StoreOutput"))
+            foreach (var intersectionLoop in allIntersectionLoops)
             {
-                foreach (var intersectionLoop in allIntersectionLoops)
+                var surfaceLoops = intersectionSurfaceLoops[intersectionLoop.brushNodeID];
+                if (surfaceLoops.surfaces == null)
+                    continue;
+                if (intersectionLoop.edges.Length >= 3)
                 {
-                    var surfaceLoops = intersectionSurfaceLoops[intersectionLoop.brushNodeID];
-                    if (surfaceLoops.surfaces == null)
-                        continue;
-                    if (intersectionLoop.edges.Length >= 3)
-                    {
-                        surfaceLoops.surfaces[intersectionLoop.surfaceIndex][0].SetEdges(intersectionLoop.edges);
-                    } else
-                        surfaceLoops.surfaces[intersectionLoop.surfaceIndex][0].ClearAllEdges();
-                }
+                    surfaceLoops.surfaces[intersectionLoop.surfaceIndex][0].SetEdges(intersectionLoop.edges);
+                } else
+                    surfaceLoops.surfaces[intersectionLoop.surfaceIndex][0].ClearAllEdges();
+            }
 
-                foreach (var intersectionLoop in basePolygonLoops)
-                {
-                    basePolygons[intersectionLoop.surfaceIndex].SetEdges(intersectionLoop.edges);
-                }
+            foreach (var intersectionLoop in basePolygonLoops)
+            {
+                basePolygons[intersectionLoop.surfaceIndex].SetEdges(intersectionLoop.edges);
+            }
             
 
-                // Note: those above are only the INTERSECTING surfaces, below ALL surfaces
-                foreach (var pair in intersectionSurfaceLoops)
+            // Note: those above are only the INTERSECTING surfaces, below ALL surfaces
+            foreach (var pair in intersectionSurfaceLoops)
+            {
+                var surfaceLoops = pair.Value.surfaces;
+                if (surfaceLoops == null)
                 {
-                    var surfaceLoops = pair.Value.surfaces;
-                    if (surfaceLoops == null)
+                    intersectionLoops[pair.Key] = null;
+                } else
+                {
+                    var loops = new Loop[surfaceLoops.Length];
+                    for (int i = 0; i < surfaceLoops.Length; i++)
                     {
-                        intersectionLoops[pair.Key] = null;
-                    } else
-                    {
-                        var loops = new Loop[surfaceLoops.Length];
-                        for (int i = 0; i < surfaceLoops.Length; i++)
+                        var surfaceLoop = surfaceLoops[i];
+                        if (surfaceLoop == null ||
+                            surfaceLoop.Count == 0 ||
+                            surfaceLoop[0] == null ||
+                            !surfaceLoop[0].Valid)
                         {
-                            var surfaceLoop = surfaceLoops[i];
-                            if (surfaceLoop == null ||
-                                surfaceLoop.Count == 0 ||
-                                surfaceLoop[0] == null ||
-                                !surfaceLoop[0].Valid)
-                            {
-                                loops[i] = null;
-                                continue;
-                            }
-
-                            Debug.Assert(surfaceLoop[0].Valid && (int)surfaceLoop[0].info.interiorCategory < CategoryRoutingRow.Length);
-
-                            var intersectionLoop = surfaceLoop[0];
-                            loops[i] = intersectionLoop;
+                            loops[i] = null;
+                            continue;
                         }
-                        intersectionLoops[pair.Key] = loops;
+
+                        Debug.Assert(surfaceLoop[0].Valid && (int)surfaceLoop[0].info.interiorCategory < CategoryRoutingRow.Length);
+
+                        var intersectionLoop = surfaceLoop[0];
+                        loops[i] = intersectionLoop;
                     }
+                    intersectionLoops[pair.Key] = loops;
                 }
-            }
+            }            
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

@@ -69,118 +69,115 @@ namespace Chisel.Core
         // Note: Assumes polygons are convex
         public unsafe static OperationResult BooleanIntersectionOperation(in VertexSoup soup, Loop polygon1, Loop polygon2, List<Loop> resultLoops)
         {
-            using (new ProfileSample("BooleanIntersectionOperation"))
+            Loop newPolygon = null;
+            //if (AreLoopsOverlapping(polygon1, polygon2))
+            //    return CSGManagerPerformCSG.OperationResult.Overlapping;
+
+            var brush1 = polygon1.info.brush;
+            var mesh1 = BrushMeshManager.GetBrushMesh(brush1.BrushMesh.BrushMeshID);
+            var nodeToTreeSpaceInversed1 = brush1.TreeToNodeSpaceMatrix;
+            var nodeToTreeSpace1 = brush1.NodeToTreeSpaceMatrix;
+
+            var worldSpacePlanes1Length = mesh1.planes.Length;
+            var worldSpacePlanes1 = stackalloc float4[worldSpacePlanes1Length];
+            fixed (float4* mesh1Planes = &mesh1.planes[0])
             {
-                Loop newPolygon = null;
-                //if (AreLoopsOverlapping(polygon1, polygon2))
-                //    return CSGManagerPerformCSG.OperationResult.Overlapping;
+                CSGManagerPerformCSG.TransformByTransposedInversedMatrix(worldSpacePlanes1, (float4*)mesh1Planes, mesh1.planes.Length, math.transpose(nodeToTreeSpaceInversed1));
+            }
 
-                var brush1 = polygon1.info.brush;
-                var mesh1 = BrushMeshManager.GetBrushMesh(brush1.BrushMesh.BrushMeshID);
-                var nodeToTreeSpaceInversed1 = brush1.TreeToNodeSpaceMatrix;
-                var nodeToTreeSpace1 = brush1.NodeToTreeSpaceMatrix;
+            newPolygon = new Loop()
+            {
+                info = polygon1.info
+            };
 
-                var worldSpacePlanes1Length = mesh1.planes.Length;
-                var worldSpacePlanes1 = stackalloc float4[worldSpacePlanes1Length];
-                fixed (float4* mesh1Planes = &mesh1.planes[0])
+
+            var vertices = soup.vertices;
+            for (int i = 0; i < polygon2.edges.Count; i++)
+            {
+                var edge = polygon2.edges[i];
+                var worldVertex = new float4((vertices[edge.index1] + vertices[edge.index2]) * 0.5f, 1);
+                if (IsOutsidePlanes(worldSpacePlanes1, worldSpacePlanes1Length, worldVertex))
+                    continue;
+                //if (!newPolygon.indices.Contains(vertexIndex)) 
+                    newPolygon.edges.Add(edge);
+            }
+
+            if (newPolygon.edges.Count == polygon2.edges.Count) // all vertices of polygon2 are inside polygon1
+                return CSGManagerPerformCSG.OperationResult.Polygon2InsidePolygon1;
+
+
+            var brush2 = polygon2.info.brush;
+            var mesh2 = BrushMeshManager.GetBrushMesh(brush2.BrushMesh.BrushMeshID);
+            var nodeToTreeSpaceInversed2 = brush2.TreeToNodeSpaceMatrix;
+            var nodeToTreeSpace2 = brush2.NodeToTreeSpaceMatrix;
+
+            var worldSpacePlanes2Length = mesh2.planes.Length;
+            var worldSpacePlanes2 = stackalloc float4[mesh2.planes.Length];
+            fixed (float4* mesh2Planes = &mesh2.planes[0])
+            {
+                CSGManagerPerformCSG.TransformByTransposedInversedMatrix(worldSpacePlanes2, (float4*)mesh2Planes, mesh2.planes.Length, math.transpose(nodeToTreeSpaceInversed2));
+            }
+
+            if (newPolygon.edges.Count == 0) // no vertex of polygon2 is inside polygon1
+            {
+                // polygon edges are not intersecting
+                var edge = polygon1.edges[0];
+                var worldVertex = new float4((vertices[edge.index1] + vertices[edge.index2]) * 0.5f, 1);
+                if (IsOutsidePlanes(worldSpacePlanes2, worldSpacePlanes2Length, worldVertex))
+                    // no vertex of polygon1 can be inside polygon2
+                    return CSGManagerPerformCSG.OperationResult.Outside;
+
+                // all vertices of polygon1 must be inside polygon2
                 {
-                    CSGManagerPerformCSG.TransformByTransposedInversedMatrix(worldSpacePlanes1, (float4*)mesh1Planes, mesh1.planes.Length, math.transpose(nodeToTreeSpaceInversed1));
+                    resultLoops.Add(new Loop(polygon1));
+                    return CSGManagerPerformCSG.OperationResult.Cut;
+                    //return CSGManagerPerformCSG.OperationResult.Polygon1InsidePolygon2;
                 }
-
-                newPolygon = new Loop()
-                {
-                    info = polygon1.info
-                };
-
-
-                var vertices = soup.vertices;
-                for (int i = 0; i < polygon2.edges.Count; i++)
-                {
-                    var edge = polygon2.edges[i];
-                    var worldVertex = new float4((vertices[edge.index1] + vertices[edge.index2]) * 0.5f, 1);
-                    if (IsOutsidePlanes(worldSpacePlanes1, worldSpacePlanes1Length, worldVertex))
-                        continue;
-                    //if (!newPolygon.indices.Contains(vertexIndex)) 
-                        newPolygon.edges.Add(edge);
-                }
-
-                if (newPolygon.edges.Count == polygon2.edges.Count) // all vertices of polygon2 are inside polygon1
-                    return CSGManagerPerformCSG.OperationResult.Polygon2InsidePolygon1;
-
-
-                var brush2 = polygon2.info.brush;
-                var mesh2 = BrushMeshManager.GetBrushMesh(brush2.BrushMesh.BrushMeshID);
-                var nodeToTreeSpaceInversed2 = brush2.TreeToNodeSpaceMatrix;
-                var nodeToTreeSpace2 = brush2.NodeToTreeSpaceMatrix;
-
-                var worldSpacePlanes2Length = mesh2.planes.Length;
-                var worldSpacePlanes2 = stackalloc float4[mesh2.planes.Length];
-                fixed (float4* mesh2Planes = &mesh2.planes[0])
-                {
-                    CSGManagerPerformCSG.TransformByTransposedInversedMatrix(worldSpacePlanes2, (float4*)mesh2Planes, mesh2.planes.Length, math.transpose(nodeToTreeSpaceInversed2));
-                }
-
-                if (newPolygon.edges.Count == 0) // no vertex of polygon2 is inside polygon1
-                {
-                    // polygon edges are not intersecting
-                    var edge = polygon1.edges[0];
-                    var worldVertex = new float4((vertices[edge.index1] + vertices[edge.index2]) * 0.5f, 1);
-                    if (IsOutsidePlanes(worldSpacePlanes2, worldSpacePlanes2Length, worldVertex))
-                        // no vertex of polygon1 can be inside polygon2
-                        return CSGManagerPerformCSG.OperationResult.Outside;
-
-                    // all vertices of polygon1 must be inside polygon2
-                    {
-                        resultLoops.Add(new Loop(polygon1));
-                        return CSGManagerPerformCSG.OperationResult.Cut;
-                        //return CSGManagerPerformCSG.OperationResult.Polygon1InsidePolygon2;
-                    }
-                } else
-                {
-                    // check if all vertices of polygon1 are on or inside polygon2
-                    bool haveOutsideVertices = false;
-                    for (int i = 0; i < polygon1.edges.Count; i++)
-                    {
-                        var edge = polygon1.edges[i];
-                        var worldVertex = new float4((vertices[edge.index1] + vertices[edge.index2]) * 0.5f, 1);
-                        if (!IsOutsidePlanes(worldSpacePlanes2, worldSpacePlanes2Length, worldVertex))
-                            continue;
-                        haveOutsideVertices = true;
-                        break;
-                    }
-                    if (!haveOutsideVertices)
-                    {
-                        resultLoops.Add(new Loop(polygon1));
-                        return CSGManagerPerformCSG.OperationResult.Cut;
-                        //return CSGManagerPerformCSG.OperationResult.Polygon1InsidePolygon2;
-                    }
-                }
-
-                // we might be missing vertices on polygon1 that are inside polygon2 (intersections with other loops)
-                // TODO: optimize
+            } else
+            {
+                // check if all vertices of polygon1 are on or inside polygon2
+                bool haveOutsideVertices = false;
                 for (int i = 0; i < polygon1.edges.Count; i++)
                 {
                     var edge = polygon1.edges[i];
                     var worldVertex = new float4((vertices[edge.index1] + vertices[edge.index2]) * 0.5f, 1);
-                    if (IsOutsidePlanes(worldSpacePlanes2, worldSpacePlanes2Length, worldVertex))
+                    if (!IsOutsidePlanes(worldSpacePlanes2, worldSpacePlanes2Length, worldVertex))
                         continue;
-
-                    var edges = newPolygon.edges;
-                    for (int e=0;e<edges.Count;e++)
-                    {
-                        if (edges[e].index1 == edge.index1 &&
-                            edges[e].index2 == edge.index2)
-                            goto SkipEdge;
-                    }
-                    //if (!newPolygon.edges.Contains(edge))
-                        newPolygon.edges.Add(edge);
-                    SkipEdge:
-                    ;
+                    haveOutsideVertices = true;
+                    break;
                 }
-
-                resultLoops.Add(newPolygon);
-                return CSGManagerPerformCSG.OperationResult.Cut;
+                if (!haveOutsideVertices)
+                {
+                    resultLoops.Add(new Loop(polygon1));
+                    return CSGManagerPerformCSG.OperationResult.Cut;
+                    //return CSGManagerPerformCSG.OperationResult.Polygon1InsidePolygon2;
+                }
             }
+
+            // we might be missing vertices on polygon1 that are inside polygon2 (intersections with other loops)
+            // TODO: optimize
+            for (int i = 0; i < polygon1.edges.Count; i++)
+            {
+                var edge = polygon1.edges[i];
+                var worldVertex = new float4((vertices[edge.index1] + vertices[edge.index2]) * 0.5f, 1);
+                if (IsOutsidePlanes(worldSpacePlanes2, worldSpacePlanes2Length, worldVertex))
+                    continue;
+
+                var edges = newPolygon.edges;
+                for (int e=0;e<edges.Count;e++)
+                {
+                    if (edges[e].index1 == edge.index1 &&
+                        edges[e].index2 == edge.index2)
+                        goto SkipEdge;
+                }
+                //if (!newPolygon.edges.Contains(edge))
+                    newPolygon.edges.Add(edge);
+                SkipEdge:
+                ;
+            }
+
+            resultLoops.Add(newPolygon);
+            return CSGManagerPerformCSG.OperationResult.Cut;
         }
 
         #endregion
