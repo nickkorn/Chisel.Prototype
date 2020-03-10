@@ -34,135 +34,7 @@ namespace Chisel.Core
         }
 
         #endregion
-
-        #region SortIndices
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        static float3 FindPolygonCentroid(List<ushort> indices, NativeList<float3> vertices)
-        {
-            var centroid = float3.zero;
-            for (int i = 0; i < indices.Count; i++)
-                centroid += vertices[indices[i]];
-            return centroid / indices.Count;
-        }
-
-        static List<int2> s_SortStack = new List<int2>();
-        // TODO: sort by using plane information instead of unreliable floating point math ..
-        // TODO: make this work on non-convex polygons
-        static void SortIndices(List<ushort> indices, NativeList<float3> vertices, float3 normal)
-        {
-            // There's no point in trying to sort a point or a line 
-            if (indices.Count < 3)
-                return;
-
-            float3 tangentX, tangentY;
-            if (normal.x > normal.y)
-            {
-                if (normal.x > normal.z)
-                {
-                    tangentX = math.cross(normal, new float3(0, 1, 0));
-                    tangentY = math.cross(normal, tangentX);
-                } else
-                {
-                    tangentX = math.cross(normal, new float3(0, 0, 1));
-                    tangentY = math.cross(normal, tangentX);
-                }
-            } else
-            {
-                if (normal.y > normal.z)
-                {
-                    tangentX = math.cross(normal, new float3(1, 0, 0));
-                    tangentY = math.cross(normal, tangentX);
-                } else
-                {
-                    tangentX = math.cross(normal, new float3(0, 1, 0));
-                    tangentY = math.cross(normal, tangentX);
-                }
-            }
-
-            var centroid = FindPolygonCentroid(indices, vertices);
-            var center = new float2(math.dot(tangentX, centroid), // distance in direction of tangentX
-                                    math.dot(tangentY, centroid)); // distance in direction of tangentY
-#if true
-            s_SortStack.Clear();
-            s_SortStack.Add(new int2(0, indices.Count - 1));
-            while (s_SortStack.Count > 0)
-            {
-                var top = s_SortStack[s_SortStack.Count - 1];
-                s_SortStack.RemoveAt(s_SortStack.Count - 1);
-                var l = top.x;
-                var r = top.y;
-                var left = l;
-                var right = r;
-                var va = (float3)vertices[indices[(left + right) / 2]];
-                while (true)
-                {
-                    var a_angle = math.atan2(math.dot(tangentX, va) - center.x, math.dot(tangentY, va) - center.y);
-
-                    {
-                        var vb = (float3)vertices[indices[left]];
-                        var b_angle = math.atan2(math.dot(tangentX, vb) - center.x, math.dot(tangentY, vb) - center.y);
-                        while (b_angle > a_angle)
-                        {
-                            left++;
-                            vb = (float3)vertices[indices[left]];
-                            b_angle = math.atan2(math.dot(tangentX, vb) - center.x, math.dot(tangentY, vb) - center.y);
-                        }
-                    }
-
-                    {
-                        var vb = (float3)vertices[indices[right]];
-                        var b_angle = math.atan2(math.dot(tangentX, vb) - center.x, math.dot(tangentY, vb) - center.y);
-                        while (a_angle > b_angle)
-                        {
-                            right--;
-                            vb = (float3)vertices[indices[right]];
-                            b_angle = math.atan2(math.dot(tangentX, vb) - center.x, math.dot(tangentY, vb) - center.y);
-                        }
-                    }
-
-                    if (left <= right)
-                    {
-                        if (left != right)
-                        {
-                            var t = indices[left];
-                            indices[left] = indices[right];
-                            indices[right] = t;
-                        }
-
-                        left++;
-                        right--;
-                    }
-                    if (left > right)
-                        break;
-                }
-                if (l < right)
-                {
-                    s_SortStack.Add(new int2(l, right));
-                }
-                if (left < r)
-                {
-                    s_SortStack.Add(new int2(left, r));
-                }
-            }
-#else
-            // sort vertices according to their angle relative to the centroid on plane defined by tangentX/tangentY
-            vertices.Sort(delegate (Vector3 a, Vector3 b) 
-            {
-                var ax = math.dot(tangentX, a) - center.x;  // distance in direction of tangentX
-                var ay = math.dot(tangentY, a) - center.y;  // distance in direction of tangentY
-                var bx = math.dot(tangentX, b) - center.x;  // distance in direction of tangentX
-                var by = math.dot(tangentY, b) - center.y;  // distance in direction of tangentY
-
-                var a1 = math.atan2(ax, ay); // angle between ax/ay and cx/cy
-                var a2 = math.atan2(bx, by); // angle between bx/by and cx/cy
-                return (int)math.sign(a2 - a1);
-            });
-#endif
-        }
-
-        #endregion
-
+        
         #region IsOutsidePlanes
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -280,7 +152,6 @@ namespace Chisel.Core
                 {
                     foreach (var intersection in this.allIntersectionLoops)
                     {
-                        intersection.indices.Dispose();
                         intersection.edges.Dispose();
                     }
                     this.allIntersectionLoops.Clear();
@@ -388,13 +259,10 @@ namespace Chisel.Core
                             var intersectionLoop = new IntersectionLoop()
                             {
                                 segment         = newBrushData.planeSegment,
-                                indices         = new NativeList<ushort>(loop.indices.Count, Allocator.Persistent),
                                 edges           = new NativeList<Edge>(loop.edges.Count, Allocator.Persistent),
                                 surfaceIndex    = s,
                                 brushNodeID     = treeBrushes[b0]
                             };
-                            for (int i = 0; i < loop.indices.Count; i++)
-                                intersectionLoop.indices.Add(loop.indices[i]);
                             for (int i = 0; i < loop.edges.Count; i++)
                                 intersectionLoop.edges.Add(loop.edges[i]);
 
@@ -660,7 +528,6 @@ namespace Chisel.Core
                                     for (int l0 = intersectionSurfaceList.Count - 1; l0 >= 0; l0--)
                                     {
                                         var intersectionSurface0 = intersectionData.allIntersectionLoops[intersectionSurfaceList[l0]];
-                                        var indices              = intersectionSurface0.indices;
                                         var edges                = intersectionSurface0.edges;
                                         for (int l1 = 0; l1 < intersectionSurfaceList.Count; l1++)
                                         {
@@ -673,7 +540,6 @@ namespace Chisel.Core
                                                 otherPlanesSegment  = intersectionData.allIntersectionLoops[intersectionSurfaceList[l1]].segment,
                                                 selfPlanesSegment   = intersectionSurface0.segment,
                                                 vertexSoup          = vertexSoup,
-                                                indices             = indices,
                                                 edges               = edges
                                             };
                                             intersectionJob.Run();
@@ -692,7 +558,6 @@ namespace Chisel.Core
                                 //       both sides of each edge on a brush. 
                                 for (int b = 0; b < intersectionData.basePolygonLoops.Length; b++)
                                 {
-                                    var indices = intersectionData.basePolygonLoops[b].indices;
                                     var edges   = intersectionData.basePolygonLoops[b].edges;
                                     foreach (var brushPlaneSegment in intersectionData.brushPlaneSegments)
                                     {
@@ -702,7 +567,6 @@ namespace Chisel.Core
                                             otherPlanesSegment  = brushPlaneSegment,
                                             selfPlanesSegment   = intersectionData.worldSpacePlanes0Segment,
                                             vertexSoup          = vertexSoup,
-                                            indices             = indices,
                                             edges               = edges
                                         };
                                         intersectionJob.Run();
@@ -718,7 +582,6 @@ namespace Chisel.Core
                                     if (intersectionSurfaceList.Count == 0)
                                         continue;
                                 
-                                    var basePolygonIndices  = intersectionData.basePolygonLoops[s].indices;
                                     var basePolygonEdges    = intersectionData.basePolygonLoops[s].edges;
                                     for (int l0 = 0; l0 < intersectionSurfaceList.Count; l0++)
                                     {
@@ -726,10 +589,8 @@ namespace Chisel.Core
                                         var intersectionJob2 = new FindLoopVertexOverlapsJob
                                         {
                                             selfPlanes      = intersectionData.GetPlanes(intersectionSurface.segment),
-                                            otherIndices    = basePolygonIndices,
                                             otherEdges      = basePolygonEdges,
                                             vertexSoup      = vertexSoup,
-                                            indices         = intersectionSurface.indices,
                                             edges           = intersectionSurface.edges
                                         };
                                         intersectionJob2.Run();
@@ -741,10 +602,6 @@ namespace Chisel.Core
                             {
                                 for (int i = intersectionData.allIntersectionLoops.Count - 1; i >= 0; i--)
                                 {
-                                    var indices = intersectionData.allIntersectionLoops[i].indices;
-                                    var removeIdenticalIndicesJob = new RemoveIdenticalIndicesJob { indices = indices };
-                                    removeIdenticalIndicesJob.Run();
-
                                     // TODO: might not be necessary
                                     var edges = intersectionData.allIntersectionLoops[i].edges;
                                     var removeIdenticalIndicesEdgesJob = new RemoveIdenticalIndicesEdgesJob { edges = edges };
@@ -753,10 +610,6 @@ namespace Chisel.Core
 
                                 for (int i = intersectionData.basePolygonLoops.Length - 1; i >= 0; i--)
                                 {
-                                    var indices = intersectionData.basePolygonLoops[i].indices;
-                                    var removeIdenticalIndicesJob = new RemoveIdenticalIndicesJob { indices = indices };
-                                    removeIdenticalIndicesJob.Run();
-
                                     // TODO: might not be necessary
                                     var edges = intersectionData.basePolygonLoops[i].edges;
                                     var removeIdenticalIndicesEdgesJob = new RemoveIdenticalIndicesEdgesJob { edges = edges };

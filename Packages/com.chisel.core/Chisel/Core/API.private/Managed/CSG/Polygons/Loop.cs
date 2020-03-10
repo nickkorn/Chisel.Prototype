@@ -32,14 +32,13 @@ namespace Chisel.Core
         }
 #endif
 
-        public readonly List<ushort>        indices     = new List<ushort>();
         public List<Edge>                   edges       = new List<Edge>();
         public bool[]                       destroyed;
 
         [NonSerialized] public List<Loop>   holes       = new List<Loop>();
         [NonSerialized] public SurfaceInfo  info;
 
-        public bool Valid { [MethodImpl(MethodImplOptions.AggressiveInlining)] get { return indices.Count >= 3 || edges.Count >= 3; } }
+        public bool Valid { [MethodImpl(MethodImplOptions.AggressiveInlining)] get { return edges.Count >= 3; } }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public Loop()
@@ -50,7 +49,6 @@ namespace Chisel.Core
         public Loop(Loop original)
         {
             this.edges  .AddRange(original.edges);
-            this.indices.AddRange(original.indices);
             this.info = original.info;
         }
 
@@ -58,7 +56,6 @@ namespace Chisel.Core
         public Loop(Loop original, CategoryGroupIndex newHoleCategory)
         {
             this.edges.AddRange(original.edges);
-            this.indices.AddRange(original.indices);
             this.info = original.info;
             this.info.interiorCategory = newHoleCategory;
         }
@@ -73,31 +70,15 @@ namespace Chisel.Core
             }
             edges.Add(new Edge() { index1 = srcIndices[offset + length - 1], index2 = srcIndices[offset] });
 
-            indices.Capacity = length;
-            for (int j = 0; j < length; j++, offset++)
-                indices.Add(srcIndices[offset]);
-
-            //AddEdges(indices);
             this.info = surfaceInfo;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ClearAllEdges()
         {
-            indices.Clear();
             edges.Clear();
         }
 
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal void SetIndices(NativeList<ushort> srcIndices)
-        {
-            indices.Clear();
-            if (indices.Capacity < srcIndices.Length)
-                indices.Capacity = srcIndices.Length;
-            for (int j = 0; j < srcIndices.Length; j++)
-                indices.Add(srcIndices[j]);
-        }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal void SetEdges(NativeList<Edge> srcEdges)
@@ -112,32 +93,6 @@ namespace Chisel.Core
 
         static HashSet<Edge> s_UniqueEdges = new HashSet<Edge>();
         
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void AddEdges(List<ushort> indices)
-        {
-            if (indices.Count < 3)
-                return;
-
-            s_UniqueEdges.Clear();
-            if (edges.Capacity < edges.Count + indices.Count)
-                edges.Capacity = edges.Count + indices.Count;
-            for (int i = 0; i < indices.Count - 1; i++)
-            {
-                Debug.Assert(indices[i] != indices[i + 1], "indices[i] != indices[i + 1]");
-                s_UniqueEdges.Add(new Edge() { index1 = indices[i], index2 = indices[i + 1] });
-            }
-            Debug.Assert(indices[indices.Count - 1] != indices[0], "indices[indices.Count - 1] != indices[0]");
-            s_UniqueEdges.Add(new Edge() { index1 = indices[indices.Count - 1], index2 = indices[0] });
-
-            for (int e = 0; e < edges.Count; e++)
-            {
-                if (s_UniqueEdges.Contains(edges[e]))
-                    s_UniqueEdges.Remove(edges[e]);
-            }
-
-            edges.AddRange(s_UniqueEdges);
-        }
-
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool AddEdges(List<Edge> addEdges, bool removeDuplicates = false)
         {

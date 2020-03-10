@@ -25,45 +25,6 @@ namespace Chisel.Core
         public const float  kNormalEpsilon			= 0.9999f;
         public const float  kPlaneDistanceEpsilon	= 0.0006f;
 
-        
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal static bool IsDegenerate(in VertexSoup soup, NativeList<ushort> indices)
-        {
-            if (indices.Length < 3)
-                return true;
-
-            var vertices = soup.vertices;
-            for (int i = 0; i < indices.Length; i++)
-            {
-                var vertexIndex1 = indices[i];
-                var vertex1      = vertices[vertexIndex1];
-                for (int j = 1; j < indices.Length - 1; j++)
-                {
-                    int a = (i + j) % indices.Length;
-                    int b = (a + 1) % indices.Length;
-
-                    var vertexIndexA = indices[a];
-                    var vertexIndexB = indices[b];
-
-                    // Loop loops back on same vertex
-                    if (vertexIndex1 == vertexIndexA || 
-                        vertexIndex1 == vertexIndexB ||
-                        vertexIndexA == vertexIndexB)
-                        continue;
-
-                    var vertexA = vertices[vertexIndexA];
-                    var vertexB = vertices[vertexIndexB];
-
-                    var distance = GeometryMath.SqrDistanceFromPointToLineSegment(vertex1, vertexA, vertexB);
-                    if (distance <= CSGManagerPerformCSG.kSqrDistanceEpsilon)
-                        return true;
-                }
-            }
-            return false;
-        }
-        
-        
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static bool IsDegenerate(in VertexSoup soup, NativeList<Edge> edges)
         {
@@ -143,7 +104,6 @@ namespace Chisel.Core
                 var lastEdge     = firstEdge + polygon.edgeCount;
                 var indexCount   = lastEdge - firstEdge;
 
-                using (var indices = new NativeList<ushort>(indexCount, Allocator.TempJob))
                 using (var edges   = new NativeList<Edge>(indexCount, Allocator.TempJob))
                 {
                     float4 worldPlane = float4.zero;
@@ -155,7 +115,6 @@ namespace Chisel.Core
                         nodeToTreeSpaceMatrix                   = nodeToTreeSpaceMatrix,
                         nodeToTreeSpaceInvertedTransposedMatrix = nodeToTreeSpaceInvertedTransposedMatrix,
                         vertexSoup                              = outputLoops.vertexSoup,
-                        indices                                 = indices,
                         edges                                   = edges,
 
                         aabb                                    = &aabb,
@@ -184,8 +143,6 @@ namespace Chisel.Core
                         holes = new List<Loop>()
                     };
 
-                    for (int i = 0; i < indices.Length; i++)
-                        surfacePolygon.indices.Add(indices[i]);
                     for (int i = 0; i < edges.Length; i++)
                         surfacePolygon.edges.Add(edges[i]);
                     outputLoops.basePolygons.Add(surfacePolygon);

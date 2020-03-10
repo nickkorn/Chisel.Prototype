@@ -17,67 +17,6 @@ namespace Chisel.Core
 #if USE_MANAGED_CSG_IMPLEMENTATION
     
     [BurstCompile(Debug = false)]
-    public unsafe struct RemoveIdenticalIndicesJob : IJob
-    {
-        public NativeList<ushort> indices;
-
-        public static void RemoveDuplicates(ref NativeList<ushort> indices)
-        {
-            if (indices.Length < 3)
-            {
-                indices.Clear();
-                return;
-            }
-
-            var lastValidIndex = indices.Length;
-            while (lastValidIndex > 3 && indices[lastValidIndex - 1] == indices[0])
-                lastValidIndex--;
-            if (lastValidIndex != indices.Length)
-                indices.Resize(lastValidIndex, NativeArrayOptions.UninitializedMemory);
-
-            if (indices.Length < 3)
-            {
-                indices.Clear();
-                return;
-            }
-
-            lastValidIndex = 0;
-            for (int v0 = 0, v1 = 1; v1 < indices.Length; v0 = v1, v1++)
-            {
-                if (indices[v0] == indices[v1])
-                    break;
-                lastValidIndex++;
-            }
-            if (lastValidIndex == indices.Length)
-                return;
-
-            var newIndices = (ushort*)UnsafeUtility.Malloc(indices.Length * sizeof(ushort), 4, Allocator.TempJob);
-            {
-                newIndices[0] = indices[0];
-                int newIndicesLength = 1;
-                for (int v0 = 0, v1 = 1; v1 < indices.Length; v0 = v1, v1++)
-                {
-                    if (indices[v0] == indices[v1])
-                        continue;
-                    newIndices[newIndicesLength] = indices[v1]; newIndicesLength++;
-                }
-                if (newIndicesLength != indices.Length)
-                {
-                    indices.Clear();
-                    if (newIndicesLength >= 3)
-                        indices.AddRange(newIndices, newIndicesLength);
-                }
-            }
-            UnsafeUtility.Free(newIndices, Allocator.TempJob);
-        }
-
-        public void Execute()
-        {
-            RemoveDuplicates(ref indices);
-        }
-    }
-    
-    [BurstCompile(Debug = false)]
     public unsafe struct RemoveIdenticalIndicesEdgesJob : IJob
     {
         public NativeList<Edge> edges;
@@ -118,7 +57,6 @@ namespace Chisel.Core
         [ReadOnly] public float4x4  nodeToTreeSpaceInvertedTransposedMatrix;
 
         public VertexSoup           vertexSoup;
-        public NativeList<ushort>   indices;
         public NativeList<Edge>     edges;
 
         // TODO: do this in separate loop so we don't need to rely on pointers to make this work
@@ -162,7 +100,6 @@ namespace Chisel.Core
                     edges[edges.Length - 1] = edge;
                 }
                 edges.Add(new Edge() { index1 = newIndex });
-                indices.Add(newIndex);
             }
             {
                 var edge = edges[edges.Length - 1];
@@ -170,14 +107,12 @@ namespace Chisel.Core
                 edges[edges.Length - 1] = edge;
             }
 
-            RemoveIdenticalIndicesJob.RemoveDuplicates(ref indices);
             RemoveIdenticalIndicesEdgesJob.RemoveDuplicates(ref edges);
 
             if (edges.Length > 0 &&
                 CSGManagerPerformCSG.IsDegenerate(vertexSoup, edges))
             {
                 edges.Clear();
-                indices.Clear();
             }
 
             if (edges.Length > 0)

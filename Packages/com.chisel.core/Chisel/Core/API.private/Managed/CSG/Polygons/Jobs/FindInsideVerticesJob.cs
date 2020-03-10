@@ -19,7 +19,6 @@ namespace Chisel.Core
         public int2                 segment;
         public int                  surfaceIndex;
         public int                  brushNodeID;
-        public NativeList<ushort>   indices;
         public NativeList<Edge>     edges;
     }
 
@@ -71,16 +70,12 @@ namespace Chisel.Core
 
             foreach (var intersectionLoop in allIntersectionLoops)
             {
-                if (intersectionLoop.indices.IsCreated)
-                    intersectionLoop.indices.Dispose();
                 if (intersectionLoop.edges.IsCreated)
                     intersectionLoop.edges.Dispose();
             }
 
             foreach (var intersectionLoop in basePolygonLoops)
             {
-                if (intersectionLoop.indices.IsCreated)
-                    intersectionLoop.indices.Dispose();
                 if (intersectionLoop.edges.IsCreated)
                     intersectionLoop.edges.Dispose();
             }
@@ -95,9 +90,8 @@ namespace Chisel.Core
                     var surfaceLoops = intersectionSurfaceLoops[intersectionLoop.brushNodeID];
                     if (surfaceLoops.surfaces == null)
                         continue;
-                    if (intersectionLoop.indices.Length >= 3)
+                    if (intersectionLoop.edges.Length >= 3)
                     {
-                        surfaceLoops.surfaces[intersectionLoop.surfaceIndex][0].SetIndices(intersectionLoop.indices);
                         surfaceLoops.surfaces[intersectionLoop.surfaceIndex][0].SetEdges(intersectionLoop.edges);
                     } else
                         surfaceLoops.surfaces[intersectionLoop.surfaceIndex][0].ClearAllEdges();
@@ -105,20 +99,11 @@ namespace Chisel.Core
 
                 foreach (var intersectionLoop in basePolygonLoops)
                 {
-                    basePolygons[intersectionLoop.surfaceIndex].SetIndices(intersectionLoop.indices);
                     basePolygons[intersectionLoop.surfaceIndex].SetEdges(intersectionLoop.edges);
                 }
             
 
                 // Note: those above are only the INTERSECTING surfaces, below ALL surfaces
-                /*
-                for (int i = 0; i < basePolygons.Count; i++)
-                {
-                    var basePolygon = basePolygons[i];
-                    basePolygon.edges.Clear();
-                    basePolygon.AddEdges(basePolygon.indices);
-                }
-                */
                 foreach (var pair in intersectionSurfaceLoops)
                 {
                     var surfaceLoops = pair.Value.surfaces;
@@ -143,8 +128,6 @@ namespace Chisel.Core
                             Debug.Assert(surfaceLoop[0].Valid && (int)surfaceLoop[0].info.interiorCategory < CategoryRoutingRow.Length);
 
                             var intersectionLoop = surfaceLoop[0];
-                            //intersectionLoop.edges.Clear();
-                            //intersectionLoop.AddEdges(intersectionLoop.indices);
                             loops[i] = intersectionLoop;
                         }
                         intersectionLoops[pair.Key] = loops;
@@ -196,13 +179,10 @@ namespace Chisel.Core
                 var intersectionLoop = new IntersectionLoop()
                 {
                     segment         = worldSpacePlanes0Segment,
-                    indices         = new NativeList<ushort>(loop.indices.Count, Allocator.Persistent),
                     edges           = new NativeList<Edge>(loop.edges.Count, Allocator.Persistent),
                     surfaceIndex    = s,
                     brushNodeID     = brush0.brushNodeID
                 };
-                for (int i = 0; i < loop.indices.Count; i++)
-                    intersectionLoop.indices.Add(loop.indices[i]);
                 for (int i = 0; i < loop.edges.Count; i++)
                     intersectionLoop.edges.Add(loop.edges[i]);
 
@@ -244,13 +224,10 @@ namespace Chisel.Core
                     var intersectionLoop = new IntersectionLoop()
                     {
                         segment         = segment,
-                        indices         = new NativeList<ushort>(loop.indices.Count, Allocator.Persistent),
                         edges           = new NativeList<Edge>(loop.edges.Count, Allocator.Persistent),
                         surfaceIndex    = s,
                         brushNodeID     = pair.Key
                     }; 
-                    for (int i = 0; i < loop.indices.Count; i++)
-                        intersectionLoop.indices.Add(loop.indices[i]);
                     for (int i = 0; i < loop.edges.Count; i++)
                         intersectionLoop.edges.Add(loop.edges[i]);
 

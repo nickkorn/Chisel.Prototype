@@ -94,17 +94,17 @@ namespace Chisel.Core
 
 
                 var vertices = soup.vertices;
-                for (int i = 0; i < polygon2.indices.Count; i++)
+                for (int i = 0; i < polygon2.edges.Count; i++)
                 {
-                    var edge = polygon2.indices[i];
-                    var worldVertex = new float4(vertices[edge], 1);
+                    var edge = polygon2.edges[i];
+                    var worldVertex = new float4((vertices[edge.index1] + vertices[edge.index2]) * 0.5f, 1);
                     if (IsOutsidePlanes(worldSpacePlanes1, worldSpacePlanes1Length, worldVertex))
                         continue;
                     //if (!newPolygon.indices.Contains(vertexIndex)) 
-                        newPolygon.indices.Add(edge);
+                        newPolygon.edges.Add(edge);
                 }
 
-                if (newPolygon.indices.Count == polygon2.indices.Count) // all vertices of polygon2 are inside polygon1
+                if (newPolygon.edges.Count == polygon2.edges.Count) // all vertices of polygon2 are inside polygon1
                     return CSGManagerPerformCSG.OperationResult.Polygon2InsidePolygon1;
 
 
@@ -120,11 +120,11 @@ namespace Chisel.Core
                     CSGManagerPerformCSG.TransformByTransposedInversedMatrix(worldSpacePlanes2, (float4*)mesh2Planes, mesh2.planes.Length, math.transpose(nodeToTreeSpaceInversed2));
                 }
 
-                if (newPolygon.indices.Count == 0) // no vertex of polygon2 is inside polygon1
+                if (newPolygon.edges.Count == 0) // no vertex of polygon2 is inside polygon1
                 {
                     // polygon edges are not intersecting
-                    var edge = polygon1.indices[0];
-                    var worldVertex = new float4(vertices[edge], 1);
+                    var edge = polygon1.edges[0];
+                    var worldVertex = new float4((vertices[edge.index1] + vertices[edge.index2]) * 0.5f, 1);
                     if (IsOutsidePlanes(worldSpacePlanes2, worldSpacePlanes2Length, worldVertex))
                         // no vertex of polygon1 can be inside polygon2
                         return CSGManagerPerformCSG.OperationResult.Outside;
@@ -139,10 +139,10 @@ namespace Chisel.Core
                 {
                     // check if all vertices of polygon1 are on or inside polygon2
                     bool haveOutsideVertices = false;
-                    for (int i = 0; i < polygon1.indices.Count; i++)
+                    for (int i = 0; i < polygon1.edges.Count; i++)
                     {
-                        var edge = polygon1.indices[i];
-                        var worldVertex = new float4(vertices[edge], 1);
+                        var edge = polygon1.edges[i];
+                        var worldVertex = new float4((vertices[edge.index1] + vertices[edge.index2]) * 0.5f, 1);
                         if (!IsOutsidePlanes(worldSpacePlanes2, worldSpacePlanes2Length, worldVertex))
                             continue;
                         haveOutsideVertices = true;
@@ -158,58 +158,29 @@ namespace Chisel.Core
 
                 // we might be missing vertices on polygon1 that are inside polygon2 (intersections with other loops)
                 // TODO: optimize
-                for (int i = 0; i < polygon1.indices.Count; i++)
+                for (int i = 0; i < polygon1.edges.Count; i++)
                 {
-                    var edge = polygon1.indices[i];
-                    var worldVertex = new float4(vertices[edge], 1);
+                    var edge = polygon1.edges[i];
+                    var worldVertex = new float4((vertices[edge.index1] + vertices[edge.index2]) * 0.5f, 1);
                     if (IsOutsidePlanes(worldSpacePlanes2, worldSpacePlanes2Length, worldVertex))
                         continue;
 
-                    if (!newPolygon.indices.Contains(edge))
-                        newPolygon.indices.Add(edge);
+                    var edges = newPolygon.edges;
+                    for (int e=0;e<edges.Count;e++)
+                    {
+                        if (edges[e].index1 == edge.index1 &&
+                            edges[e].index2 == edge.index2)
+                            goto SkipEdge;
+                    }
+                    //if (!newPolygon.edges.Contains(edge))
+                        newPolygon.edges.Add(edge);
+                    SkipEdge:
+                    ;
                 }
-                // We need to resort the indices now
-                // TODO: find a way to not have to do this
-                SortIndices(newPolygon.indices, vertices, newPolygon.info.worldPlane.xyz);
 
-                newPolygon.AddEdges(newPolygon.indices);
                 resultLoops.Add(newPolygon);
                 return CSGManagerPerformCSG.OperationResult.Cut;
             }
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal unsafe static bool IsPointInPolygon(float3 right, float3 forward, List<ushort> indices, in VertexSoup soup, float3 point)
-        {
-            var px = math.dot(right, point);
-            var py = math.dot(forward, point);
-
-            float ix, iy, jx, jy;
-
-            var vert = soup.vertices[indices[indices.Count - 1]];
-            ix = math.dot(right,   vert);
-            iy = math.dot(forward, vert);
-
-            bool result = false;
-            for (int i = 0; i < indices.Count; i++)
-            {
-                jx = ix;
-                jy = iy;
-
-                vert = soup.vertices[indices[i]];
-                ix = math.dot(right,   vert);
-                iy = math.dot(forward, vert);
-
-                if ((py >= iy && py < jy) ||
-                    (py >= jy && py < iy))
-                {
-                    if (ix + (py - iy) / (jy - iy) * (jx - ix) < px)
-                    {
-                        result = !result;
-                    }
-                }
-            }
-            return result;
         }
 
         #endregion
