@@ -23,6 +23,8 @@ namespace Chisel.Core
             UnityEngine.Profiling.Profiler.BeginSample(name);
 #endif
         }
+
+        [BurstDiscard]
         public void Dispose()
         {
 #if DO_PROFILING

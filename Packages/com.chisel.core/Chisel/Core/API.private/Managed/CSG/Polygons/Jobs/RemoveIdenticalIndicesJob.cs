@@ -16,7 +16,7 @@ namespace Chisel.Core
 {
 #if USE_MANAGED_CSG_IMPLEMENTATION
     
-    [BurstCompile]
+    [BurstCompile(Debug = false)]
     public unsafe struct RemoveIdenticalIndicesJob : IJob
     {
         public NativeList<ushort> indices;
@@ -76,13 +76,40 @@ namespace Chisel.Core
             RemoveDuplicates(ref indices);
         }
     }
+    
+    [BurstCompile(Debug = false)]
+    public unsafe struct RemoveIdenticalIndicesEdgesJob : IJob
+    {
+        public NativeList<Edge> edges;
+
+        public static void RemoveDuplicates(ref NativeList<Edge> edges)
+        {
+            if (edges.Length < 3)
+            {
+                edges.Clear();
+                return;
+            }
+
+            for (int e = edges.Length - 1; e >= 0; e--)
+            {
+                if (edges[e].index1 != edges[e].index2)
+                    continue;
+                edges.RemoveAtSwapBack(e);
+            }
+        }
+
+        public void Execute()
+        {
+            RemoveDuplicates(ref edges);
+        }
+    }
 
     public struct AABB { public float3 min, max; }
 
 
     // TODO: probably makes sense to break this up into multiple pieces/multiple jobs that can run parallel,
     //      but requires that change some storage formats first
-    [BurstCompile]
+    [BurstCompile(Debug = false)]
     public unsafe struct CopyPolygonToIndicesJob : IJob
     {
         [ReadOnly] public BlobAssetReference<BrushMeshBlob> mesh;

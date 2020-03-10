@@ -15,7 +15,7 @@ namespace Chisel.Core
 {
 #if USE_MANAGED_CSG_IMPLEMENTATION
     
-    [BurstCompile]
+    [BurstCompile(Debug = false)]
     public struct MergeLoopVerticesJob : IJob
     {
         // Add [NativeDisableContainerSafetyRestriction] when done, for performance

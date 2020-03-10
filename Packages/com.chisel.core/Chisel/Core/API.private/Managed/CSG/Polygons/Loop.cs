@@ -39,7 +39,7 @@ namespace Chisel.Core
         [NonSerialized] public List<Loop>   holes       = new List<Loop>();
         [NonSerialized] public SurfaceInfo  info;
 
-        public bool Valid { [MethodImpl(MethodImplOptions.AggressiveInlining)] get { return indices.Count >= 3; } }
+        public bool Valid { [MethodImpl(MethodImplOptions.AggressiveInlining)] get { return indices.Count >= 3 || edges.Count >= 3; } }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public Loop()
@@ -69,39 +69,17 @@ namespace Chisel.Core
             indices.Capacity = length;
             for (int j = 0; j < length; j++, offset++)
                 indices.Add(srcIndices[offset]);
+            AddEdges(indices);
             this.info = surfaceInfo;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void ClearAllIndices()
+        public void ClearAllEdges()
         {
             indices.Clear();
             edges.Clear();
         }
 
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal void SetIndices(NativeList<ushort> srcIndices, int offset, int length)
-        {
-            indices.Clear();
-            if (indices.Capacity < length)
-                indices.Capacity = length;
-            for (int j = 0; j < length; j++, offset++)
-                indices.Add(srcIndices[offset]);
-        }
-
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal void SetIndices(List<ushort> srcIndices)
-        {
-            if (indices == srcIndices)
-                return;
-            indices.Clear();
-            if (indices.Capacity < srcIndices.Count)
-                indices.Capacity = srcIndices.Count;
-            for (int j = 0; j < srcIndices.Count; j++)
-                indices.Add(srcIndices[j]);
-        }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal void SetIndices(NativeList<ushort> srcIndices)
@@ -114,12 +92,13 @@ namespace Chisel.Core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal unsafe void SetIndices(ushort* srcIndices, int offset, int length)
+        internal void SetEdges(NativeList<Edge> srcEdges)
         {
-            indices.Clear();
-            indices.Capacity = length;
-            for (int j = 0; j < length; j++, offset++)
-                indices.Add(srcIndices[offset]);
+            edges.Clear();
+            if (edges.Capacity < srcEdges.Length)
+                edges.Capacity = srcEdges.Length;
+            for (int j = 0; j < srcEdges.Length; j++)
+                edges.Add(srcEdges[j]);
         }
 
 

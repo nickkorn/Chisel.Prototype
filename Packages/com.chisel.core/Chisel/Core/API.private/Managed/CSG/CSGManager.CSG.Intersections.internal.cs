@@ -279,7 +279,10 @@ namespace Chisel.Core
                 if (this.allIntersectionLoops != null)
                 {
                     foreach (var intersection in this.allIntersectionLoops)
+                    {
                         intersection.indices.Dispose();
+                        intersection.edges.Dispose();
+                    }
                     this.allIntersectionLoops.Clear();
                 }
                 brushDataList.Clear();
@@ -386,12 +389,14 @@ namespace Chisel.Core
                             {
                                 segment         = newBrushData.planeSegment,
                                 indices         = new NativeList<ushort>(loop.indices.Count, Allocator.Persistent),
+                                edges           = new NativeList<Edge>(loop.edges.Count, Allocator.Persistent),
                                 surfaceIndex    = s,
                                 brushNodeID     = treeBrushes[b0]
                             };
-
                             for (int i = 0; i < loop.indices.Count; i++)
                                 intersectionLoop.indices.Add(loop.indices[i]);
+                            for (int i = 0; i < loop.edges.Count; i++)
+                                intersectionLoop.edges.Add(loop.edges[i]);
 
                             this.allIntersectionLoops.Add(intersectionLoop);
                             newBrushData.basePolygonLoops[s] = intersectionLoop;
@@ -434,8 +439,10 @@ namespace Chisel.Core
                         var loops10 = new SurfaceLoops(blobMesh1.Value.localPlanes.Length);
 
 
+                        UnityEngine.Profiling.Profiler.BeginSample("SharedPlaneData.Allocate");
                         using (var sharedPlaneData = new SharedPlaneData(brushInfo0, brushInfo1, brush0, blobMesh0, brush1, blobMesh1, type, Allocator.TempJob))
                         {
+                            UnityEngine.Profiling.Profiler.EndSample();
                             using (new ProfileSample("SharedPlaneData.Run"))
                             {
                                 sharedPlaneData.Run();
@@ -520,7 +527,8 @@ namespace Chisel.Core
                                         // Find all edges of brush2 that intersect brush1, and put their intersections into the appropriate loops
                                         var findIntersectionsJob = new FindIntersectionsJob
                                         {
-                                            usedPlanePairs          = sharedPlaneData.usedPlanePairs1,
+                                            usedPlanePairs1         = sharedPlaneData.usedPlanePairs1,
+                                            vertexSoup1             = sharedPlaneData.vertexSoup1,
                                             intersectingPlanes0     = sharedPlaneData.intersectingPlanes0, 
                                             intersectingPlanes1     = sharedPlaneData.intersectingPlanes1,
                                             nodeToTreeSpaceMatrix0  = sharedPlaneData.nodeToTreeSpaceMatrix0,
@@ -544,7 +552,8 @@ namespace Chisel.Core
                                         // Find all edges of brush2 that intersect brush1, and put their intersections into the appropriate loops
                                         var findIntersectionsJob = new FindIntersectionsJob
                                         {
-                                            usedPlanePairs          = sharedPlaneData.usedPlanePairs0,
+                                            usedPlanePairs1          = sharedPlaneData.usedPlanePairs0,
+                                            vertexSoup1              = sharedPlaneData.vertexSoup0,
                                             intersectingPlanes0     = sharedPlaneData.intersectingPlanes1, 
                                             intersectingPlanes1     = sharedPlaneData.intersectingPlanes0,
                                             nodeToTreeSpaceMatrix0  = sharedPlaneData.nodeToTreeSpaceMatrix0,
@@ -638,7 +647,10 @@ namespace Chisel.Core
 
                         using (var intersectionData = new OverlapIntersectionData(brush0, meshBlob, outputLoops.intersectionSurfaceLoops, outputLoops.basePolygons))
                         {
-                            intersectionData.Execute();
+                            using (new ProfileSample("OverlapIntersectionData.Execute"))
+                            {
+                                intersectionData.Execute();
+                            }
 
                             using (new ProfileSample("Find_intersectionLoop_intersectionLoop_intersections"))
                             {
@@ -649,7 +661,7 @@ namespace Chisel.Core
                                     {
                                         var intersectionSurface0 = intersectionData.allIntersectionLoops[intersectionSurfaceList[l0]];
                                         var indices              = intersectionSurface0.indices;
-
+                                        var edges                = intersectionSurface0.edges;
                                         for (int l1 = 0; l1 < intersectionSurfaceList.Count; l1++)
                                         {
                                             if (l0 == l1)
@@ -661,7 +673,8 @@ namespace Chisel.Core
                                                 otherPlanesSegment  = intersectionData.allIntersectionLoops[intersectionSurfaceList[l1]].segment,
                                                 selfPlanesSegment   = intersectionSurface0.segment,
                                                 vertexSoup          = vertexSoup,
-                                                indices             = indices
+                                                indices             = indices,
+                                                edges               = edges
                                             };
                                             intersectionJob.Run();
 
@@ -680,6 +693,7 @@ namespace Chisel.Core
                                 for (int b = 0; b < intersectionData.basePolygonLoops.Length; b++)
                                 {
                                     var indices = intersectionData.basePolygonLoops[b].indices;
+                                    var edges   = intersectionData.basePolygonLoops[b].edges;
                                     foreach (var brushPlaneSegment in intersectionData.brushPlaneSegments)
                                     {
                                         var intersectionJob = new FindLoopPlaneIntersectionsJob()
@@ -688,7 +702,8 @@ namespace Chisel.Core
                                             otherPlanesSegment  = brushPlaneSegment,
                                             selfPlanesSegment   = intersectionData.worldSpacePlanes0Segment,
                                             vertexSoup          = vertexSoup,
-                                            indices             = indices
+                                            indices             = indices,
+                                            edges               = edges
                                         };
                                         intersectionJob.Run();
                                     }
@@ -703,7 +718,8 @@ namespace Chisel.Core
                                     if (intersectionSurfaceList.Count == 0)
                                         continue;
                                 
-                                    var basePolygonIndices = intersectionData.basePolygonLoops[s].indices;
+                                    var basePolygonIndices  = intersectionData.basePolygonLoops[s].indices;
+                                    var basePolygonEdges    = intersectionData.basePolygonLoops[s].edges;
                                     for (int l0 = 0; l0 < intersectionSurfaceList.Count; l0++)
                                     {
                                         var intersectionSurface = intersectionData.allIntersectionLoops[intersectionSurfaceList[l0]];
@@ -711,8 +727,10 @@ namespace Chisel.Core
                                         {
                                             selfPlanes      = intersectionData.GetPlanes(intersectionSurface.segment),
                                             otherIndices    = basePolygonIndices,
+                                            otherEdges      = basePolygonEdges,
                                             vertexSoup      = vertexSoup,
-                                            indices         = intersectionSurface.indices
+                                            indices         = intersectionSurface.indices,
+                                            edges           = intersectionSurface.edges
                                         };
                                         intersectionJob2.Run();
                                     }
@@ -726,6 +744,11 @@ namespace Chisel.Core
                                     var indices = intersectionData.allIntersectionLoops[i].indices;
                                     var removeIdenticalIndicesJob = new RemoveIdenticalIndicesJob { indices = indices };
                                     removeIdenticalIndicesJob.Run();
+
+                                    // TODO: might not be necessary
+                                    var edges = intersectionData.allIntersectionLoops[i].edges;
+                                    var removeIdenticalIndicesEdgesJob = new RemoveIdenticalIndicesEdgesJob { edges = edges };
+                                    removeIdenticalIndicesEdgesJob.Run();
                                 }
 
                                 for (int i = intersectionData.basePolygonLoops.Length - 1; i >= 0; i--)
@@ -733,6 +756,11 @@ namespace Chisel.Core
                                     var indices = intersectionData.basePolygonLoops[i].indices;
                                     var removeIdenticalIndicesJob = new RemoveIdenticalIndicesJob { indices = indices };
                                     removeIdenticalIndicesJob.Run();
+
+                                    // TODO: might not be necessary
+                                    var edges = intersectionData.basePolygonLoops[i].edges;
+                                    var removeIdenticalIndicesEdgesJob = new RemoveIdenticalIndicesEdgesJob { edges = edges };
+                                    removeIdenticalIndicesEdgesJob.Run();
                                 }
 
                                 // TODO: eventually merge indices across multiple loops when vertices are identical

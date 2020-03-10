@@ -22,7 +22,7 @@ namespace Chisel.Core
         public BlobAssetReference<BrushMeshBlob> brushMesh;
     }
 
-    [BurstCompile]
+    [BurstCompile(Debug = false)]
     unsafe struct IntersectionTestJob : IJobParallelFor
     {
         const double kEpsilon = CSGManagerPerformCSG.kEpsilon;

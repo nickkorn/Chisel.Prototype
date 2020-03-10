@@ -14,7 +14,7 @@ using Unity.Entities;
 
 namespace Chisel.Core
 {
-    [BurstCompile]
+    [BurstCompile(Debug = false)]
     unsafe struct CategorizeEdgesJob : IJob
     {
         [ReadOnly] public VertexSoup vertexSoup;
@@ -67,7 +67,7 @@ namespace Chisel.Core
     }
 
 
-    [BurstCompile]
+    [BurstCompile(Debug = false)]
     unsafe struct SetEdgeDestroyedJob : IJob
     {
         [ReadOnly] public int edgeCount;
