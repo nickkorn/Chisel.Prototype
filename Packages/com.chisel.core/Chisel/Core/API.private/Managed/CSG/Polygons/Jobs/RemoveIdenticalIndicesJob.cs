@@ -119,6 +119,7 @@ namespace Chisel.Core
 
         public VertexSoup           vertexSoup;
         public NativeList<ushort>   indices;
+        public NativeList<Edge>     edges;
 
         // TODO: do this in separate loop so we don't need to rely on pointers to make this work
         [NativeDisableUnsafePtrRestriction] public AABB* aabb;
@@ -126,17 +127,15 @@ namespace Chisel.Core
 
         public void Execute()
         {
-            ref var halfEdges = ref mesh.Value.halfEdges;
-            ref var vertices  = ref mesh.Value.vertices;
-            ref var planes     = ref mesh.Value.localPlanes;
+            ref var halfEdges   = ref mesh.Value.halfEdges;
+            ref var vertices    = ref mesh.Value.vertices;
+            ref var planes      = ref mesh.Value.localPlanes;
+            ref var polygon     = ref mesh.Value.polygons[polygonIndex];
 
-            ref var polygon   = ref mesh.Value.polygons[polygonIndex];
-
-            var localPlane = planes[polygonIndex];
-
-            var firstEdge = polygon.firstEdge;
-            var lastEdge  = firstEdge + polygon.edgeCount;
-            var indexCount = lastEdge - firstEdge;
+            var localPlane  = planes[polygonIndex];
+            var firstEdge   = polygon.firstEdge;
+            var lastEdge    = firstEdge + polygon.edgeCount;
+            var indexCount  = lastEdge - firstEdge;
 
             vertexSoup.Reserve(indexCount); // ensure we have at least this many extra vertices in capacity
 
@@ -156,19 +155,32 @@ namespace Chisel.Core
                 min.z = math.min(min.z, worldVertex.z); max.z = math.max(max.z, worldVertex.z);
 
                 var newIndex = vertexSoup.AddNoResize(worldVertex.xyz);
-                //Debug.Assert(indices.Length == 0 || (indices[0] != newIndex && indices[indices.Length - 1] != newIndex));
+                if (e > firstEdge)
+                {
+                    var edge = edges[edges.Length - 1];
+                    edge.index2 = newIndex;
+                    edges[edges.Length - 1] = edge;
+                }
+                edges.Add(new Edge() { index1 = newIndex });
                 indices.Add(newIndex);
+            }
+            {
+                var edge = edges[edges.Length - 1];
+                edge.index2 = edges[0].index1;
+                edges[edges.Length - 1] = edge;
             }
 
             RemoveIdenticalIndicesJob.RemoveDuplicates(ref indices);
+            RemoveIdenticalIndicesEdgesJob.RemoveDuplicates(ref edges);
 
-            if (indices.Length > 0 &&
-                CSGManagerPerformCSG.IsDegenerate(vertexSoup, indices))
+            if (edges.Length > 0 &&
+                CSGManagerPerformCSG.IsDegenerate(vertexSoup, edges))
             {
+                edges.Clear();
                 indices.Clear();
             }
 
-            if (indices.Length > 0)
+            if (edges.Length > 0)
             {
                 aabb->min = min;
                 aabb->max = max;

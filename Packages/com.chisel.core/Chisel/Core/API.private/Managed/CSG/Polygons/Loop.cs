@@ -66,10 +66,18 @@ namespace Chisel.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         unsafe public Loop(in SurfaceInfo surfaceInfo, ushort* srcIndices, int offset, int length)
         {
+            edges.Capacity = length;
+            for (int j = 1; j < length; j++)
+            {
+                edges.Add(new Edge() { index1 = srcIndices[offset + j - 1], index2 = srcIndices[offset + j] });
+            }
+            edges.Add(new Edge() { index1 = srcIndices[offset + length - 1], index2 = srcIndices[offset] });
+
             indices.Capacity = length;
             for (int j = 0; j < length; j++, offset++)
                 indices.Add(srcIndices[offset]);
-            AddEdges(indices);
+
+            //AddEdges(indices);
             this.info = surfaceInfo;
         }
 

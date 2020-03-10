@@ -26,21 +26,22 @@ namespace Chisel.Core
         public const float  kPlaneDistanceEpsilon	= 0.0006f;
 
         
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal static bool IsDegenerate(in VertexSoup soup, List<ushort> indices)
+        internal static bool IsDegenerate(in VertexSoup soup, NativeList<ushort> indices)
         {
-            if (indices.Count < 3)
+            if (indices.Length < 3)
                 return true;
 
             var vertices = soup.vertices;
-            for (int i = 0; i < indices.Count; i++)
+            for (int i = 0; i < indices.Length; i++)
             {
                 var vertexIndex1 = indices[i];
                 var vertex1      = vertices[vertexIndex1];
-                for (int j = 1; j < indices.Count - 1; j++)
+                for (int j = 1; j < indices.Length - 1; j++)
                 {
-                    int a = (i + j) % indices.Count;
-                    int b = (a + 1) % indices.Count;
+                    int a = (i + j) % indices.Length;
+                    int b = (a + 1) % indices.Length;
 
                     var vertexIndexA = indices[a];
                     var vertexIndexB = indices[b];
@@ -62,25 +63,25 @@ namespace Chisel.Core
             return false;
         }
         
-
+        
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal static bool IsDegenerate(in VertexSoup soup, NativeList<ushort> indices)
+        internal static bool IsDegenerate(in VertexSoup soup, NativeList<Edge> edges)
         {
-            if (indices.Length < 3)
+            if (edges.Length < 3)
                 return true;
 
             var vertices = soup.vertices;
-            for (int i = 0; i < indices.Length; i++)
+            for (int i = 0; i < edges.Length; i++)
             {
-                var vertexIndex1 = indices[i];
+                var vertexIndex1 = edges[i].index1;
                 var vertex1      = vertices[vertexIndex1];
-                for (int j = 1; j < indices.Length - 1; j++)
+                for (int j = 0; j < edges.Length; j++)
                 {
-                    int a = (i + j) % indices.Length;
-                    int b = (a + 1) % indices.Length;
+                    if (i == j)
+                        continue;
 
-                    var vertexIndexA = indices[a];
-                    var vertexIndexB = indices[b];
+                    var vertexIndexA = edges[j].index1;
+                    var vertexIndexB = edges[j].index2;
 
                     // Loop loops back on same vertex
                     if (vertexIndex1 == vertexIndexA || 
@@ -143,26 +144,28 @@ namespace Chisel.Core
                 var indexCount   = lastEdge - firstEdge;
 
                 using (var indices = new NativeList<ushort>(indexCount, Allocator.TempJob))
+                using (var edges   = new NativeList<Edge>(indexCount, Allocator.TempJob))
                 {
                     float4 worldPlane = float4.zero;
                     // THEORY: can end up with duplicate vertices when close enough vertices are snapped together
                     var copyPolygonToIndicesJob = new CopyPolygonToIndicesJob
                     {
-                        mesh = mesh,
-                        polygonIndex = p,
-                        nodeToTreeSpaceMatrix = nodeToTreeSpaceMatrix,
+                        mesh                                    = mesh,
+                        polygonIndex                            = p,
+                        nodeToTreeSpaceMatrix                   = nodeToTreeSpaceMatrix,
                         nodeToTreeSpaceInvertedTransposedMatrix = nodeToTreeSpaceInvertedTransposedMatrix,
-                        vertexSoup = outputLoops.vertexSoup,
-                        indices = indices,
+                        vertexSoup                              = outputLoops.vertexSoup,
+                        indices                                 = indices,
+                        edges                                   = edges,
 
-                        aabb = &aabb,
+                        aabb                                    = &aabb,
 
-                        worldPlane = &worldPlane
+                        worldPlane                              = &worldPlane
                     };
 
                     copyPolygonToIndicesJob.Run();
 
-                    if (indices.Length == 0)
+                    if (edges.Length == 0)
                         continue;
 
                     min = aabb.min;
@@ -183,7 +186,8 @@ namespace Chisel.Core
 
                     for (int i = 0; i < indices.Length; i++)
                         surfacePolygon.indices.Add(indices[i]);
-                    surfacePolygon.AddEdges(surfacePolygon.indices);
+                    for (int i = 0; i < edges.Length; i++)
+                        surfacePolygon.edges.Add(edges[i]);
                     outputLoops.basePolygons.Add(surfacePolygon);
 
                     #if false

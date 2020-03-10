@@ -156,12 +156,12 @@ namespace Chisel.Core
             var vertices = vertexSoup.vertices;
 
             var otherVerticesLength = 0;
-            var otherVertices       = (ushort*)UnsafeUtility.Malloc(otherIndices.Length * sizeof(ushort), 4, Allocator.TempJob);
+            var otherVertices       = (ushort*)UnsafeUtility.Malloc(otherEdges.Length * sizeof(ushort), 4, Allocator.TempJob);
 
             // TODO: use edges instead + 2 planes intersecting each edge
-            for (int v = 0; v < otherIndices.Length; v++)
+            for (int v = 0; v < otherEdges.Length; v++)
             {
-                var vertexIndex = otherIndices[v];
+                var vertexIndex = otherEdges[v].index1; // <- assumes no gaps
                 for (int e = 0; e < edges.Length; e++)
                 {
                     if (edges[e].index1 == vertexIndex ||
