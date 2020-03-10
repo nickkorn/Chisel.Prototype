@@ -36,7 +36,7 @@ namespace Chisel.Core
 
             var otherVerticesLength = 0;
             var otherVertices       = (ushort*)UnsafeUtility.Malloc(otherEdges.Length * sizeof(ushort), 4, Allocator.TempJob);
-
+             
             // TODO: use edges instead + 2 planes intersecting each edge
             for (int v = 0; v < otherEdges.Length; v++)
             {

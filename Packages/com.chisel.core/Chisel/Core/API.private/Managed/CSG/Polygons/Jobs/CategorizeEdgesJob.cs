@@ -18,16 +18,23 @@ namespace Chisel.Core
     unsafe struct CategorizeEdgesJob : IJob
     {
         [ReadOnly] public VertexSoup vertexSoup;
+
         [ReadOnly] public NativeArray<Edge> edges1;
         [ReadOnly] public NativeArray<Edge> edges2;
-        [ReadOnly] public BlobAssetReference<BrushWorldPlanes> brushWorldPlanes;
+
+        [ReadOnly] public BlobAssetReference<BrushWorldPlanes> brushWorldPlanes1;
+        [ReadOnly] public BlobAssetReference<BrushWorldPlanes> brushWorldPlanes2;
 
         [NativeDisableUnsafePtrRestriction] [ReadOnly] public bool* destroyed1;
-        [NativeDisableUnsafePtrRestriction] [WriteOnly] public EdgeCategory* categories1;
+        [NativeDisableUnsafePtrRestriction] [ReadOnly] public bool* destroyed2;
 
+        [ReadOnly] public EdgeCategory good1;
+        [ReadOnly] public EdgeCategory good2;
+        [ReadOnly] public EdgeCategory good3;
+        [ReadOnly] public EdgeCategory good4;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public int IndexOf(Edge* edgesPtr, int edgesLength, Edge edge, out bool inverted)
+        public static int IndexOf(Edge* edgesPtr, int edgesLength, Edge edge, out bool inverted)
         {
             for (int e = 0; e < edgesLength; e++)
             {
@@ -39,7 +46,7 @@ namespace Chisel.Core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public EdgeCategory CategorizeEdge(Edge* edgesPtr, int edgesLength, Edge edge)
+        public static EdgeCategory CategorizeEdge(ref BlobArray<float4> worldPlanes, in VertexSoup vertexSoup, Edge* edgesPtr, int edgesLength, Edge edge)
         {
             // TODO: use something more clever than looping through all edges
             if (IndexOf(edgesPtr, edgesLength, edge, out bool inverted) != -1)
@@ -47,39 +54,38 @@ namespace Chisel.Core
             var vertices = vertexSoup.vertices;
             var midPoint = (vertices[edge.index1] + vertices[edge.index2]) * 0.5f;
 
-            if (CSGManagerPerformCSG.IsOutsidePlanes(ref brushWorldPlanes.Value.worldPlanes, new float4(midPoint, 1)))
+            if (CSGManagerPerformCSG.IsOutsidePlanes(ref worldPlanes, new float4(midPoint, 1)))
                 return EdgeCategory.Outside;
             return EdgeCategory.Inside;
         }
 
         public void Execute()
         {
-            var edgesPtr = (Edge*)edges2.GetUnsafeReadOnlyPtr();
-            var edgesLength = edges2.Length;
-            for (int index = 0; index < edges1.Length; index++)
+            var edges1Ptr = (Edge*)edges1.GetUnsafeReadOnlyPtr();
+            var edges1Length = edges1.Length;
+
+            var edges2Ptr = (Edge*)edges2.GetUnsafeReadOnlyPtr();
+            var edges2Length = edges2.Length;
+
+            var categories1 = new NativeArray<EdgeCategory>(edges1Length, Allocator.Temp, NativeArrayOptions.UninitializedMemory);
+            var categories2 = new NativeArray<EdgeCategory>(edges2Length, Allocator.Temp, NativeArrayOptions.UninitializedMemory);
+            for (int index = 0; index < edges1Length; index++)
             {
                 if (!destroyed1[index])
                 {
-                    categories1[index] = CategorizeEdge(edgesPtr, edgesLength, edges1[index]);
+                    categories1[index] = CategorizeEdge(ref brushWorldPlanes2.Value.worldPlanes, vertexSoup, edges2Ptr, edges2Length, edges1Ptr[index]);
                 }
             }
-        }
-    }
 
+            for (int index = 0; index < edges2Length; index++)
+            {
+                if (!destroyed2[index])
+                {
+                    categories2[index] = CategorizeEdge(ref brushWorldPlanes1.Value.worldPlanes, vertexSoup, edges1Ptr, edges1Length, edges2Ptr[index]);
+                }
+            }
 
-    [BurstCompile(Debug = false)]
-    unsafe struct SetEdgeDestroyedJob : IJob
-    {
-        [ReadOnly] public int edgeCount;
-        [ReadOnly] public EdgeCategory good1;
-        [ReadOnly] public EdgeCategory good2;
-
-        [NativeDisableUnsafePtrRestriction] [ReadOnly] public EdgeCategory* categories1;
-        [NativeDisableUnsafePtrRestriction] [WriteOnly] public bool* destroyed1;
-
-        public void Execute()
-        {
-            for (int index = 0; index < edgeCount; index++)
+            for (int index = 0; index < edges1Length; index++)
             {
                 if (!destroyed1[index])
                 {
@@ -89,6 +95,19 @@ namespace Chisel.Core
                     destroyed1[index] = true;
                 }
             }
+
+            for (int index = 0; index < edges2Length; index++)
+            {
+                if (!destroyed2[index])
+                {
+                    var category = categories2[index];
+                    if (category == good3 || category == good4)
+                        continue;
+                    destroyed2[index] = true;
+                }
+            }
+            categories1.Dispose();
+            categories2.Dispose();
         }
     }
 }

@@ -356,7 +356,7 @@ namespace Chisel.Core
                 CleanUp(soup, surfaceLoops[surfaceIndex]);
         }
 
-        internal static void CleanUp(in VertexSoup brushVertices, List<Loop> baseloops)
+        internal unsafe static void CleanUp(in VertexSoup brushVertices, List<Loop> baseloops)
         {
             for (int l = baseloops.Count - 1; l >= 0; l--)
             {
@@ -438,6 +438,13 @@ namespace Chisel.Core
                     var worldPlanes1 = brushInfo1.brushWorldPlanes;
                     using (var loop1Edges = new NativeArray<Edge>(baseloop.edges.Count, Allocator.TempJob))
                     {
+                        {
+                            NativeArray<Edge> temp = loop1Edges; // workaround for "CaN't EdIt DiSpOsAbLe VaRiAbLeS" nonsense
+                            var edgePtr = (Edge*)temp.GetUnsafePtr();
+                            for (int e = 0; e < baseloop.edges.Count; e++)
+                                edgePtr[e] = baseloop.edges[e];
+                        }
+
                         baseloop.destroyed = new bool[baseloop.edges.Count];
                         for (int h1 = holes.Count - 1; h1 >= 0; h1--)
                         {
@@ -461,12 +468,19 @@ namespace Chisel.Core
                     {
                         var brushInfo1 = CSGManager.GetBrushInfoUnsafe(brush1NodeID);
                         var worldPlanes1 = brushInfo1.brushWorldPlanes;
-                        using (var loop1Edges = new NativeArray<Edge>(hole1.edges.Count, Allocator.TempJob))
+                        var loop1Edges = new NativeArray<Edge>(hole1.edges.Count, Allocator.TempJob);
                         {
+                            {
+                                NativeArray<Edge> temp = loop1Edges; // workaround for "CaN't EdIt DiSpOsAbLe VaRiAbLeS" nonsense
+                                var edgePtr = (Edge*)temp.GetUnsafePtr();
+                                for (int e = 0; e < hole1.edges.Count; e++)
+                                    edgePtr[e] = hole1.edges[e];
+                            }
+
                             for (int h2 = holes.Count - 1; h2 > h1; h2--)
                             {
                                 var hole2 = holes[h2];
-                                var brush2NodeID = hole2.info.brush.brushNodeID;
+                                //var brush2NodeID = hole2.info.brush.brushNodeID;
                                 //Bounds bounds2 = default;
                                 //if (CSGManager.GetBrushBounds(brush1NodeID, ref bounds2) &&
                                 //    bounds1.Intersects(bounds2))
@@ -475,6 +489,7 @@ namespace Chisel.Core
                                 }
                             }
                         }
+                        loop1Edges.Dispose();
                     }
                 }
                 for (int e = baseloop.destroyed.Length - 1; e >= 0; e--)
@@ -545,21 +560,12 @@ namespace Chisel.Core
                 loop2.edges.Count == 0)
                 return;
 
-            var categories1 = new EdgeCategory[loop1.edges.Count];
-            var categories2 = new EdgeCategory[loop2.edges.Count];
-
             var brushInfo2 = CSGManager.GetBrushInfoUnsafe(loop2.info.brush.brushNodeID);
             var worldPlanes2 = brushInfo2.brushWorldPlanes;
 
             // TODO: allocate/dispose arrays outside of outer loop, or make all edges always a NativeArray
             using (var loop2Edges = new NativeArray<Edge>(loop2.edges.Count, Allocator.TempJob))
             {
-                {
-                    NativeArray<Edge> temp = loop1Edges; // workaround for "CaN't EdIt DiSpOsAbLe VaRiAbLeS" nonsense
-                    var edgePtr = (Edge*)temp.GetUnsafePtr();
-                    for (int e = 0; e < loop1.edges.Count; e++)
-                        edgePtr[e] = loop1.edges[e];
-                }
                 {
                     NativeArray<Edge> temp = loop2Edges; // workaround for "CaN't EdIt DiSpOsAbLe VaRiAbLeS" nonsense
                     var edgePtr = (Edge*)temp.GetUnsafePtr();
@@ -581,8 +587,6 @@ namespace Chisel.Core
                 // | *----*
                 // *------*
 
-                fixed (EdgeCategory* categories1Ptr = &categories1[0])
-                fixed (EdgeCategory* categories2Ptr = &categories2[0])
                 fixed (bool* loop1EdgesDestroyed = &loop1.destroyed[0])
                 fixed (bool* loop2EdgesDestroyed = &loop2.destroyed[0])
                 { 
@@ -590,46 +594,19 @@ namespace Chisel.Core
                     {
                         vertexSoup          = soup,
                         edges1              = loop1Edges,
+                        edges2              = loop2Edges,
                         destroyed1          = loop1EdgesDestroyed,
-                        categories1         = categories1Ptr,
-                        brushWorldPlanes    = worldPlanes2,
-                        edges2              = loop2Edges
+                        destroyed2          = loop2EdgesDestroyed,
+                        brushWorldPlanes1   = worldPlanes1,
+                        brushWorldPlanes2   = worldPlanes2,
+
+                        good1 = EdgeCategory.Outside,
+                        good2 = EdgeCategory.Aligned,
+
+                        good3 = EdgeCategory.Inside,
+                        good4 = EdgeCategory.Inside
                     };
                     categorizeEdgesJob1.Run();
-
-                    var categorizeEdgesJob2 = new CategorizeEdgesJob()
-                    {
-                        vertexSoup          = soup,
-                        edges1              = loop2Edges,
-                        destroyed1          = loop2EdgesDestroyed,
-                        categories1         = categories2Ptr,
-                        brushWorldPlanes    = worldPlanes1,
-                        edges2              = loop1Edges
-                    };
-                    categorizeEdgesJob2.Run();
-                    
-                    var setEdgeDestroyedJob1 = new SetEdgeDestroyedJob()
-                    {
-                        edgeCount       = loop1.edges.Count,
-                        destroyed1      = loop1EdgesDestroyed,
-                        categories1     = categories1Ptr,
-                    
-                        // TODO: reversed edges should cancel?
-                        good1           = EdgeCategory.Outside,
-                        good2           = EdgeCategory.Aligned
-                    };
-                    setEdgeDestroyedJob1.Run();
-
-                    var setEdgeDestroyedJob2 = new SetEdgeDestroyedJob()
-                    {
-                        edgeCount       = loop2.edges.Count,
-                        destroyed1      = loop2EdgesDestroyed,
-                        categories1     = categories2Ptr,
-
-                        good1           = EdgeCategory.Inside,
-                        good2           = EdgeCategory.Inside
-                    };
-                    setEdgeDestroyedJob2.Run();
                 }
             }
         }
@@ -642,9 +619,6 @@ namespace Chisel.Core
                 loop2.edges.Count == 0)
                 return;
 
-            var categories1 = new EdgeCategory[loop1.edges.Count];
-            var categories2 = new EdgeCategory[loop2.edges.Count];
-
             var brushInfo2 = CSGManager.GetBrushInfoUnsafe(loop2.info.brush.brushNodeID);
             var worldPlanes2 = brushInfo2.brushWorldPlanes;
 
@@ -652,68 +626,32 @@ namespace Chisel.Core
             using (var loop2Edges = new NativeArray<Edge>(loop2.edges.Count, Allocator.TempJob))
             {
                 {
-                    NativeArray<Edge> temp = loop1Edges; // workaround for "CaN't EdIt DiSpOsAbLe VaRiAbLeS" nonsense
-                    var edgePtr = (Edge*)temp.GetUnsafePtr();
-                    for (int e = 0; e < loop1.edges.Count; e++)
-                        edgePtr[e] = loop1.edges[e];
-                }
-                {
                     NativeArray<Edge> temp = loop2Edges; // workaround for "CaN't EdIt DiSpOsAbLe VaRiAbLeS" nonsense
                     var edgePtr = (Edge*)temp.GetUnsafePtr();
                     for (int e = 0; e < loop2.edges.Count; e++)
                         edgePtr[e] = loop2.edges[e];
                 }
-                fixed (EdgeCategory* categories1Ptr = &categories1[0])
-                fixed (EdgeCategory* categories2Ptr = &categories2[0])
                 fixed (bool* loop1EdgesDestroyed = &loop1.destroyed[0])
                 fixed (bool* loop2EdgesDestroyed = &loop2.destroyed[0])
                 { 
+                    // TODO: join into one big job, so we can get rid of lots of temporaries
                     var categorizeEdgesJob1 = new CategorizeEdgesJob()
                     {
                         vertexSoup          = soup,
                         edges1              = loop1Edges,
+                        edges2              = loop2Edges,
                         destroyed1          = loop1EdgesDestroyed,
-                        categories1         = categories1Ptr,
-                        brushWorldPlanes    = worldPlanes2,
-                        edges2              = loop2Edges
+                        destroyed2          = loop2EdgesDestroyed,
+                        brushWorldPlanes1   = worldPlanes1,
+                        brushWorldPlanes2   = worldPlanes2,
+
+                        good1 = EdgeCategory.Outside,
+                        good2 = EdgeCategory.Aligned,
+
+                        good3 = EdgeCategory.Outside,
+                        good4 = EdgeCategory.Outside
                     };
                     categorizeEdgesJob1.Run();
-
-                    var categorizeEdgesJob2 = new CategorizeEdgesJob()
-                    {
-                        vertexSoup          = soup,
-                        edges1              = loop2Edges,
-                        destroyed1          = loop2EdgesDestroyed,
-                        categories1         = categories2Ptr,
-                        brushWorldPlanes    = worldPlanes1,
-                        edges2              = loop1Edges
-                    };
-                    categorizeEdgesJob2.Run();
-
-                    var setEdgeDestroyedJob1 = new SetEdgeDestroyedJob()
-                    {
-                        edgeCount       = loop1.edges.Count,
-                        destroyed1      = loop1EdgesDestroyed,
-                        categories1     = categories1Ptr,
-
-                        good1           = EdgeCategory.Outside,
-                        good2           = EdgeCategory.Aligned
-                    };
-                    setEdgeDestroyedJob1.Run();
-
-
-
-
-                    var setEdgeDestroyedJob2 = new SetEdgeDestroyedJob()
-                    {
-                        edgeCount       = loop2.edges.Count,
-                        destroyed1      = loop2EdgesDestroyed,
-                        categories1     = categories2Ptr,
-
-                        good1           = EdgeCategory.Outside,
-                        good2           = EdgeCategory.Outside
-                    };
-                    setEdgeDestroyedJob2.Run();
                 }
             }
         }
