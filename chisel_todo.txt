@@ -1,6 +1,20 @@
 produce blobAssets at different phases as output, use as input in next phase
 	only update these blobAssets when necessary
 	removes need to store things in 'Loops' etc.
+
+required phases
+	brushMeshBlobs		
+	which brushes intersect which brushes. 
+		Have a lighting fast lookup that is stored in a struct/blob/nativearray so we can use it in jobs
+	"baseloops" -> blobs per brush
+	"intersection loops" -> blob per intersection, some way to know which brush intersection it belongs to
+	"find intersections between intersection loops/baseloops" -> make copies of prev blobs, add intersections
+	"perform csg" -> produce final loops & their categories -> store
+	"meshing" -> triangulate final loops -> cache per brush / mesh type
+
+store loop NativeArrays, their "shapes", in a "manager", so we can reuse the same shape by just copying an index
+	maybe have a "[BurstDiscard]" method that retrieves it for us in a job? is that possible?
+
 all the places we need worldplanes, use precalculated brushWorldPlanes
 somehow remove need for "destroyed" bool array in Loop
 replace bounds with own implementation that doesn't use properties & uses unity.mathematics

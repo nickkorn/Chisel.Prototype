@@ -35,7 +35,8 @@ namespace Chisel.Core
             Cut,
             Outside,
             Polygon1InsidePolygon2,
-            Polygon2InsidePolygon1
+            Polygon2InsidePolygon1,
+            Overlapping
         }
 
         public const double kEpsilon = 0.00001;
@@ -65,112 +66,6 @@ namespace Chisel.Core
             }
             return true;
         }
-
-        // Note: Assumes polygons are convex
-        public unsafe static OperationResult BooleanIntersectionOperation(in VertexSoup soup, Loop polygon1, Loop polygon2, List<Loop> resultLoops)
-        {
-            //if (AreLoopsOverlapping(polygon1, polygon2))
-            //    return CSGManagerPerformCSG.OperationResult.Overlapping;
-
-            var brush1 = polygon1.info.brush;
-
-
-            ref var worldSpacePlanes1 = ref CSGManager.GetBrushInfoUnsafe(brush1.brushNodeID).brushWorldPlanes.Value.worldPlanes;
-
-            var newPolygon = new Loop()
-            {
-                info = polygon1.info
-            };
-
-
-            var vertices = soup.vertices;
-            for (int i = 0; i < polygon2.edges.Length; i++)
-            {
-                var edge = polygon2.edges[i];
-                var worldVertex = new float4((vertices[edge.index1] + vertices[edge.index2]) * 0.5f, 1);
-                if (IsOutsidePlanes(ref worldSpacePlanes1, worldVertex))
-                    continue;
-                //if (!newPolygon.indices.Contains(vertexIndex)) 
-                    newPolygon.edges.Add(edge);
-            }
-
-            if (newPolygon.edges.Length == polygon2.edges.Length) // all vertices of polygon2 are inside polygon1
-            {
-                newPolygon.Dispose();
-                return CSGManagerPerformCSG.OperationResult.Polygon2InsidePolygon1;
-            }
-
-
-            var brush2 = polygon2.info.brush;
-            ref var worldSpacePlanes2 = ref CSGManager.GetBrushInfoUnsafe(brush2.brushNodeID).brushWorldPlanes.Value.worldPlanes;
-
-            if (newPolygon.edges.Length == 0) // no vertex of polygon2 is inside polygon1
-            {
-                // polygon edges are not intersecting
-                var edge = polygon1.edges[0];
-                var worldVertex = new float4((vertices[edge.index1] + vertices[edge.index2]) * 0.5f, 1);
-                if (IsOutsidePlanes(ref worldSpacePlanes2, worldVertex))
-                {
-                    newPolygon.Dispose();
-                    // no vertex of polygon1 can be inside polygon2
-                    return CSGManagerPerformCSG.OperationResult.Outside;
-                }
-
-                // all vertices of polygon1 must be inside polygon2
-                {
-                    newPolygon.Dispose();
-                    resultLoops.Add(new Loop(polygon1));
-                    return CSGManagerPerformCSG.OperationResult.Cut;
-                    //return CSGManagerPerformCSG.OperationResult.Polygon1InsidePolygon2;
-                }
-            } else
-            {
-                // check if all vertices of polygon1 are on or inside polygon2
-                bool haveOutsideVertices = false;
-                for (int i = 0; i < polygon1.edges.Length; i++)
-                {
-                    var edge = polygon1.edges[i];
-                    var worldVertex = new float4((vertices[edge.index1] + vertices[edge.index2]) * 0.5f, 1);
-                    if (!IsOutsidePlanes(ref worldSpacePlanes2, worldVertex))
-                        continue;
-                    haveOutsideVertices = true;
-                    break;
-                }
-                if (!haveOutsideVertices)
-                {
-                    newPolygon.Dispose();
-                    resultLoops.Add(new Loop(polygon1));
-                    return CSGManagerPerformCSG.OperationResult.Cut;
-                    //return CSGManagerPerformCSG.OperationResult.Polygon1InsidePolygon2;
-                }
-            }
-
-            // we might be missing vertices on polygon1 that are inside polygon2 (intersections with other loops)
-            // TODO: optimize
-            for (int i = 0; i < polygon1.edges.Length; i++)
-            {
-                var edge = polygon1.edges[i];
-                var worldVertex = new float4((vertices[edge.index1] + vertices[edge.index2]) * 0.5f, 1);
-                if (IsOutsidePlanes(ref worldSpacePlanes2, worldVertex))
-                    continue;
-
-                var edges = newPolygon.edges;
-                for (int e = 0; e < edges.Length; e++)
-                {
-                    if (edges[e].index1 == edge.index1 &&
-                        edges[e].index2 == edge.index2)
-                        goto SkipEdge;
-                }
-                //if (!newPolygon.edges.Contains(edge))
-                    newPolygon.edges.Add(edge);
-                SkipEdge:
-                ;
-            }
-
-            resultLoops.Add(newPolygon);
-            return CSGManagerPerformCSG.OperationResult.Cut;
-        }
-
         #endregion
 
 
@@ -251,107 +146,95 @@ namespace Chisel.Core
             }
         }
 
-        static readonly List<Loop> s_OverlappingArea = new List<Loop>();
-        internal static void Intersect(in VertexSoup brushVertices, List<Loop> loopsOnBrushSurface, Loop surfaceLoop, Loop intersectionLoop, CategoryGroupIndex newHoleCategory)
+        internal static unsafe void Intersect(in VertexSoup brushVertices, List<Loop> loopsOnBrushSurface, Loop surfaceLoop, Loop intersectionLoop, CategoryGroupIndex newHoleCategory)
         {
             // It might look like we could just set the interiorCategory of brush_intersection here, and let all other cut loops copy from it below,
             // but the same brush_intersection might be used by another categorized_loop and then we'd try to reroute it again, which wouldn't work
             //brush_intersection.interiorCategory = newHoleCategory;
 
-            // TODO: input polygons are convex, and intersection of both polygons will always be convex.
-            //       Make an intersection boolean operation that assumes everything is convex
-            Debug.Assert(s_OverlappingArea.Count == 0);
-            s_OverlappingArea.Clear();
-            OperationResult result;
-            result = CSGManagerPerformCSG.BooleanIntersectionOperation(brushVertices,
-                                                                     intersectionLoop, surfaceLoop,
-                                                                     s_OverlappingArea  // the output of cutting operations are both holes for the original polygon (categorized_loop)
-                                                                                        // and new polygons on the surface of the brush that need to be categorized
-                                                                     );
-            Debug.Assert(s_OverlappingArea.Count <= 1);
-
-            // FIXME: when brush_intersection and categorized_loop are grazing each other, 
-            //          technically we cut it but we shouldn't be creating it as a separate polygon + hole (bug7)
-
-
-            switch (result)
+            var result = OperationResult.Fail;
+            var intersectEdgesJob = new IntersectEdgesJob()
             {
-                default:
-                case CSGManagerPerformCSG.OperationResult.Fail:     
-                case CSGManagerPerformCSG.OperationResult.Outside:
-                    foreach (var loop in s_OverlappingArea)
-                        loop.Dispose();
-                    s_OverlappingArea.Clear();
-                    return;
+                vertices        = brushVertices.vertices,
+                edges1          = intersectionLoop.edges,
+                edges2          = surfaceLoop.edges,
+                worldPlanes1    = CSGManager.GetBrushInfoUnsafe(intersectionLoop.info.brush.brushNodeID).brushWorldPlanes,
+                worldPlanes2    = CSGManager.GetBrushInfoUnsafe(surfaceLoop.info.brush.brushNodeID).brushWorldPlanes,
 
-                case CSGManagerPerformCSG.OperationResult.Polygon2InsidePolygon1:
-                {
-                    // This new piece overrides the current loop
-                    if (surfaceLoop.Valid)
+                result          = &result,
+                outEdges        = new NativeList<Edge>(math.max(intersectionLoop.edges.Length, surfaceLoop.edges.Length), Allocator.Persistent)
+            };
+            intersectEdgesJob.Run();
+
+            // *somehow* put whats below in a job
+
+            if (result == OperationResult.Outside ||
+                result == OperationResult.Fail)
+            {
+                intersectEdgesJob.outEdges.Dispose();
+            } else
+            if (result == OperationResult.Overlapping)
+            {
+                intersectEdgesJob.outEdges.Dispose();
+                surfaceLoop.info.interiorCategory = newHoleCategory;
+            } else
+            { 
+                // FIXME: when brush_intersection and categorized_loop are grazing each other, 
+                //          technically we cut it but we shouldn't be creating it as a separate polygon + hole (bug7)
+
+                // the output of cutting operations are both holes for the original polygon (categorized_loop)
+                // and new polygons on the surface of the brush that need to be categorized
+                var intersectedLoop = new Loop(intersectEdgesJob.outEdges, intersectionLoop.info);
+                intersectedLoop.info.interiorCategory = newHoleCategory;
+
+                // the output of cutting operations are both holes for the original polygon (categorized_loop)
+                // and new polygons on the surface of the brush that need to be categorized
+                if (surfaceLoop.holes.Capacity < surfaceLoop.holes.Count + 1)
+                    surfaceLoop.holes.Capacity = surfaceLoop.holes.Count + 1;
+
+                if (surfaceLoop.holes.Count > 0)
+                { 
+                    var touchingSurfaceBrushes = CSGManager.GetTouchingBrushes(surfaceLoop.info.brush);
+                    for (int h = 0; h < surfaceLoop.holes.Count; h++)
                     {
-                        var newPolygon = new Loop(surfaceLoop, newHoleCategory);
-                        loopsOnBrushSurface.Add(newPolygon);
+                        // Need to make a copy so we can edit it without causing side effects
+                        var hole = surfaceLoop.holes[h];
+                        if (!hole.Valid)
+                            continue;
+
+                        var holeBrushNodeID = hole.info.brush.brushNodeID;
+
+                        // TODO: Optimize and make this a BlobAsset that's created in a pass,
+                        //       this BlobAsset must make it easy to quickly determine if two
+                        //       brushes intersect. Use this for both routing table generation 
+                        //       and loop merging.
+                        bool touches = false;
+                        for (int t = 0; t < touchingSurfaceBrushes.Count; t++)
+                        {
+                            if (touchingSurfaceBrushes[t].brushNodeID0 == holeBrushNodeID ||
+                                touchingSurfaceBrushes[t].brushNodeID1 == holeBrushNodeID)
+                            {
+                                touches = true;
+                                break;
+                            }
+                        }
+
+                        // But only if they touch
+                        if (touches)
+                        {
+                            var copyPolygon = new Loop(hole);
+                            intersectedLoop.holes.Add(copyPolygon);
+                        }
                     }
-                    foreach (var loop in s_OverlappingArea)
-                        loop.Dispose();
-                    s_OverlappingArea.Clear();
-                    surfaceLoop.ClearAllEdges();
-                    return;
                 }
-                /*
-                case CSGManagerPerformCSG.OperationResult.Polygon1InsidePolygon2:
-                {
-                    var newPolygon = new Loop(intersectionLoop, newHoleCategory);
-                    s_OverlappingArea.Add(newPolygon);
-                    break;
-                }*/
 
-                case CSGManagerPerformCSG.OperationResult.Cut:
-                    break;
+                // TODO: Separate loop "shapes" from category/loop-hole hierarchy, 
+                //       so we can simply assign the same shape to a hole and loop without 
+                //       needing to copy data we can create a new shape when we modify it.
+
+                surfaceLoop.holes.Add(new Loop(intersectedLoop, newHoleCategory));  // but it is also a hole for our polygon
+                loopsOnBrushSurface.Add(intersectedLoop);                           // this loop is a polygon on its own
             }
-
-            Debug.Assert(s_OverlappingArea.Count == 1, s_OverlappingArea.Count);
-
-            // the output of cutting operations are both holes for the original polygon (categorized_loop)
-            // and new polygons on the surface of the brush that need to be categorized
-            if (surfaceLoop.holes.Capacity < surfaceLoop.holes.Count + s_OverlappingArea.Count)
-                surfaceLoop.holes.Capacity = surfaceLoop.holes.Count + s_OverlappingArea.Count;
-
-            int o = 0;
-            //for (int o = 0; o < s_OverlappingArea.Count; o++)
-            {
-                var overlappingLoop = s_OverlappingArea[o];
-                if (!overlappingLoop.Valid)
-                {
-                    foreach (var loop in s_OverlappingArea)
-                        loop.Dispose();
-                    s_OverlappingArea.Clear();
-                    return;
-                }
-                
-                if (CSGManagerPerformCSG.AreLoopsOverlapping(surfaceLoop, overlappingLoop))
-                {
-                    foreach (var loop in s_OverlappingArea)
-                        loop.Dispose();
-                    surfaceLoop.info.interiorCategory = newHoleCategory;
-                    s_OverlappingArea.Clear();
-                    return;
-                } 
-
-                overlappingLoop.info.interiorCategory = newHoleCategory;
-
-                for (int h = 0; h < surfaceLoop.holes.Count; h++)
-                {
-                    // Need to make a copy so we can edit it without causing side effects
-                    var copyPolygon = new Loop(surfaceLoop.holes[h]);
-                    overlappingLoop.holes.Add(copyPolygon);
-                }
-
-                var newPolygon = new Loop(overlappingLoop, newHoleCategory);
-                surfaceLoop.holes.Add(newPolygon);              // but it is also a hole for our polygon
-                loopsOnBrushSurface.Add(overlappingLoop);       // this loop is a polygon on its own
-            }
-            s_OverlappingArea.Clear();
         }
         #endregion
 

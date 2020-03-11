@@ -338,6 +338,7 @@ namespace Chisel.Core
                             continue;
                         }
 
+                        // Determining if a surface overlaps with the baseLoop can be pre-generated
                         bool overlap = intersectionLoop != null && CSGManagerPerformCSG.AreLoopsOverlapping(surfaceLoop, intersectionLoop);
 
                         // Lookup categorization lookup between original surface & other surface ...

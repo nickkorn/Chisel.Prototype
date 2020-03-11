@@ -38,21 +38,6 @@ namespace Chisel.Core
         #region IsOutsidePlanes
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static unsafe bool IsOutsidePlanes(float4* planes, int length, float4 localVertex)
-        {
-            const float kEpsilon = CSGManagerPerformCSG.kDistanceEpsilon;
-            for (int n = 0; n < length; n++)
-            {
-                var distance = math.dot(planes[n], localVertex);
-                
-                // will be 'false' when distance is NaN or Infinity
-                if (!(distance <= kEpsilon))
-                    return true;
-            }
-            return false;
-        }
-        
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static unsafe bool IsOutsidePlanes(NativeArray<float4> planes, float4 localVertex)
         {
             const float kEpsilon = CSGManagerPerformCSG.kDistanceEpsilon;

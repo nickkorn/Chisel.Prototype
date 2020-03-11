@@ -45,6 +45,13 @@ namespace Chisel.Core
         {
             edges = new NativeList<Edge>(Allocator.Persistent);
         }
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public Loop(NativeList<Edge> edges, in SurfaceInfo info)
+        {
+            this.edges = edges;
+            this.info = info;
+        }
 
         ~Loop()
         {
