@@ -64,22 +64,11 @@ namespace Chisel.Core
 
             if (brushPlaneSegments.IsCreated)
                 brushPlaneSegments.Dispose();
-
-            foreach (var intersectionLoop in allIntersectionLoops)
-            {
-                if (intersectionLoop.edges.IsCreated)
-                    intersectionLoop.edges.Dispose();
-            }
-
-            foreach (var intersectionLoop in basePolygonLoops)
-            {
-                if (intersectionLoop.edges.IsCreated)
-                    intersectionLoop.edges.Dispose();
-            }
         }
 
         public void StoreOutput(Dictionary<int, SurfaceLoops> intersectionSurfaceLoops, Dictionary<int, Loop[]> intersectionLoops, List<Loop> basePolygons)
         {
+            /*
             foreach (var intersectionLoop in allIntersectionLoops)
             {
                 var surfaceLoops = intersectionSurfaceLoops[intersectionLoop.brushNodeID];
@@ -96,7 +85,7 @@ namespace Chisel.Core
             {
                 basePolygons[intersectionLoop.surfaceIndex].SetEdges(intersectionLoop.edges);
             }
-            
+            */
 
             // Note: those above are only the INTERSECTING surfaces, below ALL surfaces
             foreach (var pair in intersectionSurfaceLoops)
@@ -110,6 +99,9 @@ namespace Chisel.Core
                     var loops = new Loop[surfaceLoops.Length];
                     for (int i = 0; i < surfaceLoops.Length; i++)
                     {
+                        if (loops[i] != null)
+                            loops[i].Dispose();
+
                         var surfaceLoop = surfaceLoops[i];
                         if (surfaceLoop == null ||
                             surfaceLoop.Count == 0 ||
@@ -173,12 +165,10 @@ namespace Chisel.Core
                 var intersectionLoop = new IntersectionLoop()
                 {
                     segment         = worldSpacePlanes0Segment,
-                    edges           = new NativeList<Edge>(loop.edges.Count, Allocator.Persistent),
+                    edges           = loop.edges,
                     surfaceIndex    = s,
                     brushNodeID     = brush0.brushNodeID
                 };
-                for (int i = 0; i < loop.edges.Count; i++)
-                    intersectionLoop.edges.Add(loop.edges[i]);
 
                 basePolygonLoops[s] = intersectionLoop;                
             }
@@ -218,12 +208,10 @@ namespace Chisel.Core
                     var intersectionLoop = new IntersectionLoop()
                     {
                         segment         = segment,
-                        edges           = new NativeList<Edge>(loop.edges.Count, Allocator.Persistent),
+                        edges           = loop.edges,
                         surfaceIndex    = s,
                         brushNodeID     = pair.Key
                     }; 
-                    for (int i = 0; i < loop.edges.Count; i++)
-                        intersectionLoop.edges.Add(loop.edges[i]);
 
                     // We add the intersection loop of this particular brush with our own brush
                     intersectionSurface.Add(allIntersectionLoops.Count);

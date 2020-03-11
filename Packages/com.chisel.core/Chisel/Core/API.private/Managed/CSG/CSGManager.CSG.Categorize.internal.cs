@@ -45,16 +45,16 @@ namespace Chisel.Core
         // Note: Assumes polygons are convex
         public unsafe static bool AreLoopsOverlapping(Loop polygon1, Loop polygon2)
         {
-            if (polygon1.edges.Count < 3 ||
-                polygon2.edges.Count < 3)
+            if (polygon1.edges.Length < 3 ||
+                polygon2.edges.Length < 3)
                 return false;
 
-            if (polygon1.edges.Count != polygon2.edges.Count)
+            if (polygon1.edges.Length != polygon2.edges.Length)
                 return false;
 
-            for (int i = 0; i < polygon1.edges.Count; i++)
+            for (int i = 0; i < polygon1.edges.Length; i++)
             {
-                for (int j = 0; j < polygon2.edges.Count; j++)
+                for (int j = 0; j < polygon2.edges.Length; j++)
                 {
                     if ((polygon1.edges[i].index1 == polygon1.edges[j].index1 &&
                          polygon1.edges[i].index2 == polygon1.edges[j].index2) ||
@@ -69,66 +69,56 @@ namespace Chisel.Core
         // Note: Assumes polygons are convex
         public unsafe static OperationResult BooleanIntersectionOperation(in VertexSoup soup, Loop polygon1, Loop polygon2, List<Loop> resultLoops)
         {
-            Loop newPolygon = null;
             //if (AreLoopsOverlapping(polygon1, polygon2))
             //    return CSGManagerPerformCSG.OperationResult.Overlapping;
 
             var brush1 = polygon1.info.brush;
-            var mesh1 = BrushMeshManager.GetBrushMesh(brush1.BrushMesh.BrushMeshID);
-            var nodeToTreeSpaceInversed1 = brush1.TreeToNodeSpaceMatrix;
-            var nodeToTreeSpace1 = brush1.NodeToTreeSpaceMatrix;
 
-            var worldSpacePlanes1Length = mesh1.planes.Length;
-            var worldSpacePlanes1 = stackalloc float4[worldSpacePlanes1Length];
-            fixed (float4* mesh1Planes = &mesh1.planes[0])
-            {
-                CSGManagerPerformCSG.TransformByTransposedInversedMatrix(worldSpacePlanes1, (float4*)mesh1Planes, mesh1.planes.Length, math.transpose(nodeToTreeSpaceInversed1));
-            }
 
-            newPolygon = new Loop()
+            ref var worldSpacePlanes1 = ref CSGManager.GetBrushInfoUnsafe(brush1.brushNodeID).brushWorldPlanes.Value.worldPlanes;
+
+            var newPolygon = new Loop()
             {
                 info = polygon1.info
             };
 
 
             var vertices = soup.vertices;
-            for (int i = 0; i < polygon2.edges.Count; i++)
+            for (int i = 0; i < polygon2.edges.Length; i++)
             {
                 var edge = polygon2.edges[i];
                 var worldVertex = new float4((vertices[edge.index1] + vertices[edge.index2]) * 0.5f, 1);
-                if (IsOutsidePlanes(worldSpacePlanes1, worldSpacePlanes1Length, worldVertex))
+                if (IsOutsidePlanes(ref worldSpacePlanes1, worldVertex))
                     continue;
                 //if (!newPolygon.indices.Contains(vertexIndex)) 
                     newPolygon.edges.Add(edge);
             }
 
-            if (newPolygon.edges.Count == polygon2.edges.Count) // all vertices of polygon2 are inside polygon1
+            if (newPolygon.edges.Length == polygon2.edges.Length) // all vertices of polygon2 are inside polygon1
+            {
+                newPolygon.Dispose();
                 return CSGManagerPerformCSG.OperationResult.Polygon2InsidePolygon1;
+            }
 
 
             var brush2 = polygon2.info.brush;
-            var mesh2 = BrushMeshManager.GetBrushMesh(brush2.BrushMesh.BrushMeshID);
-            var nodeToTreeSpaceInversed2 = brush2.TreeToNodeSpaceMatrix;
-            var nodeToTreeSpace2 = brush2.NodeToTreeSpaceMatrix;
+            ref var worldSpacePlanes2 = ref CSGManager.GetBrushInfoUnsafe(brush2.brushNodeID).brushWorldPlanes.Value.worldPlanes;
 
-            var worldSpacePlanes2Length = mesh2.planes.Length;
-            var worldSpacePlanes2 = stackalloc float4[mesh2.planes.Length];
-            fixed (float4* mesh2Planes = &mesh2.planes[0])
-            {
-                CSGManagerPerformCSG.TransformByTransposedInversedMatrix(worldSpacePlanes2, (float4*)mesh2Planes, mesh2.planes.Length, math.transpose(nodeToTreeSpaceInversed2));
-            }
-
-            if (newPolygon.edges.Count == 0) // no vertex of polygon2 is inside polygon1
+            if (newPolygon.edges.Length == 0) // no vertex of polygon2 is inside polygon1
             {
                 // polygon edges are not intersecting
                 var edge = polygon1.edges[0];
                 var worldVertex = new float4((vertices[edge.index1] + vertices[edge.index2]) * 0.5f, 1);
-                if (IsOutsidePlanes(worldSpacePlanes2, worldSpacePlanes2Length, worldVertex))
+                if (IsOutsidePlanes(ref worldSpacePlanes2, worldVertex))
+                {
+                    newPolygon.Dispose();
                     // no vertex of polygon1 can be inside polygon2
                     return CSGManagerPerformCSG.OperationResult.Outside;
+                }
 
                 // all vertices of polygon1 must be inside polygon2
                 {
+                    newPolygon.Dispose();
                     resultLoops.Add(new Loop(polygon1));
                     return CSGManagerPerformCSG.OperationResult.Cut;
                     //return CSGManagerPerformCSG.OperationResult.Polygon1InsidePolygon2;
@@ -137,17 +127,18 @@ namespace Chisel.Core
             {
                 // check if all vertices of polygon1 are on or inside polygon2
                 bool haveOutsideVertices = false;
-                for (int i = 0; i < polygon1.edges.Count; i++)
+                for (int i = 0; i < polygon1.edges.Length; i++)
                 {
                     var edge = polygon1.edges[i];
                     var worldVertex = new float4((vertices[edge.index1] + vertices[edge.index2]) * 0.5f, 1);
-                    if (!IsOutsidePlanes(worldSpacePlanes2, worldSpacePlanes2Length, worldVertex))
+                    if (!IsOutsidePlanes(ref worldSpacePlanes2, worldVertex))
                         continue;
                     haveOutsideVertices = true;
                     break;
                 }
                 if (!haveOutsideVertices)
                 {
+                    newPolygon.Dispose();
                     resultLoops.Add(new Loop(polygon1));
                     return CSGManagerPerformCSG.OperationResult.Cut;
                     //return CSGManagerPerformCSG.OperationResult.Polygon1InsidePolygon2;
@@ -156,15 +147,15 @@ namespace Chisel.Core
 
             // we might be missing vertices on polygon1 that are inside polygon2 (intersections with other loops)
             // TODO: optimize
-            for (int i = 0; i < polygon1.edges.Count; i++)
+            for (int i = 0; i < polygon1.edges.Length; i++)
             {
                 var edge = polygon1.edges[i];
                 var worldVertex = new float4((vertices[edge.index1] + vertices[edge.index2]) * 0.5f, 1);
-                if (IsOutsidePlanes(worldSpacePlanes2, worldSpacePlanes2Length, worldVertex))
+                if (IsOutsidePlanes(ref worldSpacePlanes2, worldVertex))
                     continue;
 
                 var edges = newPolygon.edges;
-                for (int e=0;e<edges.Count;e++)
+                for (int e = 0; e < edges.Length; e++)
                 {
                     if (edges[e].index1 == edge.index1 &&
                         edges[e].index2 == edge.index2)
@@ -220,7 +211,7 @@ namespace Chisel.Core
             builder.AppendLine("             ");
             */
 
-            for (int i = 0; i < categorized_loop.edges.Count; i++)
+            for (int i = 0; i < categorized_loop.edges.Length; i++)
             {
                 var edge = categorized_loop.edges[i];
                 var index1 = edge.index1;
@@ -242,6 +233,7 @@ namespace Chisel.Core
             {
                 if (!loopsOnBrushSurface[l].Valid)
                 {
+                    loopsOnBrushSurface[l].Dispose();
                     loopsOnBrushSurface.RemoveAt(l);
                     break;
                 }
@@ -251,6 +243,7 @@ namespace Chisel.Core
                 {
                     if (!holes[h].Valid)
                     {
+                        holes[h].Dispose();
                         holes.RemoveAt(h);
                         break;
                     }
@@ -267,6 +260,7 @@ namespace Chisel.Core
 
             // TODO: input polygons are convex, and intersection of both polygons will always be convex.
             //       Make an intersection boolean operation that assumes everything is convex
+            Debug.Assert(s_OverlappingArea.Count == 0);
             s_OverlappingArea.Clear();
             OperationResult result;
             result = CSGManagerPerformCSG.BooleanIntersectionOperation(brushVertices,
@@ -285,6 +279,9 @@ namespace Chisel.Core
                 default:
                 case CSGManagerPerformCSG.OperationResult.Fail:     
                 case CSGManagerPerformCSG.OperationResult.Outside:
+                    foreach (var loop in s_OverlappingArea)
+                        loop.Dispose();
+                    s_OverlappingArea.Clear();
                     return;
 
                 case CSGManagerPerformCSG.OperationResult.Polygon2InsidePolygon1:
@@ -295,6 +292,9 @@ namespace Chisel.Core
                         var newPolygon = new Loop(surfaceLoop, newHoleCategory);
                         loopsOnBrushSurface.Add(newPolygon);
                     }
+                    foreach (var loop in s_OverlappingArea)
+                        loop.Dispose();
+                    s_OverlappingArea.Clear();
                     surfaceLoop.ClearAllEdges();
                     return;
                 }
@@ -321,28 +321,37 @@ namespace Chisel.Core
             //for (int o = 0; o < s_OverlappingArea.Count; o++)
             {
                 var overlappingLoop = s_OverlappingArea[o];
-                if (overlappingLoop.Valid)
+                if (!overlappingLoop.Valid)
                 {
-                    if (CSGManagerPerformCSG.AreLoopsOverlapping(surfaceLoop, overlappingLoop))
-                    {
-                        surfaceLoop.info.interiorCategory = newHoleCategory;
-                    } else
-                    { 
-                        overlappingLoop.info.interiorCategory = newHoleCategory;
-
-                        for (int h = 0; h < surfaceLoop.holes.Count; h++)
-                        {
-                            // Need to make a copy so we can edit it without causing side effects
-                            var copyPolygon = new Loop(surfaceLoop.holes[h]);
-                            overlappingLoop.holes.Add(copyPolygon);
-                        }
-
-                        var newPolygon = new Loop(overlappingLoop, newHoleCategory);
-                        surfaceLoop.holes.Add(newPolygon);              // but it is also a hole for our polygon
-                        loopsOnBrushSurface.Add(overlappingLoop);       // this loop is a polygon on its own
-                    }
+                    foreach (var loop in s_OverlappingArea)
+                        loop.Dispose();
+                    s_OverlappingArea.Clear();
+                    return;
                 }
+                
+                if (CSGManagerPerformCSG.AreLoopsOverlapping(surfaceLoop, overlappingLoop))
+                {
+                    foreach (var loop in s_OverlappingArea)
+                        loop.Dispose();
+                    surfaceLoop.info.interiorCategory = newHoleCategory;
+                    s_OverlappingArea.Clear();
+                    return;
+                } 
+
+                overlappingLoop.info.interiorCategory = newHoleCategory;
+
+                for (int h = 0; h < surfaceLoop.holes.Count; h++)
+                {
+                    // Need to make a copy so we can edit it without causing side effects
+                    var copyPolygon = new Loop(surfaceLoop.holes[h]);
+                    overlappingLoop.holes.Add(copyPolygon);
+                }
+
+                var newPolygon = new Loop(overlappingLoop, newHoleCategory);
+                surfaceLoop.holes.Add(newPolygon);              // but it is also a hole for our polygon
+                loopsOnBrushSurface.Add(overlappingLoop);       // this loop is a polygon on its own
             }
+            s_OverlappingArea.Clear();
         }
         #endregion
 
@@ -361,7 +370,7 @@ namespace Chisel.Core
             for (int l = baseloops.Count - 1; l >= 0; l--)
             {
                 var baseloop = baseloops[l];
-                if (baseloop.edges.Count < 3)
+                if (baseloop.edges.Length < 3)
                 {
                     baseloop.edges.Clear();
                     continue;
@@ -381,14 +390,16 @@ namespace Chisel.Core
                 for (int h = holes.Count - 1; h >= 0; h--)
                 {
                     var hole = holes[h];
-                    if (hole.edges.Count < 3)
+                    if (hole.edges.Length < 3)
                     {
+                        holes[h].Dispose();
                         holes.RemoveAt(h);
                         continue;
                     }
                     var holeNormal = CalculatePlaneEdges(hole, brushVertices);
                     if (math.all(holeNormal == float3.zero))
                     {
+                        holes[h].Dispose();
                         holes.RemoveAt(h);
                         continue;
                     }
@@ -396,120 +407,129 @@ namespace Chisel.Core
                 if (holes.Count == 0)
                     continue;
 
-                /*
-                // TODO: figure out why sometimes polygons are flipped around, and try to fix this at the source
-                if (math.dot(baseLoopNormal, baseloop.info.worldPlane.xyz) < 0)
+                using (var allWorldPlanes   = new NativeList<float4>(Allocator.TempJob))
+                using (var allSegments      = new NativeList<LoopSegment>(Allocator.TempJob))
+                using (var allEdges         = new NativeList<Edge>(Allocator.TempJob))
                 {
-                    var holeEdges = baseloop.edges;
-                    for (int n = 0; n < holeEdges.Count; n++)
+                    int edgeOffset = 0;
+                    int planeOffset = 0;
+                    for (int h = 0; h < holes.Count; h++)
                     {
-                        var holeEdge = holeEdges[n];
-                        var i1 = holeEdge.index1;
-                        var i2 = holeEdge.index2;
-                        holeEdge.index1 = i2;
-                        holeEdge.index2 = i1;
-                        holeEdges[n] = holeEdge;
-                    }
-                    baseLoopNormal = baseloop.info.worldPlane.xyz;
-                }
-                */
+                        var hole = holes[h];
 
-                // TODO: figure out why sometimes polygons are flipped around, and try to fix this at the source
-                for (int h = holes.Count - 1; h >= 0; h--)
-                {
-                    var holeEdges = holes[h].edges;
-                    var holeNormal = CalculatePlaneEdges(holes[h], brushVertices);
-                    if (math.dot(holeNormal, baseLoopNormal) > 0)
-                    {
-                        for (int n = 0; n < holeEdges.Count; n++)
+                        // TODO: figure out why sometimes polygons are flipped around, and try to fix this at the source
+                        var holeEdges = hole.edges;
+                        var holeNormal = CalculatePlaneEdges(hole, brushVertices);
+                        if (math.dot(holeNormal, baseLoopNormal) > 0)
                         {
-                            var holeEdge = holeEdges[n];
-                            var i1 = holeEdge.index1;
-                            var i2 = holeEdge.index2;
-                            holeEdge.index1 = i2;
-                            holeEdge.index2 = i1;
-                            holeEdges[n] = holeEdge;
-                        }
-                    }
-                }
-
-                {
-                    var brushInfo1 = CSGManager.GetBrushInfoUnsafe(baseloop.info.brush.brushNodeID);
-                    var worldPlanes1 = brushInfo1.brushWorldPlanes;
-                    using (var loop1Edges = new NativeArray<Edge>(baseloop.edges.Count, Allocator.TempJob))
-                    {
-                        {
-                            NativeArray<Edge> temp = loop1Edges; // workaround for "CaN't EdIt DiSpOsAbLe VaRiAbLeS" nonsense
-                            var edgePtr = (Edge*)temp.GetUnsafePtr();
-                            for (int e = 0; e < baseloop.edges.Count; e++)
-                                edgePtr[e] = baseloop.edges[e];
+                            for (int n = 0; n < holeEdges.Length; n++)
+                            {
+                                var holeEdge = holeEdges[n];
+                                var i1 = holeEdge.index1;
+                                var i2 = holeEdge.index2;
+                                holeEdge.index1 = i2;
+                                holeEdge.index2 = i1;
+                                holeEdges[n] = holeEdge;
+                            }
                         }
 
-                        baseloop.destroyed = new bool[baseloop.edges.Count];
+                        ref var worldPlanes = ref CSGManager.GetBrushInfoUnsafe(hole.info.brush.brushNodeID).brushWorldPlanes.Value.worldPlanes;
+
+                        var edgesLength = hole.edges.Length;
+                        var planesLength = worldPlanes.Length;
+
+                        allSegments.Add(new LoopSegment()
+                        {
+                            edgeOffset      = edgeOffset,
+                            edgeLength      = edgesLength,
+                            planesOffset    = planeOffset,
+                            planesLength    = planesLength
+                        });
+
+                        allEdges.AddRange(hole.edges);
+
+                        // TODO: ideally we'd only use the planes that intersect our edges
+                        allWorldPlanes.AddRange(worldPlanes.GetUnsafePtr(), planesLength);
+
+                        edgeOffset += edgesLength;
+                        planeOffset += planesLength;
+                    }
+                    if (baseloop.edges.Length > 0)
+                    {
+                        ref var worldPlanes = ref CSGManager.GetBrushInfoUnsafe(baseloop.info.brush.brushNodeID).brushWorldPlanes.Value.worldPlanes;
+
+                        var planesLength    = worldPlanes.Length;
+                        var edgesLength     = baseloop.edges.Length;
+
+                        allSegments.Add(new LoopSegment()
+                        {
+                            edgeOffset      = edgeOffset,
+                            edgeLength      = edgesLength,
+                            planesOffset    = planeOffset,
+                            planesLength    = planesLength
+                        });
+
+                        allEdges.AddRange(baseloop.edges);
+
+                        // TODO: ideally we'd only use the planes that intersect our edges
+                        allWorldPlanes.AddRange(worldPlanes.GetUnsafePtr(), planesLength);
+
+                        edgeOffset += edgesLength;
+                        planeOffset += planesLength;
+                    }
+
+                    using (var destroyedEdges = new NativeArray<byte>(edgeOffset, Allocator.TempJob))
+                    {
+                        {
+                            var subtractEdgesJob = new SubtractEdgesJob()
+                            {
+                                vertices            = brushVertices.vertices,
+                                segmentIndex        = holes.Count,
+                                destroyedEdges      = destroyedEdges,
+                                allWorldPlanes      = allWorldPlanes,
+                                allSegments         = allSegments,
+                                allEdges            = allEdges
+                            };
+                            subtractEdgesJob.Run(holes.Count);
+                        }
+
+                        // TODO: optimize, keep track which holes (potentially) intersect
+                        // TODO: create our own bounds data structure that doesn't use stupid slow properties for everything
+                        {
+                            var mergeEdgesJob = new MergeEdgesJob()
+                            {
+                                vertices            = brushVertices.vertices,
+                                segmentCount        = holes.Count,
+                                destroyedEdges      = destroyedEdges,
+                                allWorldPlanes      = allWorldPlanes,
+                                allSegments         = allSegments,
+                                allEdges            = allEdges
+                            };
+                            mergeEdgesJob.Run(GeometryMath.GetTriangleArraySize(holes.Count));
+                        }
+
+                        {
+                            var segment = allSegments[holes.Count];
+                            for (int e = baseloop.edges.Length - 1; e >= 0; e--)
+                            {
+                                if (destroyedEdges[segment.edgeOffset + e] == 0)
+                                    continue;
+                                baseloop.edges.RemoveAtSwapBack(e);
+                            }
+                        }
+
                         for (int h1 = holes.Count - 1; h1 >= 0; h1--)
                         {
                             var hole1 = holes[h1];
-                            hole1.destroyed = new bool[hole1.edges.Count];
-                            CSGManagerPerformCSG.Subtract(brushVertices, worldPlanes1, loop1Edges, baseloop, hole1);
-                        }
-                    }
-                }
-
-                // TODO: optimize, keep track which holes (potentially) intersect
-                for (int h1 = holes.Count - 1; h1 >= 0; h1--)
-                {
-                    var hole1 = holes[h1];
-
-                    var brush1NodeID = hole1.info.brush.brushNodeID;
-
-                    // TODO: create our own data structure that doesn't use stupid slow properties for everything
-                    //Bounds bounds1 = default;
-                    //if (CSGManager.GetBrushBounds(brush1NodeID, ref bounds1))
-                    {
-                        var brushInfo1 = CSGManager.GetBrushInfoUnsafe(brush1NodeID);
-                        var worldPlanes1 = brushInfo1.brushWorldPlanes;
-                        var loop1Edges = new NativeArray<Edge>(hole1.edges.Count, Allocator.TempJob);
-                        {
+                            var segment = allSegments[h1];
+                            for (int e = hole1.edges.Length - 1; e >= 0; e--)
                             {
-                                NativeArray<Edge> temp = loop1Edges; // workaround for "CaN't EdIt DiSpOsAbLe VaRiAbLeS" nonsense
-                                var edgePtr = (Edge*)temp.GetUnsafePtr();
-                                for (int e = 0; e < hole1.edges.Count; e++)
-                                    edgePtr[e] = hole1.edges[e];
-                            }
-
-                            for (int h2 = holes.Count - 1; h2 > h1; h2--)
-                            {
-                                var hole2 = holes[h2];
-                                //var brush2NodeID = hole2.info.brush.brushNodeID;
-                                //Bounds bounds2 = default;
-                                //if (CSGManager.GetBrushBounds(brush1NodeID, ref bounds2) &&
-                                //    bounds1.Intersects(bounds2))
-                                {
-                                    CSGManagerPerformCSG.Merge(brushVertices, worldPlanes1, loop1Edges, hole1, hole2);
-                                }
+                                if (destroyedEdges[segment.edgeOffset + e] == 0)
+                                    continue;
+                                hole1.edges.RemoveAtSwapBack(e);
                             }
                         }
-                        loop1Edges.Dispose();
                     }
-                }
-                for (int e = baseloop.destroyed.Length - 1; e >= 0; e--)
-                {
-                    if (!baseloop.destroyed[e])
-                        continue;
-                    baseloop.edges.RemoveAt(e);
-                }
-                baseloop.destroyed = null;
-
-                for (int h1 = holes.Count - 1; h1 >= 0; h1--)
-                {
-                    var hole1 = holes[h1];
-                    for (int e = hole1.destroyed.Length - 1; e >= 0; e--)
-                    {
-                        if (!hole1.destroyed[e])
-                            continue;
-                        hole1.edges.RemoveAt(e);
-                    }
-                    hole1.destroyed = null;
                 }
 
                 for (int h = holes.Count - 1; h >= 0; h--)
@@ -518,6 +538,8 @@ namespace Chisel.Core
                     //          (only edges between holes and base-loop are guaranteed to not be duplciate)
                     baseloop.AddEdges(holes[h].edges, removeDuplicates: true);
                 }
+                foreach(var hole in holes)
+                    hole.Dispose();
                 holes.Clear();
             }
 
@@ -525,8 +547,9 @@ namespace Chisel.Core
             for (int l = baseloops.Count - 1; l >= 0; l--)
             {
                 var baseloop = baseloops[l];
-                if (baseloop.edges.Count < 3)
+                if (baseloop.edges.Length < 3)
                 {
+                    baseloops[l].Dispose();
                     baseloops.RemoveAt(l);
                     continue;
                 }
@@ -540,7 +563,7 @@ namespace Chisel.Core
             // NOTE: doesn't work well for self-intersecting polygons
             var normal = Vector3.zero;
             var vertices = soup.vertices;
-            for (int n = 0; n < loop.edges.Count; n++)
+            for (int n = 0; n < loop.edges.Length; n++)
             {
                 var edge = loop.edges[n];
                 var prevVertex = vertices[edge.index1];
@@ -554,109 +577,7 @@ namespace Chisel.Core
             return normal;
         }
 
-        static unsafe void Subtract(in VertexSoup soup, BlobAssetReference<BrushWorldPlanes> worldPlanes1, NativeArray<Edge> loop1Edges, Loop loop1, Loop loop2)
-        {
-            if (loop1.edges.Count == 0 ||
-                loop2.edges.Count == 0)
-                return;
-
-            var brushInfo2 = CSGManager.GetBrushInfoUnsafe(loop2.info.brush.brushNodeID);
-            var worldPlanes2 = brushInfo2.brushWorldPlanes;
-
-            // TODO: allocate/dispose arrays outside of outer loop, or make all edges always a NativeArray
-            using (var loop2Edges = new NativeArray<Edge>(loop2.edges.Count, Allocator.TempJob))
-            {
-                {
-                    NativeArray<Edge> temp = loop2Edges; // workaround for "CaN't EdIt DiSpOsAbLe VaRiAbLeS" nonsense
-                    var edgePtr = (Edge*)temp.GetUnsafePtr();
-                    for (int e = 0; e < loop2.edges.Count; e++)
-                        edgePtr[e] = loop2.edges[e];
-                }
-                // 1. there are edges with two identical vertex indices?
-                // 2. all edges should overlap, but some aren't overlapping?
-
-                // *------*......*
-                // |      |      .
-                // |      |      .
-                // |      |      .
-                // *------*......*
-
-                // *------*
-                // | *----*
-                // | |    .
-                // | *----*
-                // *------*
-
-                fixed (bool* loop1EdgesDestroyed = &loop1.destroyed[0])
-                fixed (bool* loop2EdgesDestroyed = &loop2.destroyed[0])
-                { 
-                    var categorizeEdgesJob1 = new CategorizeEdgesJob()
-                    {
-                        vertexSoup          = soup,
-                        edges1              = loop1Edges,
-                        edges2              = loop2Edges,
-                        destroyed1          = loop1EdgesDestroyed,
-                        destroyed2          = loop2EdgesDestroyed,
-                        brushWorldPlanes1   = worldPlanes1,
-                        brushWorldPlanes2   = worldPlanes2,
-
-                        good1 = EdgeCategory.Outside,
-                        good2 = EdgeCategory.Aligned,
-
-                        good3 = EdgeCategory.Inside,
-                        good4 = EdgeCategory.Inside
-                    };
-                    categorizeEdgesJob1.Run();
-                }
-            }
-        }
-
-
-
-        static unsafe void Merge(in VertexSoup soup, BlobAssetReference<BrushWorldPlanes> worldPlanes1, NativeArray<Edge> loop1Edges, Loop loop1, Loop loop2)
-        {
-            if (loop1.edges.Count == 0 ||
-                loop2.edges.Count == 0)
-                return;
-
-            var brushInfo2 = CSGManager.GetBrushInfoUnsafe(loop2.info.brush.brushNodeID);
-            var worldPlanes2 = brushInfo2.brushWorldPlanes;
-
-            // TODO: allocate/dispose arrays outside of outer loop, or make all edges always a NativeArray
-            using (var loop2Edges = new NativeArray<Edge>(loop2.edges.Count, Allocator.TempJob))
-            {
-                {
-                    NativeArray<Edge> temp = loop2Edges; // workaround for "CaN't EdIt DiSpOsAbLe VaRiAbLeS" nonsense
-                    var edgePtr = (Edge*)temp.GetUnsafePtr();
-                    for (int e = 0; e < loop2.edges.Count; e++)
-                        edgePtr[e] = loop2.edges[e];
-                }
-                fixed (bool* loop1EdgesDestroyed = &loop1.destroyed[0])
-                fixed (bool* loop2EdgesDestroyed = &loop2.destroyed[0])
-                { 
-                    // TODO: join into one big job, so we can get rid of lots of temporaries
-                    var categorizeEdgesJob1 = new CategorizeEdgesJob()
-                    {
-                        vertexSoup          = soup,
-                        edges1              = loop1Edges,
-                        edges2              = loop2Edges,
-                        destroyed1          = loop1EdgesDestroyed,
-                        destroyed2          = loop2EdgesDestroyed,
-                        brushWorldPlanes1   = worldPlanes1,
-                        brushWorldPlanes2   = worldPlanes2,
-
-                        good1 = EdgeCategory.Outside,
-                        good2 = EdgeCategory.Aligned,
-
-                        good3 = EdgeCategory.Outside,
-                        good4 = EdgeCategory.Outside
-                    };
-                    categorizeEdgesJob1.Run();
-                }
-            }
-        }
-
-        #endregion
+#endregion
     }
 #endif
-}
+                    }

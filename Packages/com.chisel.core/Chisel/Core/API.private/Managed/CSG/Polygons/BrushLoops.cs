@@ -14,7 +14,7 @@ using ReadOnlyAttribute = Unity.Collections.ReadOnlyAttribute;
 namespace Chisel.Core
 {
 #if USE_MANAGED_CSG_IMPLEMENTATION
-    internal sealed class BrushLoops
+    internal sealed class BrushLoops : IDisposable
     {
         public CSGTreeBrush brush;
         public VertexSoup   vertexSoup   = new VertexSoup();
@@ -30,6 +30,30 @@ namespace Chisel.Core
         {
             intersectionSurfaceLoops.Clear();
             intersectionLoops.Clear();
+        }
+        ~BrushLoops() { Dispose(); }
+        public void Dispose()
+        {
+            vertexSoup.Dispose();
+            foreach (var surfaceLoop in intersectionSurfaceLoops.Values)
+                surfaceLoop.Dispose();
+            intersectionSurfaceLoops.Clear();
+            foreach (var loopArray in intersectionLoops.Values)
+            {
+                if (loopArray != null &&
+                    loopArray.Length > 0)
+                {
+                    foreach (var loop in loopArray)
+                    {
+                        if (loop != null)
+                            loop.Dispose();
+                    }
+                }
+            }
+            intersectionLoops.Clear();
+            foreach (var loop in basePolygons)
+                loop.Dispose();
+            basePolygons.Clear();
         }
     }
 

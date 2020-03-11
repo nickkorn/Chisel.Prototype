@@ -81,6 +81,8 @@ namespace Chisel.Core
             ref var polygons   = ref mesh.Value.polygons;
             var nodeToTreeSpaceMatrix   = (float4x4)outputLoops.brush.NodeToTreeSpaceMatrix;
             var nodeToTreeSpaceInvertedTransposedMatrix = math.transpose(math.inverse(nodeToTreeSpaceMatrix));
+
+            Debug.Assert(outputLoops.basePolygons.Count == 0);
             outputLoops.basePolygons.Clear(); 
             if (outputLoops.basePolygons.Capacity < polygons.Length)
                 outputLoops.basePolygons.Capacity = polygons.Length;

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Entities;
@@ -211,8 +212,14 @@ namespace Chisel.Core
 
             public readonly RoutingTable    routingTable        = new RoutingTable();
 
+            ~BrushInfo() { Dispose(); }
+
             public void Dispose()
             {
+                routingTable.Dispose();
+                if (brushSurfaceLoops != null) brushSurfaceLoops.Dispose();
+                brushSurfaceLoops = null;
+                brushOutputLoops.Dispose();
                 if (brushWorldPlanes.IsCreated)
                     brushWorldPlanes.Dispose();
                 brushWorldPlanes = BlobAssetReference<BrushWorldPlanes>.Null;
@@ -221,10 +228,9 @@ namespace Chisel.Core
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void Reset()
             {
+                Dispose();
                 brushOutlineGeneration  = 0;
                 brushOutline.Reset();
-                if (brushSurfaceLoops != null)
-                    brushSurfaceLoops.Clear();
                 brushOutputLoops.Clear();
                 renderBuffers.surfaceRenderBuffers.Clear();
                 brushBrushIntersections.Clear();
@@ -748,7 +754,7 @@ namespace Chisel.Core
                     //    continue;
 
                     var loop = surfaceLoopList[l];
-                    if (loop.edges.Count < 3)
+                    if (loop.edges.Length < 3)
                         continue;
 
                     loops.Add(loop);
@@ -791,7 +797,7 @@ namespace Chisel.Core
 
                         // TODO: all separate loops on same surface should be put in same OutputSurfaceMesh!                    
 
-                        surfaceIndices = context.TriangulateLoops(loop, brushVertices.vertices, loop.edges, rotation);
+                        surfaceIndices = context.TriangulateLoops(loop, brushVertices.vertices, loop.edges.ToArray().ToList(), rotation);
 
                     
                         #if false

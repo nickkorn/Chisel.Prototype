@@ -146,13 +146,7 @@ namespace Chisel.Core
                     brushPlaneSegments.Dispose();
 
                 if (this.allIntersectionLoops != null)
-                {
-                    foreach (var intersection in this.allIntersectionLoops)
-                    {
-                        intersection.edges.Dispose();
-                    }
                     this.allIntersectionLoops.Clear();
-                }
                 brushDataList.Clear();
             }
 
@@ -251,12 +245,10 @@ namespace Chisel.Core
                             var intersectionLoop = new IntersectionLoop()
                             {
                                 segment         = newBrushData.planeSegment,
-                                edges           = new NativeList<Edge>(loop.edges.Count, Allocator.Persistent),
+                                edges           = loop.edges,
                                 surfaceIndex    = s,
                                 brushNodeID     = treeBrushes[b0]
                             };
-                            for (int i = 0; i < loop.edges.Count; i++)
-                                intersectionLoop.edges.Add(loop.edges[i]);
 
                             this.allIntersectionLoops.Add(intersectionLoop);
                             newBrushData.basePolygonLoops[s] = intersectionLoop;
@@ -303,10 +295,14 @@ namespace Chisel.Core
                         {
                             sharedPlaneData.Run();
                             if (sharedPlaneData.intersectingPlanes0.Length == 0 && sharedPlaneData.intersectingPlanes1.Length == 0)
+                            {
+                                loops01.Dispose();
+                                loops10.Dispose();
                                 continue;
+                            }
 
                             // chain each subsection together, then chain subsections together
-                            var handleDep = new JobHandle();
+                            //var handleDep = new JobHandle();
 
                             // TODO: allocate per intersection, perform all calculations/sorts, THEN create ALL surface-loops and assign indices
                             using (var insideVerticesStream0    = new NativeStream(math.max(1, sharedPlaneData.usedVertices0.Length), Allocator.TempJob))
@@ -474,6 +470,13 @@ namespace Chisel.Core
                         }
 
                         // TODO: this can probably be done using a list instead of a dictionary
+                        {
+                            if (brushInfo0.brushOutputLoops.intersectionSurfaceLoops.TryGetValue(brush1.brushNodeID, out SurfaceLoops oldLoops1))
+                                oldLoops1.Dispose();
+                            if (brushInfo0.brushOutputLoops.intersectionSurfaceLoops.TryGetValue(brush0.brushNodeID, out SurfaceLoops oldLoops0))
+                                oldLoops0.Dispose();
+                        }
+
                         brushInfo0.brushOutputLoops.intersectionSurfaceLoops[brush1.brushNodeID] = loops01;
                         brushInfo1.brushOutputLoops.intersectionSurfaceLoops[brush0.brushNodeID] = loops10;
                     }

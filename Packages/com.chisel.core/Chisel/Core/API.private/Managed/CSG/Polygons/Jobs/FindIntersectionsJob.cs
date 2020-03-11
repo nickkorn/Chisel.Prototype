@@ -849,12 +849,15 @@ namespace Chisel.Core
         {
             if (uniqueIndices.Length < 3)
                 return;
-            
+
+            if (outputSurfaces == null)
+                return;
+
             var indicesPtr              = (ushort*)uniqueIndices.GetUnsafeReadOnlyPtr();
             var planeIndexOffsetsPtr    = (PlaneIndexOffsetLength*)planeIndexOffsets.GetUnsafeReadOnlyPtr();
             var planeIndexOffsetsLength = planeIndexOffsets.Length;
             var surfaceCategoriesPtr    = (SurfaceInfo*)surfaceCategories.GetUnsafeReadOnlyPtr();
-            
+
             for (int n = 0; n < planeIndexOffsetsLength; n++)
             {
                 var planeIndexLength    = planeIndexOffsetsPtr[n];
@@ -862,7 +865,8 @@ namespace Chisel.Core
                 var loopLength          = planeIndexLength.length;
                 var basePlaneIndex      = planeIndexLength.planeIndex;
                 var surfaceCategory     = surfaceCategoriesPtr[basePlaneIndex];
-                outputSurfaces[basePlaneIndex].Add(new Loop(surfaceCategory, indicesPtr, offset, loopLength));
+                if (outputSurfaces[basePlaneIndex] != null)
+                    outputSurfaces[basePlaneIndex].Add(new Loop(surfaceCategory, indicesPtr, offset, loopLength));
             }
         }
     }

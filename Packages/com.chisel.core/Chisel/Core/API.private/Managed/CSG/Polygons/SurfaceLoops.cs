@@ -14,7 +14,7 @@ using ReadOnlyAttribute = Unity.Collections.ReadOnlyAttribute;
 namespace Chisel.Core
 {
 #if USE_MANAGED_CSG_IMPLEMENTATION
-    public sealed class SurfaceLoops
+    public sealed class SurfaceLoops : IDisposable
     {
         public List<Loop>[] surfaces;
 
@@ -24,21 +24,24 @@ namespace Chisel.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public SurfaceLoops(int surfaceCount)
         {
-            if (surfaces == null ||
-                surfaces.Length != surfaceCount)
-                surfaces = new List<Loop>[surfaceCount];
+            surfaces = new List<Loop>[surfaceCount];
             for (int i = 0; i < surfaceCount; i++)
                 surfaces[i] = new List<Loop>();
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void Clear()
-        {
-            if (surfaces == null)
-                return;
+        ~SurfaceLoops() { Dispose(); }
 
-            for (int i = 0; i < surfaces.Length; i++)
-                surfaces[i].Clear();
+        public void Dispose()
+        {
+            if (surfaces != null)
+            {
+                foreach (var loopList in surfaces)
+                {
+                    foreach (var loop in loopList)
+                        loop.Dispose();
+                    loopList.Clear();
+                }
+            }
         }
     }
 #endif

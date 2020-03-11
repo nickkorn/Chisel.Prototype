@@ -1,22 +1,12 @@
-Fix bug with surface at front of test level being removed
-    first appears at "cleaning up code 7"
-	hole is triangle shape, vertex index is missing?
-	already like this *before* cleanup
-		why is this triangulated incorrectly?
-			should just be triangular hole
-		why is the vertex index missing?
-			when was this introduced?
-Get rid of loop.indices
+produce blobAssets at different phases as output, use as input in next phase
+	only update these blobAssets when necessary
+	removes need to store things in 'Loops' etc.
 all the places we need worldplanes, use precalculated brushWorldPlanes
 somehow remove need for "destroyed" bool array in Loop
-somehow store edges in NativeList so we never have to convert
 replace bounds with own implementation that doesn't use properties & uses unity.mathematics
 
-indices used in
-   CalculatePlane
-   AreLoopsOverlapping
-   PerformBooleanIntersection
-   class IntersectionLoop
+producing brushMesh assets is slow
+	this in a job somehow
 
 remove somehow (slow)
 	SortIndices

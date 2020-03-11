@@ -17,8 +17,9 @@ namespace Chisel.Core
 {
 #if USE_MANAGED_CSG_IMPLEMENTATION
     // TODO: rename
-    public sealed class Loop
+    public sealed class Loop : IDisposable
     {
+
 #if DebugInfo
         public static int loopDebugCounter = 0;
         public int loopIndex = loopDebugCounter++;
@@ -32,22 +33,37 @@ namespace Chisel.Core
         }
 #endif
 
-        public List<Edge>                   edges       = new List<Edge>();
-        public bool[]                       destroyed;
-
+        public NativeList<Edge>             edges;
+        
         [NonSerialized] public List<Loop>   holes       = new List<Loop>();
         [NonSerialized] public SurfaceInfo  info;
 
-        public bool Valid { [MethodImpl(MethodImplOptions.AggressiveInlining)] get { return edges.Count >= 3; } }
+        public bool Valid { [MethodImpl(MethodImplOptions.AggressiveInlining)] get { return edges.Length >= 3; } }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public Loop()
         {
+            edges = new NativeList<Edge>(Allocator.Persistent);
+        }
+
+        ~Loop()
+        {
+            Dispose();
+        }
+
+        public void Dispose()
+        {
+            if (edges.IsCreated)
+                edges.Dispose();
+            foreach (var loop in holes)
+                loop.Dispose();
+            holes.Clear();
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public Loop(Loop original)
         {
+            edges = new NativeList<Edge>(Allocator.Persistent);
             this.edges  .AddRange(original.edges);
             this.info = original.info;
         }
@@ -55,6 +71,7 @@ namespace Chisel.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public Loop(Loop original, CategoryGroupIndex newHoleCategory)
         {
+            edges = new NativeList<Edge>(Allocator.Persistent);
             this.edges.AddRange(original.edges);
             this.info = original.info;
             this.info.interiorCategory = newHoleCategory;
@@ -63,6 +80,7 @@ namespace Chisel.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         unsafe public Loop(in SurfaceInfo surfaceInfo, ushort* srcIndices, int offset, int length)
         {
+            edges = new NativeList<Edge>(Allocator.Persistent);
             edges.Capacity = length;
             for (int j = 1; j < length; j++)
             {
@@ -94,13 +112,13 @@ namespace Chisel.Core
         static HashSet<Edge> s_UniqueEdges = new HashSet<Edge>();
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool AddEdges(List<Edge> addEdges, bool removeDuplicates = false)
+        public bool AddEdges(NativeList<Edge> addEdges, bool removeDuplicates = false)
         {
-            if (addEdges.Count == 0)
+            if (addEdges.Length == 0)
                 return false;
 
             s_UniqueEdges.Clear();
-            for (int e = 0; e < addEdges.Count; e++)
+            for (int e = 0; e < addEdges.Length; e++)
             {
                 if (!s_UniqueEdges.Add(addEdges[e]))
                 {
@@ -110,11 +128,11 @@ namespace Chisel.Core
 
             if (removeDuplicates)
             {
-                for (int e = edges.Count - 1; e >= 0; e--)
+                for (int e = edges.Length - 1; e >= 0; e--)
                 {
                     if (s_UniqueEdges.Remove(edges[e]))
                     {
-                        edges.RemoveAt(e);
+                        edges.RemoveAtSwapBack(e);
                     }
                 }
             }
@@ -140,7 +158,7 @@ namespace Chisel.Core
         public int IndexOf(Edge edge, out bool inverted)
         {
             //var builder = new System.Text.StringBuilder();
-            for (int e = 0; e < edges.Count; e++)
+            for (int e = 0; e < edges.Length; e++)
             {
                 //builder.AppendLine($"{e}/{edges.Count}: {edges[e]} {edge}");
                 if (edges[e].index1 == edge.index1 && edges[e].index2 == edge.index2) { inverted = false; return e; }

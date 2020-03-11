@@ -1,11 +1,12 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using UnityEngine;
 
 namespace Chisel.Core
 {
 #if USE_MANAGED_CSG_IMPLEMENTATION    
-    class RoutingTable
+    class RoutingTable : IDisposable
     {
         public CategoryGroupIndex[] inputs;
         public CategoryRoutingRow[] routingRows;
@@ -24,6 +25,27 @@ namespace Chisel.Core
             routingRows         = kEmptyRoutingRows;
             routingLookups      = kEmptyRoutingLookups;
             intersectionLoops   = kEmptyIntersectionLoops;
+        }
+
+        ~RoutingTable() { Dispose(); }
+        public void Dispose()
+        {
+            if (intersectionLoops != null)
+            {
+                foreach (var loopArray in intersectionLoops)
+                {
+                    if (loopArray != null)
+                    {
+                        foreach (var loop in loopArray)
+                        {
+                            if (loop != null)
+                                loop.Dispose();
+                        }
+                    }
+                }
+                intersectionLoops = null;
+            }
+            Clear();
         }
     }
     

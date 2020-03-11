@@ -1,4 +1,5 @@
-﻿using System;
+﻿#define IS_PARALLEL
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.ComponentModel;
@@ -14,100 +15,157 @@ using Unity.Entities;
 
 namespace Chisel.Core
 {
-    [BurstCompile(Debug = false)]
-    unsafe struct CategorizeEdgesJob : IJob
+    public struct LoopSegment
     {
-        [ReadOnly] public VertexSoup vertexSoup;
+        public int edgeOffset;
+        public int edgeLength;
+        public int planesOffset;
+        public int planesLength;
+    }
 
-        [ReadOnly] public NativeArray<Edge> edges1;
-        [ReadOnly] public NativeArray<Edge> edges2;
+    static unsafe class BooleanEdgesUtility
+    {
+        const float kEpsilon = CSGManagerPerformCSG.kDistanceEpsilon;
 
-        [ReadOnly] public BlobAssetReference<BrushWorldPlanes> brushWorldPlanes1;
-        [ReadOnly] public BlobAssetReference<BrushWorldPlanes> brushWorldPlanes2;
-
-        [NativeDisableUnsafePtrRestriction] [ReadOnly] public bool* destroyed1;
-        [NativeDisableUnsafePtrRestriction] [ReadOnly] public bool* destroyed2;
-
-        [ReadOnly] public EdgeCategory good1;
-        [ReadOnly] public EdgeCategory good2;
-        [ReadOnly] public EdgeCategory good3;
-        [ReadOnly] public EdgeCategory good4;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static int IndexOf(Edge* edgesPtr, int edgesLength, Edge edge, out bool inverted)
+        public static int IndexOf(NativeList<Edge> edges, int edgesOffset, int edgesLength, Edge edge, out bool inverted)
         {
-            for (int e = 0; e < edgesLength; e++)
+            for (int e = edgesOffset; e < edgesOffset + edgesLength; e++)
             {
-                if (edgesPtr[e].index1 == edge.index1 && edgesPtr[e].index2 == edge.index2) { inverted = false; return e; }
-                if (edgesPtr[e].index1 == edge.index2 && edgesPtr[e].index2 == edge.index1) { inverted = true; return e; }
+                if (edges[e].index1 == edge.index1 && edges[e].index2 == edge.index2) { inverted = false; return e; }
+                if (edges[e].index1 == edge.index2 && edges[e].index2 == edge.index1) { inverted = true; return e; }
             }
             inverted = false;
             return -1;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static EdgeCategory CategorizeEdge(ref BlobArray<float4> worldPlanes, in VertexSoup vertexSoup, Edge* edgesPtr, int edgesLength, Edge edge)
+        public static unsafe bool IsOutsidePlanes(NativeList<float4> planes, int planesOffset, int planesLength, float4 localVertex)
+        {
+            var planePtr = (float4*)planes.GetUnsafeReadOnlyPtr();
+            for (int n = 0; n < planesLength; n++)
+            {
+                var distance = math.dot(planePtr[planesOffset + n], localVertex);
+
+                // will be 'false' when distance is NaN or Infinity
+                if (!(distance <= kEpsilon))
+                    return true;
+            }
+            return false;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static EdgeCategory CategorizeEdge(in Edge edge, in NativeList<float4> planes, in NativeList<Edge> edges, in LoopSegment segment, in NativeList<float3> vertices)
         {
             // TODO: use something more clever than looping through all edges
-            if (IndexOf(edgesPtr, edgesLength, edge, out bool inverted) != -1)
+            if (IndexOf(edges, segment.edgeOffset, segment.edgeLength, edge, out bool inverted) != -1)
                 return (inverted) ? EdgeCategory.ReverseAligned : EdgeCategory.Aligned;
-            var vertices = vertexSoup.vertices;
             var midPoint = (vertices[edge.index1] + vertices[edge.index2]) * 0.5f;
 
-            if (CSGManagerPerformCSG.IsOutsidePlanes(ref worldPlanes, new float4(midPoint, 1)))
+            if (IsOutsidePlanes(planes, segment.planesOffset, segment.planesLength, new float4(midPoint, 1)))
                 return EdgeCategory.Outside;
             return EdgeCategory.Inside;
         }
 
+    }
+
+    [BurstCompile(Debug = false)]
+    unsafe struct SubtractEdgesJob : IJobParallelFor
+    {
+        [ReadOnly] public int                       segmentIndex;
+
+        [ReadOnly] public NativeList<float3>        vertices;
+        [ReadOnly] public NativeList<Edge>          allEdges;
+        [ReadOnly] public NativeList<float4>        allWorldPlanes;
+        [ReadOnly] public NativeList<LoopSegment>   allSegments;       
+
+        [NativeDisableParallelForRestriction]
+        [WriteOnly] public NativeArray<byte>        destroyedEdges;
+
+        public void Execute(int index)
+        {
+            var segment1 = allSegments[segmentIndex];
+            var segment2 = allSegments[index];
+
+            if (segment1.edgeLength == 0 ||
+                segment2.edgeLength == 0)
+                return;
+
+            for (int e = 0; e < segment1.edgeLength; e++)
+            {
+                var category = BooleanEdgesUtility.CategorizeEdge(allEdges[segment1.edgeOffset + e], allWorldPlanes, allEdges, segment2, vertices);
+                if (category == EdgeCategory.Outside || category == EdgeCategory.Aligned)
+                    continue;
+                destroyedEdges[segment1.edgeOffset + e] = 1;
+            }
+
+            for (int e = 0; e < segment2.edgeLength; e++)
+            {
+                var category = BooleanEdgesUtility.CategorizeEdge(allEdges[segment2.edgeOffset + e], allWorldPlanes, allEdges, segment1, vertices);
+                if (category == EdgeCategory.Inside)
+                    continue;
+                destroyedEdges[segment2.edgeOffset + e] = 1;
+            }
+        }
+    }
+    
+    [BurstCompile(Debug = false)]
+#if IS_PARALLEL
+    unsafe struct MergeEdgesJob : IJobParallelFor
+#else
+    unsafe struct MergeEdgesJob : IJob
+#endif
+    {
+        [ReadOnly] public int segmentCount;
+
+        [ReadOnly] public NativeList<float3>        vertices;
+        [ReadOnly] public NativeList<Edge>          allEdges;
+        [ReadOnly] public NativeList<float4>        allWorldPlanes;
+        [ReadOnly] public NativeList<LoopSegment>   allSegments;
+
+        [NativeDisableParallelForRestriction]
+        [WriteOnly] public NativeArray<byte>        destroyedEdges;
+
+#if IS_PARALLEL
+        public void Execute(int index)
+        {
+            var arrayIndex = GeometryMath.GetTriangleArrayIndex(index, segmentCount);
+            var segmentIndex1 = arrayIndex.x;
+            var segmentIndex2 = arrayIndex.y;
+            {
+                {
+#else
         public void Execute()
         {
-            var edges1Ptr = (Edge*)edges1.GetUnsafeReadOnlyPtr();
-            var edges1Length = edges1.Length;
-
-            var edges2Ptr = (Edge*)edges2.GetUnsafeReadOnlyPtr();
-            var edges2Length = edges2.Length;
-
-            var categories1 = new NativeArray<EdgeCategory>(edges1Length, Allocator.Temp, NativeArrayOptions.UninitializedMemory);
-            var categories2 = new NativeArray<EdgeCategory>(edges2Length, Allocator.Temp, NativeArrayOptions.UninitializedMemory);
-            for (int index = 0; index < edges1Length; index++)
+            for (int segmentIndex1 = 0; segmentIndex1 < segmentCount; segmentIndex1++)
             {
-                if (!destroyed1[index])
+                for (int segmentIndex2 = segmentIndex1 + 1; segmentIndex2 < segmentCount; segmentIndex2++)
                 {
-                    categories1[index] = CategorizeEdge(ref brushWorldPlanes2.Value.worldPlanes, vertexSoup, edges2Ptr, edges2Length, edges1Ptr[index]);
+#endif
+                    var segment1 = allSegments[segmentIndex1];
+                    var segment2 = allSegments[segmentIndex2];
+                    if (segment1.edgeLength > 0 && segment2.edgeLength > 0)
+                    {
+                        for (int e = 0; e < segment1.edgeLength; e++)
+                        {
+                            var category = BooleanEdgesUtility.CategorizeEdge(allEdges[segment1.edgeOffset + e], allWorldPlanes, allEdges, segment2, vertices);
+                            if (category == EdgeCategory.Outside ||
+                                category == EdgeCategory.Aligned)
+                                continue;
+                            destroyedEdges[segment1.edgeOffset + e] = 1;
+                        }
+
+                        for (int e = 0; e < segment2.edgeLength; e++)
+                        {
+                            var category = BooleanEdgesUtility.CategorizeEdge(allEdges[segment2.edgeOffset + e], allWorldPlanes, allEdges, segment1, vertices);
+                            if (category == EdgeCategory.Outside)
+                                continue;
+                            destroyedEdges[segment2.edgeOffset + e] = 1;
+                        }
+                    }
                 }
             }
-
-            for (int index = 0; index < edges2Length; index++)
-            {
-                if (!destroyed2[index])
-                {
-                    categories2[index] = CategorizeEdge(ref brushWorldPlanes1.Value.worldPlanes, vertexSoup, edges1Ptr, edges1Length, edges2Ptr[index]);
-                }
-            }
-
-            for (int index = 0; index < edges1Length; index++)
-            {
-                if (!destroyed1[index])
-                {
-                    var category = categories1[index];
-                    if (category == good1 || category == good2)
-                        continue;
-                    destroyed1[index] = true;
-                }
-            }
-
-            for (int index = 0; index < edges2Length; index++)
-            {
-                if (!destroyed2[index])
-                {
-                    var category = categories2[index];
-                    if (category == good3 || category == good4)
-                        continue;
-                    destroyed2[index] = true;
-                }
-            }
-            categories1.Dispose();
-            categories2.Dispose();
         }
     }
 }

@@ -90,8 +90,9 @@ namespace Chisel.Core
             {
                 var brush0NodeID = treeBrushes[b0];
                 var output = CSGManager.GetBrushInfo(brush0NodeID);
-                var outputLoops = output.brushOutputLoops;
-                outputLoops.vertexSoup.Dispose();
+                output.brushOutputLoops.Dispose();
+                if (output.brushSurfaceLoops != null) output.brushSurfaceLoops.Dispose();
+                output.brushSurfaceLoops = null;
             }
             return true;
         }
@@ -153,6 +154,7 @@ namespace Chisel.Core
                 var brushNodeID     = treeBrushes[b];
                 var output          = CSGManager.GetBrushInfo(brushNodeID);
                 var outputLoops     = output.brushOutputLoops;
+                outputLoops.Dispose();
                 outputLoops.brush   = new CSGTreeBrush() { brushNodeID = brushNodeID };
                 nodeBounds[brushNodeID - 1] = CSGManagerPerformCSG.GenerateBasePolygons(outputLoops);
             }
@@ -266,10 +268,9 @@ namespace Chisel.Core
                 if (output.brushOutputLoops.basePolygons.Count > 0)
                 {
                     // TODO: get rid of this somehow
-                    if (output.brushSurfaceLoops == null ||
-                        output.brushSurfaceLoops.surfaces.Length != output.brushOutputLoops.basePolygons.Count)
-                        output.brushSurfaceLoops = new SurfaceLoops(output.brushOutputLoops.basePolygons.Count);
-
+                    if (output.brushSurfaceLoops != null)
+                        output.brushSurfaceLoops.Dispose();
+                    output.brushSurfaceLoops = new SurfaceLoops(output.brushOutputLoops.basePolygons.Count);
                     PerformCSG(output.brushSurfaceLoops, new CSGTreeBrush { brushNodeID = brushNodeID });
                 }
 
