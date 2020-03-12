@@ -3,9 +3,11 @@ produce blobAssets at different phases as output, use as input in next phase
 	removes need to store things in 'Loops' etc.
 
 required phases
-	brushMeshBlobs		
+	brushMeshBlobs
 	which brushes intersect which brushes. 
 		Have a lighting fast lookup that is stored in a struct/blob/nativearray so we can use it in jobs
+	"categorization table" -> blobs
+		Needs a unmanaged readable hierarchy!!!	
 	"baseloops" -> blobs per brush
 	"intersection loops" -> blob per intersection, some way to know which brush intersection it belongs to
 	"find intersections between intersection loops/baseloops" -> make copies of prev blobs, add intersections

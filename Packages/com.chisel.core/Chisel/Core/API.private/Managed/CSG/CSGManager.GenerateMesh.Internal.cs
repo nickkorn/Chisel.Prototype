@@ -219,8 +219,6 @@ namespace Chisel.Core
                 if (brushSurfaceLoops != null) brushSurfaceLoops.Dispose();
                 brushSurfaceLoops = null;
                 brushOutputLoops.Dispose();
-                if (brushWorldPlanes.IsCreated)
-                    brushWorldPlanes.Dispose();
                 routingTable = BlobAssetReference<RoutingTable>.Null;
                 brushWorldPlanes = BlobAssetReference<BrushWorldPlanes>.Null;
             }
@@ -235,8 +233,6 @@ namespace Chisel.Core
                 renderBuffers.surfaceRenderBuffers.Clear();
                 brushBrushIntersections.Clear();
                 routingTable = BlobAssetReference<RoutingTable>.Null;
-                if (brushWorldPlanes.IsCreated)
-                    brushWorldPlanes.Dispose();
                 brushWorldPlanes = BlobAssetReference<BrushWorldPlanes>.Null;
             }
         }

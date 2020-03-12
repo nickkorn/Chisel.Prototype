@@ -15,7 +15,6 @@ namespace Chisel.Core
         static List<BrushMesh>	brushMeshes		= new List<BrushMesh>();
         static List<int>		userIDs			= new List<int>();
         static List<int>		unusedIDs		= new List<int>();
-        static List<BlobAssetReference<BrushMeshBlob>> brushMeshesBlobs = new List<BlobAssetReference<BrushMeshBlob>>();
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static bool		IsBrushMeshIDValid		(Int32 brushMeshInstanceID)	{ return brushMeshInstanceID > 0 && brushMeshInstanceID <= brushMeshes.Count; }
@@ -63,7 +62,10 @@ namespace Chisel.Core
         {
             if (!IsBrushMeshIDValid(brushMeshInstanceID))
                 return BlobAssetReference<BrushMeshBlob>.Null;
-            return brushMeshesBlobs[brushMeshInstanceID - 1];
+
+            if (!ChiselLookup.Value.brushMeshBlobs.TryGetValue(brushMeshInstanceID - 1, out BlobAssetReference<BrushMeshBlob> item))
+                return BlobAssetReference<BrushMeshBlob>.Null;
+            return item;
         }
 
         public static Int32 CreateBrushMesh(Int32				 userID,
@@ -89,7 +91,13 @@ namespace Chisel.Core
             }
 
             var brushMeshIndex = brushMeshID - 1;
-            brushMeshesBlobs[brushMeshIndex] = BrushMeshBlob.Build(brushMesh);
+            if (ChiselLookup.Value.brushMeshBlobs.TryGetValue(brushMeshIndex, out BlobAssetReference<BrushMeshBlob> item))
+            {
+                ChiselLookup.Value.brushMeshBlobs.Remove(brushMeshIndex);
+                if (item.IsCreated)
+                    item.Dispose();
+            }
+            ChiselLookup.Value.brushMeshBlobs[brushMeshIndex] = BrushMeshBlob.Build(brushMesh);
             return brushMeshID;
         }
 
@@ -118,9 +126,13 @@ namespace Chisel.Core
             }
 
             var brushMeshIndex = brushMeshInstanceID - 1;
-            if (brushMeshesBlobs[brushMeshIndex].IsCreated)
-                brushMeshesBlobs[brushMeshIndex].Dispose();
-            brushMeshesBlobs[brushMeshIndex] = BrushMeshBlob.Build(brushMesh);
+            if (ChiselLookup.Value.brushMeshBlobs.TryGetValue(brushMeshIndex, out BlobAssetReference<BrushMeshBlob> item))
+            {
+                ChiselLookup.Value.brushMeshBlobs.Remove(brushMeshIndex);
+                if (item.IsCreated)
+                    item.Dispose();
+            }
+            ChiselLookup.Value.brushMeshBlobs[brushMeshIndex] = BrushMeshBlob.Build(brushMesh);
             CSGManager.NotifyBrushMeshModified(brushMeshInstanceID);
             return true;
         }
@@ -131,7 +143,6 @@ namespace Chisel.Core
             {
                 int index = brushMeshes.Count;
                 brushMeshes.Add(new BrushMesh());
-                brushMeshesBlobs.Add(BlobAssetReference<BrushMeshBlob>.Null);
                 userIDs.Add(userID);
                 return index + 1;
             }
@@ -141,10 +152,13 @@ namespace Chisel.Core
             var brushMeshIndex	= brushMeshID - 1;
             unusedIDs.RemoveAt(0); // sorry again
             brushMeshes[brushMeshIndex].Reset();
-            if (brushMeshesBlobs[brushMeshIndex].IsCreated)
-                brushMeshesBlobs[brushMeshIndex].Dispose();
-            brushMeshesBlobs[brushMeshIndex] = BlobAssetReference<BrushMeshBlob>.Null;
             userIDs[brushMeshIndex] = userID;
+            if (ChiselLookup.Value.brushMeshBlobs.TryGetValue(brushMeshIndex, out BlobAssetReference<BrushMeshBlob> item))
+            {
+                ChiselLookup.Value.brushMeshBlobs.Remove(brushMeshIndex);
+                if (item.IsCreated)
+                    item.Dispose();
+            }
             return brushMeshID;
         }
 
@@ -156,10 +170,13 @@ namespace Chisel.Core
             CSGManager.NotifyBrushMeshRemoved(brushMeshInstanceID);
 
             var brushMeshIndex = brushMeshInstanceID - 1;
+            if (ChiselLookup.Value.brushMeshBlobs.TryGetValue(brushMeshIndex, out BlobAssetReference<BrushMeshBlob> item))
+            {
+                ChiselLookup.Value.brushMeshBlobs.Remove(brushMeshIndex);
+                if (item.IsCreated)
+                    item.Dispose();
+            }
             brushMeshes[brushMeshIndex].Reset();
-            if (brushMeshesBlobs[brushMeshIndex].IsCreated)
-                brushMeshesBlobs[brushMeshIndex].Dispose();
-            brushMeshesBlobs[brushMeshIndex] = BlobAssetReference<BrushMeshBlob>.Null;
             userIDs[brushMeshIndex] = CSGManager.kDefaultUserID;
             unusedIDs.Add(brushMeshInstanceID);
 

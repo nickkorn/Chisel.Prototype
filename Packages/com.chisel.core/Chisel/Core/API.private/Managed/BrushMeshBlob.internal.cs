@@ -34,6 +34,7 @@ namespace Chisel.Core
             public int      count;
         }
 
+        // TODO: turn this into AABB
         public Bounds		                    localBounds;
         public BlobArray<float3>	            vertices;
         public BlobArray<BrushMesh.HalfEdge>	halfEdges;
@@ -53,7 +54,10 @@ namespace Chisel.Core
 
         public static BlobAssetReference<BrushMeshBlob> Build(BrushMesh brushMesh)
         {
-            if (brushMesh == null)
+            if (brushMesh == null ||
+                brushMesh.vertices.Length < 4 ||
+                brushMesh.polygons.Length < 4 ||
+                brushMesh.halfEdges.Length < 12)
                 return BlobAssetReference<BrushMeshBlob>.Null;
             UnityEngine.Profiling.Profiler.BeginSample("BrushMeshBlob.Build");
             try

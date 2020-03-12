@@ -43,8 +43,6 @@ namespace Chisel.Core
         }
     }
 
-    public struct AABB { public float3 min, max; }
-
 
     // TODO: probably makes sense to break this up into multiple pieces/multiple jobs that can run parallel,
     //      but requires that change some storage formats first

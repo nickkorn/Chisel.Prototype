@@ -1,35 +1,103 @@
-#define USE_OPTIMIZATIONS
+﻿#define USE_OPTIMIZATIONS
 //#define SHOW_DEBUG_MESSAGES 
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
-using System.Text;
-using System.Threading.Tasks;
+using System.ComponentModel;
+using UnityEngine;
 using Unity.Burst;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
-using Unity.Entities;
 using Unity.Jobs;
 using Unity.Mathematics;
-using UnityEngine;
+using ReadOnlyAttribute = Unity.Collections.ReadOnlyAttribute;
+using System.Runtime.CompilerServices;
+using Unity.Entities;
 
-namespace Chisel.Core 
+namespace Chisel.Core
 {
 #if USE_MANAGED_CSG_IMPLEMENTATION
-    internal unsafe struct CategoryStackNode
-    { 
-        public CSGTreeNode          node;
-        public CSGOperationType     operation;
-        public CategoryGroupIndex   input;
-        public CategoryRoutingRow   routingRow;
+    [BurstCompile]
+    internal unsafe struct CreateRoutingTableJob : IJob
+    {
+        [ReadOnly] public NativeList<CategoryStackNode> routingTable;
+        //[ReadOnly] public NativeArray<int>                  treeBrushes;
+//            [ReadOnly] public BrushIntersectionLookup           intersectionTypeLookup;
+        [ReadOnly] public CSGTreeBrush processedNode;
+//            [ReadOnly] public CSGTree rootNode;
+//            [ReadOnly] public NativeArray<CategoryRoutingRow>   operationTables;
+        [WriteOnly] public NativeHashMap<int, BlobAssetReference<RoutingTable>>.ParallelWriter routingTableLookup;
 
-        public override string ToString() { return $"'{node}': {(CategoryIndex)input} -> {routingRow}"; }
+        public void Execute()
+        {
+            //var brushNodeID = treeBrushes[index];
+
+            //CSGManager.GetTreeOfNodeUnsafe(brushNodeID, out Int32 treeNodeID);
+
+            //var processedNode = new CSGTreeBrush() { brushNodeID = brushNodeID };
+            //var rootNode = new CSGTree() { treeNodeID = treeNodeID };
+
+            int categoryStackNodeCount, polygonGroupCount;
+            //var routingTable            = new NativeList<CategoryStackNode>(Allocator.Temp);
+            //var intersectionTypeLookup  = new BrushIntersectionLookup(CSGManager.GetMaxNodeIndex(), Allocator.Temp);
+            {
+                //SetUsedNodesBits(processedNode, rootNode, in intersectionTypeLookup);
+                //GetStack(in operationTables, in intersectionTypeLookup, processedNode, rootNode, routingTable);
+                     
+#if SHOW_DEBUG_MESSAGES
+                if (processedNode.NodeID == kDebugNode || kDebugNode == -1)
+                    Dump(processedNode, stack); 
+#endif
+
+                categoryStackNodeCount = (int)routingTable.Length;
+
+                int maxCounter = (int)CategoryRoutingRow.Length;
+                for (int i = 0; i < categoryStackNodeCount; i++)
+                    maxCounter = Math.Max(maxCounter, (int)routingTable[i].input);
+                polygonGroupCount = maxCounter + 1;
+
+                var inputs          = new NativeList<CategoryGroupIndex>(Allocator.Temp);
+                var routingRows     = new NativeList<CategoryRoutingRow>(Allocator.Temp);
+                var routingLookups  = new NativeList<RoutingLookup>(Allocator.Temp);
+                var nodes           = new NativeList<int>(Allocator.Temp);
+                {
+                    // TODO: clean up
+                    for (int i = 0; i < routingTable.Length;)
+                    {
+                        var cutting_node = routingTable[i].node;
+                        var cutting_node_id = cutting_node.nodeID;
+
+                        int start_index = i;
+                        do
+                        {
+                            inputs.Add(routingTable[i].input);
+                            routingRows.Add(routingTable[i].routingRow);
+                            i++;
+                        } while (i < routingTable.Length && routingTable[i].node.nodeID == cutting_node_id);
+                        int end_index = i;
+
+
+                        nodes.Add(cutting_node_id);
+                        routingLookups.Add(new RoutingLookup(start_index, end_index));
+                    }
+
+                    var routingTableBlob = RoutingTable.Build(inputs, routingRows, routingLookups, nodes);
+                    if (!routingTableLookup.TryAdd(processedNode.brushNodeID - 1, routingTableBlob))
+                        FailureMessage();
+                }
+                inputs.Dispose();
+                routingRows.Dispose();
+                routingLookups.Dispose();
+                nodes.Dispose();
+
+            }
+            //routingTable.Dispose();
+            //intersectionTypeLookup.Dispose();
+        }
 
 
         [BurstDiscard]
-        public static void SetUsedNodesBits(CSGTreeBrush brush, CSGTreeNode rootNode, in BrushIntersectionLookup bitset)
+        internal static void SetUsedNodesBits(CSGTreeBrush brush, CSGTreeNode rootNode, in BrushIntersectionLookup bitset)
         {
             var brushNodeIndex = brush.NodeID - 1;
 
@@ -66,84 +134,6 @@ namespace Chisel.Core
             }
         }
 
-        [BurstCompile]
-        public unsafe struct CreateRoutingTableJob : IJob
-        {
-            [ReadOnly] public NativeList<CategoryStackNode> routingTable;
-            //[ReadOnly] public NativeArray<int>                  treeBrushes;
-//            [ReadOnly] public BrushIntersectionLookup           intersectionTypeLookup;
-            [ReadOnly] public CSGTreeBrush processedNode;
-//            [ReadOnly] public CSGTree rootNode;
-//            [ReadOnly] public NativeArray<CategoryRoutingRow>   operationTables;
-            [WriteOnly] public NativeHashMap<int, BlobAssetReference<RoutingTable>>.ParallelWriter routingTableLookup;
-
-            public void Execute()
-            {
-                //var brushNodeID = treeBrushes[index];
-
-                //CSGManager.GetTreeOfNodeUnsafe(brushNodeID, out Int32 treeNodeID);
-
-                //var processedNode = new CSGTreeBrush() { brushNodeID = brushNodeID };
-                //var rootNode = new CSGTree() { treeNodeID = treeNodeID };
-
-                int categoryStackNodeCount, polygonGroupCount;
-                //var routingTable            = new NativeList<CategoryStackNode>(Allocator.Temp);
-                //var intersectionTypeLookup  = new BrushIntersectionLookup(CSGManager.GetMaxNodeIndex(), Allocator.Temp);
-                {
-                    //SetUsedNodesBits(processedNode, rootNode, in intersectionTypeLookup);
-                    //GetStack(in operationTables, in intersectionTypeLookup, processedNode, rootNode, routingTable);
-                     
-#if SHOW_DEBUG_MESSAGES
-                    if (processedNode.NodeID == kDebugNode || kDebugNode == -1)
-                        Dump(processedNode, stack); 
-#endif
-
-                    categoryStackNodeCount = (int)routingTable.Length;
-
-                    int maxCounter = (int)CategoryRoutingRow.Length;
-                    for (int i = 0; i < categoryStackNodeCount; i++)
-                        maxCounter = Math.Max(maxCounter, (int)routingTable[i].input);
-                    polygonGroupCount = maxCounter + 1;
-
-                    var inputs          = new NativeList<CategoryGroupIndex>(Allocator.Temp);
-                    var routingRows     = new NativeList<CategoryRoutingRow>(Allocator.Temp);
-                    var routingLookups  = new NativeList<RoutingLookup>(Allocator.Temp);
-                    var nodes           = new NativeList<int>(Allocator.Temp);
-                    {
-                        // TODO: clean up
-                        for (int i = 0; i < routingTable.Length;)
-                        {
-                            var cutting_node = routingTable[i].node;
-                            var cutting_node_id = cutting_node.nodeID;
-
-                            int start_index = i;
-                            do
-                            {
-                                inputs.Add(routingTable[i].input);
-                                routingRows.Add(routingTable[i].routingRow);
-                                i++;
-                            } while (i < routingTable.Length && routingTable[i].node.nodeID == cutting_node_id);
-                            int end_index = i;
-
-
-                            nodes.Add(cutting_node_id);
-                            routingLookups.Add(new RoutingLookup(start_index, end_index));
-                        }
-
-                        var routingTableBlob = RoutingTable.Build(inputs, routingRows, routingLookups, nodes);
-                        if (!routingTableLookup.TryAdd(processedNode.brushNodeID - 1, routingTableBlob))
-                            FailureMessage();
-                    }
-                    inputs.Dispose();
-                    routingRows.Dispose();
-                    routingLookups.Dispose();
-                    nodes.Dispose();
-
-                }
-                //routingTable.Dispose();
-                //intersectionTypeLookup.Dispose();
-            }
-        }
 
         [BurstDiscard]
         static void FailureMessage()
@@ -170,6 +160,130 @@ namespace Chisel.Core
 
                 categoryRow.routingRow = routingRow;
                 stack[i] = categoryRow;
+            }
+        }
+
+        public static void GetStack(in NativeArray<CategoryRoutingRow> operationTables, in BrushIntersectionLookup intersectionTypeLookup, CSGTreeBrush processedNode, CSGTreeNode rootNode, NativeList<CategoryStackNode> output)
+        {
+            int haveGonePastSelf = 0;
+            GetStack(in operationTables, in intersectionTypeLookup, processedNode, rootNode, rootNode, 0, ref haveGonePastSelf, output);
+            if (output.Length == 0)
+                output.Add(new CategoryStackNode() { node = rootNode, operation = rootNode.Operation, routingRow = CategoryRoutingRow.outside });
+        }
+
+        static void GetStack(in NativeArray<CategoryRoutingRow> operationTables, in BrushIntersectionLookup intersectionTypeLookup, CSGTreeBrush processedNode, CSGTreeNode node, CSGTreeNode rootNode, int depth, ref int haveGonePastSelf, NativeList<CategoryStackNode> output)
+        {
+            output.Clear();
+            var nodeIndex           = node.nodeID - 1;
+            var intersectionType    = intersectionTypeLookup.Get(nodeIndex);
+            if (intersectionType == IntersectionType.NoIntersection)
+                return;// sEmptyStack.ToList();
+
+
+            // TODO: use other intersection types
+            if (intersectionType == IntersectionType.AInsideB) { output.Add(new CategoryStackNode() { node = node, operation = node.Operation, routingRow = CategoryRoutingRow.inside }); return; }
+            if (intersectionType == IntersectionType.BInsideA) { output.Add(new CategoryStackNode() { node = node, operation = node.Operation, routingRow = CategoryRoutingRow.outside }); return; }
+
+            switch (node.Type)
+            {
+                case CSGNodeType.Brush:
+                {
+                    // All surfaces of processedNode are aligned with it's own surfaces, so all categories are Aligned
+                    if (processedNode == node)
+                    {
+                        haveGonePastSelf = 1;
+                        output.Add(new CategoryStackNode() { node = node, operation = node.Operation, routingRow = CategoryRoutingRow.selfAligned } );
+                        return;
+                    }
+
+                    if (haveGonePastSelf > 0)
+                        haveGonePastSelf = 2;
+
+                    // Otherwise return identity categories (input == output)
+                    output.Add(new CategoryStackNode() { node = node, operation = node.Operation, routingRow = CategoryRoutingRow.identity });
+                    return;
+                }
+                default:
+                {
+                    var nodeCount = node.Count;
+                    if (nodeCount == 0)
+                        return;// sEmptyStack.ToList();
+
+                    // Skip all nodes that are not additive at the start of the branch since they will never produce any geometry
+                    int firstIndex = 0;
+                    for (; firstIndex < nodeCount && node[firstIndex].Valid && (node[firstIndex].Operation != CSGOperationType.Additive && 
+                                                                                node[firstIndex].Operation != CSGOperationType.Copy); firstIndex++)
+                        firstIndex++;
+
+                    if ((nodeCount - firstIndex) <= 0)
+                        return;// sEmptyStack.ToList();
+
+                    if ((nodeCount - firstIndex) == 1)
+                    {
+                        GetStack(in operationTables, in intersectionTypeLookup, processedNode, node[firstIndex], rootNode, depth + 1, ref haveGonePastSelf, output);
+
+                        // Node operation is always Additive at this point, and operation would be performed against .. nothing ..
+                        // Anything added with nothing is itself, so we don't need to apply an operation here.
+
+                        if (output.Length > 0)
+                        {
+                            var item = output[output.Length - 1];
+                            item.operation = node[firstIndex].Operation;
+                            output[output.Length - 1] = item;
+                        }
+
+#if SHOW_DEBUG_MESSAGES
+                        if (processedNode.NodeID == kDebugNode || kDebugNode == -1)
+                            Dump(stack, depth, "stack return ");
+#endif
+                        return;
+                    } else
+                    {
+                        var leftHaveGonePastSelf = 0;
+
+                        var leftStack   = output;
+                        var rightStack = new NativeList<CategoryStackNode>(Allocator.Temp); // TODO: get rid of allocation
+                        { 
+                            GetStack(in operationTables, in intersectionTypeLookup, processedNode, node[firstIndex], rootNode, depth + 1, ref leftHaveGonePastSelf, leftStack);
+                            haveGonePastSelf |= leftHaveGonePastSelf;
+                            for (int i = firstIndex + 1; i < nodeCount; i++)
+                            {
+                                if (!node[i].Valid)
+                                    continue;
+#if SHOW_DEBUG_MESSAGES
+                                if (processedNode.NodeID == kDebugNode || kDebugNode == -1)                           
+                                    Dump(leftStack, depth, $"before '{node[i - 1]}' {node[i].Operation} '{node[i]}'");
+#endif
+                                var rightHaveGonePastSelf = leftHaveGonePastSelf >= 1 ? 2 : 0;
+                                GetStack(in operationTables, in intersectionTypeLookup, processedNode, node[i], rootNode, depth + 1, ref rightHaveGonePastSelf, rightStack);
+                                haveGonePastSelf |= rightHaveGonePastSelf;
+
+                                Combine(in operationTables,
+                                        in intersectionTypeLookup, 
+                                        processedNode,
+                                        leftStack,
+                                        leftHaveGonePastSelf,
+                                        rightStack,
+                                        rightHaveGonePastSelf,
+                                        node[i].Operation,
+                                        depth + 1,
+                                        node == rootNode
+                                );
+                                leftHaveGonePastSelf = rightHaveGonePastSelf;
+
+                                //if (leftStack.Length > 0 && node.Operation == CSGOperationType.Copy)
+                                //    leftStack[leftStack.Length - 1].operation = node.Operation;
+
+#if SHOW_DEBUG_MESSAGES
+                                if (processedNode.NodeID == kDebugNode || kDebugNode == -1)
+                                    Dump(leftStack, depth, $"after '{node[i - 1]}' {node[i].Operation} '{node[i]}'");
+#endif
+                            }
+                        }
+                        rightStack.Dispose();
+                        return;
+                    }
+                }
             }
         }
 
@@ -258,9 +372,8 @@ namespace Chisel.Core
                                             OperationTables.RemoveOverlappingOffset : 0) +
                                             ((int)operation) * OperationTables.NumberOfRowsPerOperation;
                 var operationTable = operationTables.GetSubArray(operationTableOffset, OperationTables.NumberOfRowsPerOperation);
-#endif
-                 
                 bool haveRemap = false;
+#endif
                 int nodeIndex = 1;
                 rightNode = firstNode;
                 for (int r = 0; r < rightStack.Length; r++)
@@ -495,130 +608,6 @@ namespace Chisel.Core
             }
             sCombineUsedIndices.Dispose();
             sCombineIndexRemap.Dispose();
-        }
-
-        public static void GetStack(in NativeArray<CategoryRoutingRow> operationTables, in BrushIntersectionLookup intersectionTypeLookup, CSGTreeBrush processedNode, CSGTreeNode rootNode, NativeList<CategoryStackNode> output)
-        {
-            int haveGonePastSelf = 0;
-            GetStack(in operationTables, in intersectionTypeLookup, processedNode, rootNode, rootNode, 0, ref haveGonePastSelf, output);
-            if (output.Length == 0)
-                output.Add(new CategoryStackNode() { node = rootNode, operation = rootNode.Operation, routingRow = CategoryRoutingRow.outside });
-        }
-
-        static void GetStack(in NativeArray<CategoryRoutingRow> operationTables, in BrushIntersectionLookup intersectionTypeLookup, CSGTreeBrush processedNode, CSGTreeNode node, CSGTreeNode rootNode, int depth, ref int haveGonePastSelf, NativeList<CategoryStackNode> output)
-        {
-            output.Clear();
-            var nodeIndex           = node.nodeID - 1;
-            var intersectionType    = intersectionTypeLookup.Get(nodeIndex);
-            if (intersectionType == IntersectionType.NoIntersection)
-                return;// sEmptyStack.ToList();
-
-
-            // TODO: use other intersection types
-            if (intersectionType == IntersectionType.AInsideB) { output.Add(new CategoryStackNode() { node = node, operation = node.Operation, routingRow = CategoryRoutingRow.inside }); return; }
-            if (intersectionType == IntersectionType.BInsideA) { output.Add(new CategoryStackNode() { node = node, operation = node.Operation, routingRow = CategoryRoutingRow.outside }); return; }
-
-            switch (node.Type)
-            {
-                case CSGNodeType.Brush:
-                {
-                    // All surfaces of processedNode are aligned with it's own surfaces, so all categories are Aligned
-                    if (processedNode == node)
-                    {
-                        haveGonePastSelf = 1;
-                        output.Add(new CategoryStackNode() { node = node, operation = node.Operation, routingRow = CategoryRoutingRow.selfAligned } );
-                        return;
-                    }
-
-                    if (haveGonePastSelf > 0)
-                        haveGonePastSelf = 2;
-
-                    // Otherwise return identity categories (input == output)
-                    output.Add(new CategoryStackNode() { node = node, operation = node.Operation, routingRow = CategoryRoutingRow.identity });
-                    return;
-                }
-                default:
-                {
-                    var nodeCount = node.Count;
-                    if (nodeCount == 0)
-                        return;// sEmptyStack.ToList();
-
-                    // Skip all nodes that are not additive at the start of the branch since they will never produce any geometry
-                    int firstIndex = 0;
-                    for (; firstIndex < nodeCount && node[firstIndex].Valid && (node[firstIndex].Operation != CSGOperationType.Additive && 
-                                                                                node[firstIndex].Operation != CSGOperationType.Copy); firstIndex++)
-                        firstIndex++;
-
-                    if ((nodeCount - firstIndex) <= 0)
-                        return;// sEmptyStack.ToList();
-
-                    if ((nodeCount - firstIndex) == 1)
-                    {
-                        GetStack(in operationTables, in intersectionTypeLookup, processedNode, node[firstIndex], rootNode, depth + 1, ref haveGonePastSelf, output);
-
-                        // Node operation is always Additive at this point, and operation would be performed against .. nothing ..
-                        // Anything added with nothing is itself, so we don't need to apply an operation here.
-
-                        if (output.Length > 0)
-                        {
-                            var item = output[output.Length - 1];
-                            item.operation = node[firstIndex].Operation;
-                            output[output.Length - 1] = item;
-                        }
-
-#if SHOW_DEBUG_MESSAGES
-                        if (processedNode.NodeID == kDebugNode || kDebugNode == -1)
-                            Dump(stack, depth, "stack return ");
-#endif
-                        return;
-                    } else
-                    {
-                        var leftHaveGonePastSelf = 0;
-
-                        var leftStack   = output;
-                        var rightStack = new NativeList<CategoryStackNode>(Allocator.Temp); // TODO: get rid of allocation
-                        { 
-                            GetStack(in operationTables, in intersectionTypeLookup, processedNode, node[firstIndex], rootNode, depth + 1, ref leftHaveGonePastSelf, leftStack);
-                            haveGonePastSelf |= leftHaveGonePastSelf;
-                            for (int i = firstIndex + 1; i < nodeCount; i++)
-                            {
-                                if (!node[i].Valid)
-                                    continue;
-#if SHOW_DEBUG_MESSAGES
-                                if (processedNode.NodeID == kDebugNode || kDebugNode == -1)                           
-                                    Dump(leftStack, depth, $"before '{node[i - 1]}' {node[i].Operation} '{node[i]}'");
-#endif
-                                var rightHaveGonePastSelf = leftHaveGonePastSelf >= 1 ? 2 : 0;
-                                GetStack(in operationTables, in intersectionTypeLookup, processedNode, node[i], rootNode, depth + 1, ref rightHaveGonePastSelf, rightStack);
-                                haveGonePastSelf |= rightHaveGonePastSelf;
-
-                                Combine(in operationTables,
-                                        in intersectionTypeLookup, 
-                                        processedNode,
-                                        leftStack,
-                                        leftHaveGonePastSelf,
-                                        rightStack,
-                                        rightHaveGonePastSelf,
-                                        node[i].Operation,
-                                        depth + 1,
-                                        node == rootNode
-                                );
-                                leftHaveGonePastSelf = rightHaveGonePastSelf;
-
-                                //if (leftStack.Length > 0 && node.Operation == CSGOperationType.Copy)
-                                //    leftStack[leftStack.Length - 1].operation = node.Operation;
-
-#if SHOW_DEBUG_MESSAGES
-                                if (processedNode.NodeID == kDebugNode || kDebugNode == -1)
-                                    Dump(leftStack, depth, $"after '{node[i - 1]}' {node[i].Operation} '{node[i]}'");
-#endif
-                            }
-                        }
-                        rightStack.Dispose();
-                        return;
-                    }
-                }
-            }
         }
 
 #if SHOW_DEBUG_MESSAGES

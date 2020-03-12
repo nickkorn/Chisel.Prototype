@@ -242,6 +242,7 @@ namespace Chisel.Core
             }
         }
 
+        static List<Loop[]> sIntersectionLoops = new List<Loop[]>();
         internal unsafe static void FindAllIntersectionLoops(NativeArray<int> treeBrushes)
         {
             // TODO: - calculate all data per brush here (currently unused)
@@ -585,6 +586,24 @@ namespace Chisel.Core
                     }
                 }
                 finally { UnityEngine.Profiling.Profiler.EndSample(); }
+            }
+
+
+            for (int b = 0; b < treeBrushes.Length; b++)
+            {
+                var brushNodeID = treeBrushes[b];
+                var brushInfo = CSGManager.GetBrushInfo(brushNodeID);
+                ref var nodes = ref brushInfo.routingTable.Value.nodes;
+                sIntersectionLoops.Clear();
+                for (int i = 0; i < nodes.Length; i++)
+                {
+                    var cutting_node_id = nodes[i];
+                    // Get the intersection loops between the two brushes on every surface of the brush we're performing CSG on
+                    if (!brushInfo.brushOutputLoops.intersectionLoopLookup.TryGetValue(cutting_node_id, out Loop[] cuttingNodeIntersectionLoops))
+                        cuttingNodeIntersectionLoops = null;
+                    sIntersectionLoops.Add(cuttingNodeIntersectionLoops);
+                }
+                brushInfo.brushOutputLoops.intersectionLoops = sIntersectionLoops.ToArray();
             }
         }        
         #endregion
