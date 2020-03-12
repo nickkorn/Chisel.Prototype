@@ -7,6 +7,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
+using Unity.Collections;
 using UnityEngine;
 
 namespace Chisel.Core
@@ -106,8 +107,8 @@ namespace Chisel.Core
 	            //----------------------------------------------------------------------------------------------------------------------------
 	            new CategoryRoutingRow( Inside,           Inside,           Inside,           Inside            ), // inside
 	            new CategoryRoutingRow( Inside,           Outside,          Inside,           Aligned           ), // aligned
-	            new CategoryRoutingRow( Inside,           Inside,           Outside,           ReverseAligned    ), // reverse-aligned
-	            new CategoryRoutingRow( Inside,           Outside,          Outside,           Outside           )  // outside
+	            new CategoryRoutingRow( Inside,           Inside,           Outside,          ReverseAligned    ), // reverse-aligned
+	            new CategoryRoutingRow( Inside,           Outside,          Outside,          Outside           )  // outside
             },
 
             // Subtractive set operation on polygons: output = !(!left-node || right-node)
@@ -204,6 +205,45 @@ namespace Chisel.Core
 	            new CategoryRoutingRow( Inside,           Aligned,          ReverseAligned,   Outside           )  // outside
             }
         };
+
+        public const int NumberOfRowsPerOperation = 4;
+        public const int RemoveOverlappingOffset = 4 * NumberOfRowsPerOperation;
+        public static NativeArray<CategoryRoutingRow> Rows;
+
+
+        public static void EnsureInitialized()
+        {
+            if (Rows.IsCreated)
+                Rows.Dispose();
+
+            // TODO: blobAsset instead?
+            Rows = new NativeArray<CategoryRoutingRow>((RemoveOverlappingOperationTables.Length * NumberOfRowsPerOperation) +
+                                                       (RegularOperationTables.Length * NumberOfRowsPerOperation), Allocator.Persistent);
+
+            Debug.Assert(NumberOfRowsPerOperation == RegularOperationTables[0].Length);
+            int n = 0;
+            for (int i=0;i< RegularOperationTables.Length;i++)
+            {
+                for (int j = 0; j < NumberOfRowsPerOperation; j++, n++)
+                {
+                    Rows[n] = RegularOperationTables[i][j];
+                }
+            }
+            Debug.Assert(n == RemoveOverlappingOffset);
+            for (int i = 0; i < RemoveOverlappingOperationTables.Length; i++)
+            {
+                for (int j = 0; j < NumberOfRowsPerOperation; j++, n++)
+                {
+                    Rows[n] = RemoveOverlappingOperationTables[i][j];
+                }
+            }
+        }
+
+        public static void EnsureCleanedUp()
+        {
+            if (Rows.IsCreated)
+                Rows.Dispose();
+        }
 #endif
     }
     #endregion

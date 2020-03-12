@@ -210,23 +210,23 @@ namespace Chisel.Core
 
             public readonly List<BrushBrushIntersection> brushBrushIntersections = new List<BrushBrushIntersection>();
 
-            public readonly RoutingTable    routingTable        = new RoutingTable();
+            public BlobAssetReference<RoutingTable> routingTable = BlobAssetReference<RoutingTable>.Null;
 
             ~BrushInfo() { Dispose(); }
 
             public void Dispose()
             {
-                routingTable.Dispose();
                 if (brushSurfaceLoops != null) brushSurfaceLoops.Dispose();
                 brushSurfaceLoops = null;
                 brushOutputLoops.Dispose();
                 if (brushWorldPlanes.IsCreated)
                     brushWorldPlanes.Dispose();
+                routingTable = BlobAssetReference<RoutingTable>.Null;
                 brushWorldPlanes = BlobAssetReference<BrushWorldPlanes>.Null;
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public void Reset()
+            public void Reset() 
             {
                 Dispose();
                 brushOutlineGeneration  = 0;
@@ -234,7 +234,7 @@ namespace Chisel.Core
                 brushOutputLoops.Clear();
                 renderBuffers.surfaceRenderBuffers.Clear();
                 brushBrushIntersections.Clear();
-                routingTable.Clear();
+                routingTable = BlobAssetReference<RoutingTable>.Null;
                 if (brushWorldPlanes.IsCreated)
                     brushWorldPlanes.Dispose();
                 brushWorldPlanes = BlobAssetReference<BrushWorldPlanes>.Null;
@@ -605,9 +605,9 @@ namespace Chisel.Core
                 if (nodeType != CSGNodeType.Brush)
                     continue;
 
-                var brushOutput = nodeHierarchies[nodeIndex].brushInfo;
+                var brushInfo = nodeHierarchies[nodeIndex].brushInfo;
                 //var operation_type_bits = GetNodeOperationByIndex(nodeIndex);
-                if (brushOutput == null //||
+                if (brushInfo == null //||
                                         //brush.triangleMesh == null //||
                                         //((int)operation_type_bits & InfiniteBrushBits) == InfiniteBrushBits 
                     )
@@ -616,7 +616,7 @@ namespace Chisel.Core
                 GenerateSurfaceRenderBuffers(brushNodeID, //brushOutput.brushSurfaceLoops, 
                                              meshQueries, vertexChannelMask);
 
-                var renderBuffers = brushOutput.renderBuffers;
+                var renderBuffers = brushInfo.renderBuffers;
                 if (renderBuffers.surfaceRenderBuffers.Count == 0)
                     continue;
 

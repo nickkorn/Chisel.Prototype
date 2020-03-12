@@ -14,7 +14,7 @@ namespace Chisel.Core
     /// <seealso cref="Chisel.Core.CSGTreeNode"/>
     /// <seealso cref="Chisel.Core.CSGTreeBranch"/>
     /// <seealso cref="Chisel.Core.CSGTreeBrush"/>
-    [StructLayout(LayoutKind.Sequential, Pack = 4)]	
+    [StructLayout(LayoutKind.Sequential)]	
     public partial struct CSGTree
     {
         #region Create

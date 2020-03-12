@@ -15,59 +15,15 @@ using Unity.Entities;
 
 namespace Chisel.Core
 {
-    // TODO:    perform CSG using edges instead of indices.
-    //          we don't care about ordering since triangulation doesn't care about ordering
-    //          so CSG would simply be determining if edges are inside/outside or ON the other polygon & categorize them
-    //
-    //          Intersecting -> needs to check Inside/Outside on both polygons -> if inputs are convex, output is convex too
-    //          Subtraction/Addition -> only needs to check Inside/Outside on secondary polygon
-    //          
-    //          In first phase (intersecting) just work with convex polygons, in second phase, keep subtracting/adding 
-    //          convex polygons to final polygon.
-    //          => can use bag of unordered edges
 #if USE_MANAGED_CSG_IMPLEMENTATION
     static partial class CSGManagerPerformCSG
     {
         #region PerformBooleanOperation
-        public enum OperationResult
-        {
-            Fail,
-            Cut,
-            Outside,
-            Polygon1InsidePolygon2,
-            Polygon2InsidePolygon1,
-            Overlapping
-        }
 
         public const double kEpsilon = 0.00001;
         public const double kEpsilon2 = 0.001;
         public const double kEpsilonSqr = kEpsilon * kEpsilon;
-
-        // Note: Assumes polygons are convex
-        public unsafe static bool AreLoopsOverlapping(Loop polygon1, Loop polygon2)
-        {
-            if (polygon1.edges.Length < 3 ||
-                polygon2.edges.Length < 3)
-                return false;
-
-            if (polygon1.edges.Length != polygon2.edges.Length)
-                return false;
-
-            for (int i = 0; i < polygon1.edges.Length; i++)
-            {
-                for (int j = 0; j < polygon2.edges.Length; j++)
-                {
-                    if ((polygon1.edges[i].index1 == polygon1.edges[j].index1 &&
-                         polygon1.edges[i].index2 == polygon1.edges[j].index2) ||
-                        (polygon1.edges[i].index1 == polygon1.edges[j].index2 &&
-                         polygon1.edges[i].index2 == polygon1.edges[j].index1))
-                        return false;
-                }
-            }
-            return true;
-        }
         #endregion
-
 
         #region PerformCSG
 
@@ -463,4 +419,4 @@ namespace Chisel.Core
 #endregion
     }
 #endif
-                    }
+}

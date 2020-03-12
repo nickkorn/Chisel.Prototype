@@ -15,7 +15,7 @@ namespace Chisel.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static CSGNodeType GetTypeOfNode(Int32 nodeID) { return CSGManager.GetTypeOfNode(nodeID); }
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal static bool	IsNodeIDValid(Int32 nodeID)		{ return CSGManager.IsValidNodeID(nodeID); }
+        internal static bool	IsNodeIDValid(Int32 nodeID)		{ CSGManager.IsValidNodeIDRet(nodeID, out bool result); return result; }
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static Int32	GetUserIDOfNode(Int32 nodeID)	{ return CSGManager.GetUserIDOfNode(nodeID); }
 

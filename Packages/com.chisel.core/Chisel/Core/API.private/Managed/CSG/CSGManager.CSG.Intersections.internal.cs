@@ -98,14 +98,14 @@ namespace Chisel.Core
             public NativeList<int2>                 brushPlaneSegments;
 
             public List<BrushData>                  brushDataList;
-            public List<int>                        treeBrushes;
+            public NativeArray<int>                 treeBrushes;
             public HashSet<BrushBrushIntersection>  intersectingBrushes = new HashSet<BrushBrushIntersection>();
             public List<IntersectionLoop>           allIntersectionLoops;
-            public Temporaries(List<int> treeBrushes)
+            public Temporaries(NativeArray<int> treeBrushes)
             {
                 this.treeBrushes            = treeBrushes;
                 this.allWorldSpacePlanes    = new NativeList<float4>(4, Allocator.Persistent);
-                this.brushPlaneSegments     = new NativeList<int2>(treeBrushes.Count, Allocator.Persistent);
+                this.brushPlaneSegments     = new NativeList<int2>(treeBrushes.Length, Allocator.Persistent);
                 
                 this.brushDataList          = new List<BrushData>();
                 this.allIntersectionLoops   = new List<IntersectionLoop>();
@@ -140,7 +140,7 @@ namespace Chisel.Core
                 int totalPlanes = 0;
 
                 intersectingBrushes.Clear();
-                for (int b0 = 0; b0 < treeBrushes.Count; b0++)
+                for (int b0 = 0; b0 < treeBrushes.Length; b0++)
                 {
                     var brushInfo = CSGManager.GetBrushInfo(treeBrushes[b0]);
                     var intersections = brushInfo.brushBrushIntersections;
@@ -193,7 +193,7 @@ namespace Chisel.Core
             public void Execute()
             {
                 var indexLookup = new Dictionary<int, int>();
-                for (int b0 = 0; b0 < treeBrushes.Count; b0++)
+                for (int b0 = 0; b0 < treeBrushes.Length; b0++)
                 {
                     indexLookup[treeBrushes[b0]] = b0;
                     var newBrushData = brushDataList[b0];
@@ -211,7 +211,7 @@ namespace Chisel.Core
                     newBrushData.planeSegment = segment;
                 }
 
-                for (int b0 = 0; b0 < treeBrushes.Count; b0++)
+                for (int b0 = 0; b0 < treeBrushes.Length; b0++)
                     {
                         var newBrushData = brushDataList[b0];
                         if (newBrushData.meshBlob == BlobAssetReference<BrushMeshBlob>.Null)
@@ -242,7 +242,7 @@ namespace Chisel.Core
             }
         }
 
-        internal unsafe static void FindAllIntersectionLoops(List<int> treeBrushes)
+        internal unsafe static void FindAllIntersectionLoops(NativeArray<int> treeBrushes)
         {
             // TODO: - calculate all data per brush here (currently unused)
             //         and use this later on, hopefully making it possible to remove all intermediates
@@ -471,7 +471,7 @@ namespace Chisel.Core
                 UnityEngine.Profiling.Profiler.BeginSample("FindLoopOverlapIntersections");
                 try
                 {
-                    for (int b0 = 0; b0 < treeBrushes.Count; b0++)
+                    for (int b0 = 0; b0 < treeBrushes.Length; b0++)
                     {
                         var brush0NodeID    = treeBrushes[b0];
                         var brush0          = new CSGTreeBrush() { brushNodeID = brush0NodeID };
@@ -580,7 +580,7 @@ namespace Chisel.Core
 
                             // TODO: eventually merge indices across multiple loops when vertices are identical
 
-                            intersectionData.StoreOutput(outputLoops.intersectionSurfaceLoops, outputLoops.intersectionLoops, outputLoops.basePolygons);
+                            intersectionData.StoreOutput(outputLoops.intersectionSurfaceLoops, outputLoops.intersectionLoopLookup, outputLoops.basePolygons);
                         }
                     }
                 }

@@ -22,6 +22,15 @@ namespace Chisel.Core
         public int planesOffset;
         public int planesLength;
     }
+    public enum OperationResult
+    {
+        Fail,
+        Cut,
+        Outside,
+        Polygon1InsidePolygon2,
+        Polygon2InsidePolygon1,
+        Overlapping
+    }
 
     static unsafe class BooleanEdgesUtility
     {
@@ -104,8 +113,31 @@ namespace Chisel.Core
                 return EdgeCategory.Outside;
             return EdgeCategory.Inside;
         }
+
+
+        // Note: Assumes polygons are convex
+        public unsafe static bool AreLoopsOverlapping(Loop polygon1, Loop polygon2)
+        {
+            if (!polygon1.edges.IsCreated ||
+                !polygon2.edges.IsCreated)
+                return false;
+            if (polygon1.edges.Length < 3 ||
+                polygon2.edges.Length < 3)
+                return false;
+
+            if (polygon1.edges.Length != polygon2.edges.Length)
+                return false;
+
+            for (int i = 0; i < polygon1.edges.Length; i++)
+            {
+                if (IndexOf(polygon2.edges, polygon1.edges[i], out bool inverted) == -1)
+                    return false;
+            }
+            return true;
+        }
     }
 
+    // Note: Assumes polygons are convex
     [BurstCompile(Debug = false)]
     unsafe struct SubtractEdgesJob : IJobParallelFor
     {
@@ -145,7 +177,8 @@ namespace Chisel.Core
             }
         }
     }
-    
+
+    // Note: Assumes polygons are convex
     [BurstCompile(Debug = false)]
 #if IS_PARALLEL
     unsafe struct MergeEdgesJob : IJobParallelFor
@@ -205,6 +238,8 @@ namespace Chisel.Core
         }
     }
 
+
+    // Note: Assumes polygons are convex
     [BurstCompile(Debug = false)]
     unsafe struct IntersectEdgesJob : IJob
     {
@@ -215,15 +250,15 @@ namespace Chisel.Core
         [ReadOnly] public BlobAssetReference<BrushWorldPlanes> worldPlanes2;
 
         [NativeDisableUnsafePtrRestriction]
-        [WriteOnly] public CSGManagerPerformCSG.OperationResult* result;
-        [WriteOnly] public NativeList<Edge>         outEdges;
+        [WriteOnly] public OperationResult* result;
+        [WriteOnly] public NativeList<Edge> outEdges;
 
         public void Execute()
         {
             if (edges1.Length == 0 ||
                 edges2.Length == 0)
             {
-                *result = CSGManagerPerformCSG.OperationResult.Outside;
+                *result = OperationResult.Outside;
                 return;
             }
 
@@ -257,7 +292,7 @@ namespace Chisel.Core
                 {
                     categories1.Dispose();
                     categories2.Dispose();
-                    *result = CSGManagerPerformCSG.OperationResult.Outside;
+                    *result = OperationResult.Outside;
                     return;
                 }
 
@@ -265,7 +300,7 @@ namespace Chisel.Core
                 categories1.Dispose();
                 categories2.Dispose();
                 outEdges.AddRange(edges1);
-                *result = CSGManagerPerformCSG.OperationResult.Polygon1InsidePolygon2;
+                *result = OperationResult.Polygon1InsidePolygon2;
                 return;
             } else
             { 
@@ -275,7 +310,7 @@ namespace Chisel.Core
                     categories1.Dispose();
                     categories2.Dispose();
                     outEdges.AddRange(edges1);
-                    *result = CSGManagerPerformCSG.OperationResult.Polygon1InsidePolygon2;
+                    *result = OperationResult.Polygon1InsidePolygon2;
                     return;
                 }
             }
@@ -285,35 +320,41 @@ namespace Chisel.Core
             {
                 categories1.Dispose();
                 categories2.Dispose();
-                outEdges.AddRange(edges1);
-                *result = CSGManagerPerformCSG.OperationResult.Polygon1InsidePolygon2;
+                *result = OperationResult.Overlapping;
                 return;
             }
 
-            
 
 
+
+            int outEdgesLength = 0; // Can't read from outEdges.Length since it's marked as WriteOnly
             for (int e = 0; e < edges1.Length; e++)
             {
                 var category = categories1[e];
                 if (category == EdgeCategory.Inside)
+                {
                     outEdges.Add(edges1[e]);
+                    outEdgesLength++;
+                }
             }
 
             for (int e = 0; e < edges2.Length; e++)
             {
                 var category = categories2[e];
                 if (category != EdgeCategory.Outside)
+                {
                     outEdges.Add(edges2[e]);
+                    outEdgesLength++;
+                }
             }
 
             categories1.Dispose();
             categories2.Dispose();
 
-            if (outEdges.Length < 3)
-                *result = CSGManagerPerformCSG.OperationResult.Outside;
+            if (outEdgesLength < 3)
+                *result = OperationResult.Outside;
             else
-                *result = CSGManagerPerformCSG.OperationResult.Cut;
+                *result = OperationResult.Cut;
         }
     }
 

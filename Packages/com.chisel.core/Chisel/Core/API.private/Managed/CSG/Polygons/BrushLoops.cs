@@ -20,16 +20,19 @@ namespace Chisel.Core
         public VertexSoup   vertexSoup   = new VertexSoup();
         public List<Loop>   basePolygons = new List<Loop>();
 
+        public Loop[][] intersectionLoops;
+
+
         // TODO: Have list of surfaceloops, dictionary holds index into list
         // TODO: Actually, do not need lookups?
         public Dictionary<int, SurfaceLoops>    intersectionSurfaceLoops    = new Dictionary<int, SurfaceLoops>();
-        public Dictionary<int, Loop[]>          intersectionLoops           = new Dictionary<int, Loop[]>();
+        public Dictionary<int, Loop[]>          intersectionLoopLookup      = new Dictionary<int, Loop[]>();
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Clear()
         {
             intersectionSurfaceLoops.Clear();
-            intersectionLoops.Clear();
+            intersectionLoopLookup.Clear();
         }
         ~BrushLoops() { Dispose(); }
         public void Dispose()
@@ -38,7 +41,7 @@ namespace Chisel.Core
             foreach (var surfaceLoop in intersectionSurfaceLoops.Values)
                 surfaceLoop.Dispose();
             intersectionSurfaceLoops.Clear();
-            foreach (var loopArray in intersectionLoops.Values)
+            foreach (var loopArray in intersectionLoopLookup.Values)
             {
                 if (loopArray != null &&
                     loopArray.Length > 0)
@@ -50,7 +53,22 @@ namespace Chisel.Core
                     }
                 }
             }
-            intersectionLoops.Clear();
+            if (intersectionLoops != null)
+            {
+                foreach (var loopArray in intersectionLoops)
+                {
+                    if (loopArray != null)
+                    {
+                        foreach (var loop in loopArray)
+                        {
+                            if (loop != null)
+                                loop.Dispose();
+                        }
+                    }
+                }
+                intersectionLoops = null;
+            }
+            intersectionLoopLookup.Clear();
             foreach (var loop in basePolygons)
                 loop.Dispose();
             basePolygons.Clear();
