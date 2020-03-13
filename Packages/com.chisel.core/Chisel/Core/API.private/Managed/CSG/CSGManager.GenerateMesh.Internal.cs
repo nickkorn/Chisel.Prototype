@@ -210,8 +210,6 @@ namespace Chisel.Core
 
             public readonly List<BrushBrushIntersection> brushBrushIntersections = new List<BrushBrushIntersection>();
 
-            public BlobAssetReference<RoutingTable> routingTable = BlobAssetReference<RoutingTable>.Null;
-
             ~BrushInfo() { Dispose(); }
 
             public void Dispose()
@@ -219,7 +217,6 @@ namespace Chisel.Core
                 if (brushSurfaceLoops != null) brushSurfaceLoops.Dispose();
                 brushSurfaceLoops = null;
                 brushOutputLoops.Dispose();
-                routingTable = BlobAssetReference<RoutingTable>.Null;
                 brushWorldPlanes = BlobAssetReference<BrushWorldPlanes>.Null;
             }
 
@@ -232,7 +229,6 @@ namespace Chisel.Core
                 brushOutputLoops.Clear();
                 renderBuffers.surfaceRenderBuffers.Clear();
                 brushBrushIntersections.Clear();
-                routingTable = BlobAssetReference<RoutingTable>.Null;
                 brushWorldPlanes = BlobAssetReference<BrushWorldPlanes>.Null;
             }
         }

@@ -18,12 +18,12 @@ namespace Chisel.Core
 #if USE_MANAGED_CSG_IMPLEMENTATION
     internal unsafe struct CategoryStackNode
     { 
-        public CSGTreeNode          node;
+        public int                  nodeIndex;
         public CSGOperationType     operation;
         public CategoryGroupIndex   input;
         public CategoryRoutingRow   routingRow;
 
-        public override string ToString() { return $"'{node}': {(CategoryIndex)input} -> {routingRow}"; }
+        public override string ToString() { return $"'{nodeIndex}': {(CategoryIndex)input} -> {routingRow}"; }
     }
 #endif
 }

@@ -64,7 +64,6 @@ namespace Chisel.Core
 
         #region GenerateBasePolygons
 
-        //static readonly List<ushort> s_Indices = new List<ushort>(32);
         public static unsafe Bounds GenerateBasePolygons(CSGTreeBrush brush, BrushLoops outputLoops)
         {
             if (!BrushMeshManager.IsBrushMeshIDValid(outputLoops.brush.BrushMesh.BrushMeshID))

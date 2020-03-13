@@ -592,8 +592,12 @@ namespace Chisel.Core
             for (int b = 0; b < treeBrushes.Length; b++)
             {
                 var brushNodeID = treeBrushes[b];
+
+                if (!ChiselLookup.Value.routingTableLookup.TryGetValue(brushNodeID - 1, out BlobAssetReference<RoutingTable> routingTable))
+                    continue;
+
                 var brushInfo = CSGManager.GetBrushInfo(brushNodeID);
-                ref var nodes = ref brushInfo.routingTable.Value.nodes;
+                ref var nodes = ref routingTable.Value.nodes;
                 sIntersectionLoops.Clear();
                 for (int i = 0; i < nodes.Length; i++)
                 {

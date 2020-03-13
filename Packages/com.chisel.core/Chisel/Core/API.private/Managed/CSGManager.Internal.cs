@@ -1362,9 +1362,6 @@ namespace Chisel.Core
 
                 if (CSGTreeNode.IsNodeIDValid(nodeHierarchy.treeNodeID))
                     CSGManager.SetBrushMeshID(nodeHierarchy.treeNodeID, BrushMeshInstance.InvalidInstance.BrushMeshID);
-
-                if (nodeHierarchy.brushInfo.brushWorldPlanes.IsCreated)
-                    nodeHierarchy.brushInfo.brushWorldPlanes.Dispose();
             }
         }
 
@@ -1383,9 +1380,6 @@ namespace Chisel.Core
 
                 if (CSGTreeNode.IsNodeIDValid(nodeHierarchy.treeNodeID))
                     CSGTreeNode.SetDirty(nodeHierarchy.treeNodeID);
-
-                if (nodeHierarchy.brushInfo.brushWorldPlanes.IsCreated)
-                    nodeHierarchy.brushInfo.brushWorldPlanes.Dispose();
             }
         }
 
