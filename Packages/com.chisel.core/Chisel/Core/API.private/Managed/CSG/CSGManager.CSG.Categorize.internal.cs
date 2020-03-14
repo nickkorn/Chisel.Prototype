@@ -114,8 +114,8 @@ namespace Chisel.Core
                 vertices        = brushVertices.vertices,
                 edges1          = intersectionLoop.edges,
                 edges2          = surfaceLoop.edges,
-                worldPlanes1    = CSGManager.GetBrushInfoUnsafe(intersectionLoop.info.brush.brushNodeID).brushWorldPlanes,
-                worldPlanes2    = CSGManager.GetBrushInfoUnsafe(surfaceLoop.info.brush.brushNodeID).brushWorldPlanes,
+                worldPlanes1    = ChiselLookup.Value.brushWorldPlanes[intersectionLoop.info.brush.brushNodeID - 1],
+                worldPlanes2    = ChiselLookup.Value.brushWorldPlanes[surfaceLoop.info.brush.brushNodeID - 1],
 
                 result          = &result,
                 outEdges        = new NativeList<Edge>(math.max(intersectionLoop.edges.Length, surfaceLoop.edges.Length), Allocator.Persistent)
@@ -149,8 +149,8 @@ namespace Chisel.Core
                     surfaceLoop.holes.Capacity = surfaceLoop.holes.Count + 1;
 
                 if (surfaceLoop.holes.Count > 0)
-                { 
-                    var touchingSurfaceBrushes = CSGManager.GetTouchingBrushes(surfaceLoop.info.brush);
+                {
+                    ref var brushIntersections = ref ChiselLookup.Value.brushesTouchedByBrushes[surfaceLoop.info.brush.brushNodeID - 1].Value.brushIntersections;
                     for (int h = 0; h < surfaceLoop.holes.Count; h++)
                     {
                         // Need to make a copy so we can edit it without causing side effects
@@ -165,10 +165,9 @@ namespace Chisel.Core
                         //       brushes intersect. Use this for both routing table generation 
                         //       and loop merging.
                         bool touches = false;
-                        for (int t = 0; t < touchingSurfaceBrushes.Count; t++)
+                        for (int t = 0; t < brushIntersections.Length; t++)
                         {
-                            if (touchingSurfaceBrushes[t].brushNodeID0 == holeBrushNodeID ||
-                                touchingSurfaceBrushes[t].brushNodeID1 == holeBrushNodeID)
+                            if (brushIntersections[t].nodeIndex == holeBrushNodeID)
                             {
                                 touches = true;
                                 break;
@@ -272,8 +271,8 @@ namespace Chisel.Core
                             }
                         }
 
-                        ref var worldPlanes = ref CSGManager.GetBrushInfoUnsafe(hole.info.brush.brushNodeID).brushWorldPlanes.Value.worldPlanes;
-
+                        ref var worldPlanes = ref ChiselLookup.Value.brushWorldPlanes[hole.info.brush.brushNodeID - 1].Value.worldPlanes;
+                        
                         var edgesLength = hole.edges.Length;
                         var planesLength = worldPlanes.Length;
 
@@ -295,7 +294,7 @@ namespace Chisel.Core
                     }
                     if (baseloop.edges.Length > 0)
                     {
-                        ref var worldPlanes = ref CSGManager.GetBrushInfoUnsafe(baseloop.info.brush.brushNodeID).brushWorldPlanes.Value.worldPlanes;
+                        ref var worldPlanes = ref ChiselLookup.Value.brushWorldPlanes[baseloop.info.brush.brushNodeID - 1].Value.worldPlanes;
 
                         var planesLength    = worldPlanes.Length;
                         var edgesLength     = baseloop.edges.Length;

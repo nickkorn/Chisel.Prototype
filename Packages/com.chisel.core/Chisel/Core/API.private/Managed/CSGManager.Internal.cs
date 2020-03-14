@@ -413,13 +413,6 @@ namespace Chisel.Core
             return true;
         }
 
-
-        internal static List<BrushBrushIntersection> GetTouchingBrushes(CSGTreeNode brush)
-        {
-            var brushInfo = GetBrushInfo(brush.nodeID);
-            return brushInfo.brushBrushIntersections;
-        }
-
         internal static bool		IsValidNodeID					(Int32 nodeID)	{ return (nodeID > 0 && nodeID <= nodeHierarchies.Count) && nodeFlags[nodeID - 1].nodeType != CSGNodeType.None; }
 
         [BurstDiscard] //<- only works when there's no return value

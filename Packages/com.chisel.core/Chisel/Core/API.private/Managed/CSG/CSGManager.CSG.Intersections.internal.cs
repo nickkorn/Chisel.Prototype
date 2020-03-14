@@ -139,22 +139,34 @@ namespace Chisel.Core
             {
                 int totalPlanes = 0;
 
+                ref var brushesTouchedByBrushes = ref ChiselLookup.Value.brushesTouchedByBrushes;
+
                 intersectingBrushes.Clear();
                 for (int b0 = 0; b0 < treeBrushes.Length; b0++)
                 {
-                    var brushInfo = CSGManager.GetBrushInfo(treeBrushes[b0]);
-                    var intersections = brushInfo.brushBrushIntersections;
-                    if (intersections.Count == 0)
+                    var brushNodeID0     = treeBrushes[b0];
+                    var brushNodeIndex0  = brushNodeID0 + 1;
+                    var brushInfo = CSGManager.GetBrushInfo(brushNodeID0);
+                    if (!brushesTouchedByBrushes.TryGetValue(brushNodeIndex0, out BlobAssetReference<BrushesTouchedByBrush> brushesTouchedByBrush))
+                    {
+                        brushDataList.Add(BrushData.Default);
+                        continue;
+                    }
+
+                    ref var intersections = ref brushesTouchedByBrush.Value.brushIntersections;
+                    if (intersections.Length == 0)
                     {
                         brushDataList.Add(BrushData.Default);
                         continue;
                     }
 
                     // Find all intersections between brushes
-                    foreach (var intersection in intersections)
+                    for (int i = 0; i < intersections.Length; i++)
                     {
-                        Debug.Assert(intersection.brushNodeID0 != intersection.brushNodeID1);
-                        var reverseOrder = intersection.brushNodeID0 > intersection.brushNodeID1; // ensures we do calculations exactly the same for each brush pair
+                        var intersection = intersections[i];
+                        var brushNodeIndex1 = intersection.nodeIndex;
+
+                        var reverseOrder = brushNodeIndex0 > brushNodeIndex1; // ensures we do calculations exactly the same for each brush pair
                         var type = intersection.type;
 
                         CSGTreeBrush brush0, brush1;
@@ -162,16 +174,21 @@ namespace Chisel.Core
                         {
                             if (type == IntersectionType.AInsideB) type = IntersectionType.BInsideA;
                             else if (type == IntersectionType.BInsideA) type = IntersectionType.AInsideB;
-                            brush0.brushNodeID = intersection.brushNodeID1;
-                            brush1.brushNodeID = intersection.brushNodeID0;
+                            brush0.brushNodeID = brushNodeIndex1 + 1;
+                            brush1.brushNodeID = brushNodeIndex0 + 1;
                         }
                         else
                         {
-                            brush0.brushNodeID = intersection.brushNodeID0;
-                            brush1.brushNodeID = intersection.brushNodeID1;
+                            brush0.brushNodeID = brushNodeIndex0 + 1;
+                            brush1.brushNodeID = brushNodeIndex1 + 1;
                         }
 
-                        intersectingBrushes.Add(intersection); // uses hashset to ensure this is unique
+                        intersectingBrushes.Add(new BrushBrushIntersection()
+                        {
+                            brushNodeID0 = brush0.brushNodeID,
+                            brushNodeID1 = brush1.brushNodeID,
+                            type = type,
+                        }); // uses hashset to ensure this is unique
                     }
 
                     var intersectingBrush = new CSGTreeBrush() { brushNodeID = treeBrushes[b0] };

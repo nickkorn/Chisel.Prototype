@@ -205,9 +205,6 @@ namespace Chisel.Core
 
             public BrushOutline             brushOutline        = new BrushOutline();
 
-            // TODO: put somewhere else
-            public BlobAssetReference<BrushWorldPlanes> brushWorldPlanes;
-
             public readonly List<BrushBrushIntersection> brushBrushIntersections = new List<BrushBrushIntersection>();
 
             ~BrushInfo() { Dispose(); }
@@ -217,7 +214,6 @@ namespace Chisel.Core
                 if (brushSurfaceLoops != null) brushSurfaceLoops.Dispose();
                 brushSurfaceLoops = null;
                 brushOutputLoops.Dispose();
-                brushWorldPlanes = BlobAssetReference<BrushWorldPlanes>.Null;
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -229,7 +225,6 @@ namespace Chisel.Core
                 brushOutputLoops.Clear();
                 renderBuffers.surfaceRenderBuffers.Clear();
                 brushBrushIntersections.Clear();
-                brushWorldPlanes = BlobAssetReference<BrushWorldPlanes>.Null;
             }
         }
 

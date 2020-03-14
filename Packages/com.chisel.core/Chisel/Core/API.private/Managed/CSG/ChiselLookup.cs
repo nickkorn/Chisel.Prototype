@@ -79,7 +79,8 @@ namespace Chisel.Core
 
     struct BrushesTouchedByBrush
     {
-        public BlobArray<uint> intersectionBits;
+        public BlobArray<BrushIntersection> brushIntersections;
+        public BlobArray<uint>              intersectionBits;
         public int Length;
         public int Offset;
 
@@ -98,6 +99,23 @@ namespace Chisel.Core
             return (IntersectionType)((intersectionBits[int32Index] & twoBit) >> bitIndex);
         }
     }
+        
+    public struct NodeTransformations
+    {
+        public float4x4 nodeToTree;
+        public float4x4 treeToNode;
+
+        public static BlobAssetReference<NodeTransformations> Build(float4x4 nodeToTree, float4x4 treeToNode)
+        {
+            var builder = new BlobBuilder(Allocator.Temp);
+            ref var root = ref builder.ConstructRoot<NodeTransformations>();
+            root.nodeToTree = nodeToTree;
+            root.treeToNode = treeToNode;
+            var result = builder.CreateBlobAssetReference<NodeTransformations>(Allocator.Persistent);
+            builder.Dispose();
+            return result;
+        }
+    };
 
     internal sealed unsafe class ChiselLookup : ScriptableObject
     {
@@ -106,6 +124,7 @@ namespace Chisel.Core
             public NativeHashMap<int, BlobAssetReference<RoutingTable>>             routingTableLookup;
             public NativeHashMap<int, BlobAssetReference<BrushWorldPlanes>>         brushWorldPlanes;
             public NativeHashMap<int, BlobAssetReference<BrushesTouchedByBrush>>    brushesTouchedByBrushes;
+            public NativeHashMap<int, BlobAssetReference<NodeTransformations>>      transformations;
 
             public NativeHashMap<int, BlobAssetReference<BrushMeshBlob>>            brushMeshBlobs;
             public NativeHashMap<int, BlobAssetReference<CompactTree>>              compactTrees;
@@ -133,6 +152,12 @@ namespace Chisel.Core
                         if (brushesTouchedByBrush.IsCreated)
                             brushesTouchedByBrush.Dispose();
                     }
+                    if (transformations.TryGetValue(brushNodeID - 1, out BlobAssetReference<NodeTransformations> transformation))
+                    {
+                        transformations.Remove(brushNodeID - 1);
+                        if (transformation.IsCreated)
+                            transformation.Dispose();
+                    }
                 }
             }
 
@@ -143,6 +168,7 @@ namespace Chisel.Core
                 routingTableLookup      = new NativeHashMap<int, BlobAssetReference<RoutingTable>>(1000, Allocator.Persistent);
                 brushWorldPlanes        = new NativeHashMap<int, BlobAssetReference<BrushWorldPlanes>>(1000, Allocator.Persistent);
                 brushesTouchedByBrushes = new NativeHashMap<int, BlobAssetReference<BrushesTouchedByBrush>>(1000, Allocator.Persistent);
+                transformations         = new NativeHashMap<int, BlobAssetReference<NodeTransformations>>(1000, Allocator.Persistent);
 
                 // brushMeshIndex
                 brushMeshBlobs          = new NativeHashMap<int, BlobAssetReference<BrushMeshBlob>>(1000, Allocator.Persistent);
@@ -185,6 +211,19 @@ namespace Chisel.Core
                     {
                         brushesTouchedByBrushes.Clear();
                         brushesTouchedByBrushes.Dispose();
+                        foreach (var item in items)
+                        {
+                            if (item.IsCreated)
+                                item.Dispose();
+                        }
+                    }
+                }
+                if (transformations.IsCreated)
+                {
+                    using (var items = transformations.GetValueArray(Allocator.Temp))
+                    {
+                        transformations.Clear();
+                        transformations.Dispose();
                         foreach (var item in items)
                         {
                             if (item.IsCreated)
