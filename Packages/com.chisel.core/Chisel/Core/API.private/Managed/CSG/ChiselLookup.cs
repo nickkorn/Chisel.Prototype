@@ -58,6 +58,147 @@ namespace Chisel.Core
 
         public int                                  indexOffset;
         public BlobArray<int>                       brushIndexToBottomUpIndex;
+
+        struct CompactTopDownBuilderNode
+        {
+            public CSGTreeNode node;
+            public int index;
+        }
+
+        internal static BlobAssetReference<CompactTree> Create(List<CSGManager.NodeHierarchy> nodeHierarchies, int treeNodeIndex)
+        {
+            if (ChiselLookup.Value.compactTrees.TryGetValue(treeNodeIndex, out BlobAssetReference<CompactTree> oldCompactTree))
+            {
+                ChiselLookup.Value.compactTrees.Remove(treeNodeIndex); // Remove first in case there's an error
+                if (oldCompactTree.IsCreated)
+                    oldCompactTree.Dispose();
+            }
+
+            var treeInfo                    = nodeHierarchies[treeNodeIndex].treeInfo;
+            var treeBrushes                 = treeInfo.treeBrushes;
+
+            if (treeBrushes.Count == 0)
+                return BlobAssetReference<CompactTree>.Null;
+
+            var bottomUpNodeIndices         = new List<BottomUpNodeIndex>();
+            var bottomUpNodes               = new List<int>();
+            
+            var minBrushIndex               = nodeHierarchies.Count;
+            var maxBrushIndex               = 0;
+            for (int b = 0; b < treeBrushes.Count; b++)
+            {
+                var brush = new CSGTreeNode() { nodeID = treeBrushes[b] };
+                if (!brush.Valid)
+                    continue;
+
+                minBrushIndex = math.min(brush.NodeID - 1, minBrushIndex);
+                maxBrushIndex = math.max(brush.NodeID - 1, maxBrushIndex);
+            }
+            var brushIndexToBottomUpIndex = new int[(maxBrushIndex + 1) - minBrushIndex];
+
+            // Bottom-up -> per brush list of all ancestors to root
+            for (int b = 0; b < treeBrushes.Count; b++)
+            {
+                var brush = new CSGTreeNode() { nodeID = treeBrushes[b] };
+                if (!brush.Valid)
+                    continue;
+
+                var parentStart = bottomUpNodes.Count;
+
+                var parent = brush.Parent;
+                var treeNodeID = treeNodeIndex + 1;
+                while (parent.Valid && parent.NodeID != treeNodeID)
+                {
+                    var parentIndex = parent.NodeID - 1;
+                    bottomUpNodes.Add(parentIndex);
+                    parent = parent.Parent;
+                }
+
+                brushIndexToBottomUpIndex[brush.NodeID - 1 - minBrushIndex] = bottomUpNodeIndices.Count;
+                bottomUpNodeIndices.Add(new BottomUpNodeIndex()
+                {
+                    nodeIndex       = (brush.NodeID - 1),
+                    bottomUpEnd     = bottomUpNodes.Count,
+                    bottomUpStart   = parentStart
+                });
+            }
+
+            // Top-down
+            var nodeQueue       = new Queue<CompactTopDownBuilderNode>();
+            var topDownNodes    = new List<CompactTopDownNode>(); // TODO: set capacity to number of nodes in tree
+
+            nodeQueue.Enqueue(new CompactTopDownBuilderNode() { node = new CSGTreeNode() { nodeID =  treeNodeIndex + 1 }, index = 0 });
+            topDownNodes.Add(new CompactTopDownNode()
+            {
+                Type        = CSGNodeType.Tree,
+                Operation   = CSGOperationType.Additive,
+                nodeIndex   = treeNodeIndex,
+            });
+
+            while (nodeQueue.Count > 0)
+            {
+                var parent      = nodeQueue.Dequeue();
+                var nodeCount   = parent.node.Count;
+                if (nodeCount == 0)
+                {
+                    var item = topDownNodes[parent.index];
+                    item.childOffset = -1;
+                    item.childCount = 0;
+                    topDownNodes[parent.index] = item;
+                    continue;
+                }
+
+                int firstIndex = 0;
+                // Skip all nodes that are not additive at the start of the branch since they will never produce any geometry
+                for (; firstIndex < nodeCount && parent.node[firstIndex].Valid && 
+                                    (parent.node[firstIndex].Operation != CSGOperationType.Additive &&
+                                     parent.node[firstIndex].Operation != CSGOperationType.Copy); firstIndex++)
+                    firstIndex++;
+
+                var firstChildIndex = topDownNodes.Count;
+                for (int i = firstIndex; i < nodeCount; i++)
+                {
+                    var child = parent.node[i];
+                    // skip invalid nodes (they don't contribute to the mesh)
+                    if (!child.Valid)
+                        continue;
+
+                    var childType = child.Type;
+                    if (childType != CSGNodeType.Brush)
+                        nodeQueue.Enqueue(new CompactTopDownBuilderNode()
+                        {
+                            node = child,
+                            index = topDownNodes.Count
+                        });
+                    topDownNodes.Add(new CompactTopDownNode()
+                    {
+                        Type        = childType,
+                        Operation   = child.Operation,
+                        nodeIndex   = child.NodeID - 1
+                    });
+                }
+
+                {
+                    var item = topDownNodes[parent.index];
+                    item.childOffset = firstChildIndex;
+                    item.childCount = topDownNodes.Count - firstChildIndex;
+                    topDownNodes[parent.index] = item;
+                }
+            }
+
+            var builder = new BlobBuilder(Allocator.Temp);
+            ref var root = ref builder.ConstructRoot<CompactTree>();
+            builder.Construct(ref root.topDownNodes, topDownNodes);
+            builder.Construct(ref root.bottomUpNodeIndices, bottomUpNodeIndices);
+            builder.Construct(ref root.bottomUpNodes, bottomUpNodes);
+            root.indexOffset = minBrushIndex;
+            builder.Construct(ref root.brushIndexToBottomUpIndex, brushIndexToBottomUpIndex);
+            ChiselLookup.Value.compactTrees[treeNodeIndex] = builder.CreateBlobAssetReference<CompactTree>(Allocator.Persistent);
+            builder.Dispose();
+
+            return ChiselLookup.Value.compactTrees[treeNodeIndex];
+        }
+        
     }
 
     struct BrushIntersectionIndex

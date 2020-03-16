@@ -24,7 +24,7 @@ namespace Chisel.Core
 
     unsafe struct OverlapIntersectionData : IDisposable
     {
-        public CSGTreeBrush                         brush0;
+        public int                                  brushNodeID0;
         public BlobAssetReference<BrushMeshBlob>    meshBlob0;
         public float4x4                             treeToNodeSpaceMatrix0;
         
@@ -39,11 +39,11 @@ namespace Chisel.Core
         public List<IntersectionLoop>               allIntersectionLoops;
         public IntersectionLoop[]                   basePolygonLoops;
 
-        public OverlapIntersectionData(CSGTreeBrush brush0, BlobAssetReference<BrushMeshBlob> meshBlob0, Dictionary<int, SurfaceLoops> intersectionSurfaceLoops, List<Loop> basePolygons)
+        public OverlapIntersectionData(int brushNodeID0, BlobAssetReference<NodeTransformations> transform0, BlobAssetReference<BrushMeshBlob> meshBlob0, Dictionary<int, SurfaceLoops> intersectionSurfaceLoops, List<Loop> basePolygons)
         {
-            this.brush0 = brush0;
+            this.brushNodeID0 = brushNodeID0;
             this.meshBlob0 = meshBlob0;
-            this.treeToNodeSpaceMatrix0 = brush0.TreeToNodeSpaceMatrix;
+            this.treeToNodeSpaceMatrix0 = transform0.Value.treeToNode;
             this.allWorldSpacePlanes = new NativeList<float4>(meshBlob0.Value.localPlanes.Length, Allocator.Persistent);
             this.brushPlaneSegments = new NativeList<int2>(intersectionSurfaceLoops.Count, Allocator.Persistent);
             this.worldSpacePlanes0Segment = new int2();
@@ -167,7 +167,7 @@ namespace Chisel.Core
                     segment         = worldSpacePlanes0Segment,
                     edges           = loop.edges,
                     surfaceIndex    = s,
-                    brushNodeID     = brush0.brushNodeID
+                    brushNodeID     = brushNodeID0
                 };
 
                 basePolygonLoops[s] = intersectionLoop;                

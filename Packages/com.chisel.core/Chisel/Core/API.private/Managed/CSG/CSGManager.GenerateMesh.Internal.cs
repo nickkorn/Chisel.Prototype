@@ -76,6 +76,8 @@ namespace Chisel.Core
     {
         public int brushNodeID0;
         public int brushNodeID1;
+        public BlobAssetReference<BrushMeshBlob> blobMesh0;
+        public BlobAssetReference<BrushMeshBlob> blobMesh1;
         public IntersectionType type;
 
         #region Equals

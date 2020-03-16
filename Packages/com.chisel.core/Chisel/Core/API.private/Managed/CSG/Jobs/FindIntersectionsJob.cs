@@ -19,7 +19,7 @@ namespace Chisel.Core
         public float4               worldPlane;
         public SurfaceLayers        layers;
         public int                  basePlaneIndex;
-        public CSGTreeBrush         brush;
+        public int                  brushNodeID;
         public CategoryGroupIndex   interiorCategory;
     }
 
@@ -92,8 +92,8 @@ namespace Chisel.Core
         const float kPlaneDistanceEpsilon = CSGManagerPerformCSG.kPlaneDistanceEpsilon;
         const float kNormalEpsilon = CSGManagerPerformCSG.kNormalEpsilon;
 
-        public CSGTreeBrush             treeBrush0;
-        public CSGTreeBrush             treeBrush1;
+        public int                      treeBrushNodeID0;
+        public int                      treeBrushNodeID1;
         public IntersectionType         intersectionType;
 
         public BlobAssetReference<BrushMeshBlob> blobMesh0;
@@ -124,23 +124,27 @@ namespace Chisel.Core
         public VertexSoup               vertexSoup1;
             
 
-        public SharedPlaneData(CSGManager.BrushInfo brushInfo0, CSGManager.BrushInfo brushInfo1, CSGTreeBrush brush0, BlobAssetReference<BrushMeshBlob> blobMesh0, CSGTreeBrush brush1, BlobAssetReference<BrushMeshBlob> blobMesh1, IntersectionType intersectionType, Allocator allocator)
+        public SharedPlaneData(VertexSoup vertexSoup0, int treeBrushNodeID0, 
+                                          BlobAssetReference<BrushMeshBlob> blobMesh0, BlobAssetReference<NodeTransformations> transform0,
+                               VertexSoup vertexSoup1, int treeBrushNodeID1, 
+                                          BlobAssetReference<BrushMeshBlob> blobMesh1, BlobAssetReference<NodeTransformations> transform1,
+                               IntersectionType intersectionType, Allocator allocator)
         {
-            var nodeToTreeSpaceMatrix0 = (float4x4)brush0.NodeToTreeSpaceMatrix;
-            var treeToNodeSpaceMatrix0 = (float4x4)brush0.TreeToNodeSpaceMatrix;
-            var nodeToTreeSpaceMatrix1 = (float4x4)brush1.NodeToTreeSpaceMatrix;
-            var treeToNodeSpaceMatrix1 = (float4x4)brush1.TreeToNodeSpaceMatrix;
+            var nodeToTreeSpaceMatrix0 = transform0.Value.nodeToTree;
+            var treeToNodeSpaceMatrix0 = transform0.Value.treeToNode;
+            var nodeToTreeSpaceMatrix1 = transform1.Value.nodeToTree;
+            var treeToNodeSpaceMatrix1 = transform1.Value.treeToNode;
 
             ref var mesh0 = ref blobMesh0.Value;
             ref var mesh1 = ref blobMesh1.Value;
 
-            this.treeBrush0                  = brush0;
-            this.treeBrush1                  = brush1;
+            this.treeBrushNodeID0            = treeBrushNodeID0;
+            this.treeBrushNodeID1            = treeBrushNodeID1;
             this.blobMesh0                   = blobMesh0;
             this.blobMesh1                   = blobMesh1;
 
-            this.vertexSoup0                 = brushInfo0.brushOutputLoops.vertexSoup;
-            this.vertexSoup1                 = brushInfo1.brushOutputLoops.vertexSoup;
+            this.vertexSoup0                 = vertexSoup0;
+            this.vertexSoup1                 = vertexSoup1;
 
             this.nodeToTreeSpaceMatrix0      = nodeToTreeSpaceMatrix0;
             this.treeToNodeSpaceMatrix0      = treeToNodeSpaceMatrix0;
@@ -349,11 +353,11 @@ namespace Chisel.Core
 
                 surfaceCategory0[i] = new SurfaceInfo()
                 {
-                    interiorCategory = (CategoryGroupIndex)CategoryIndex.Inside,
-                    basePlaneIndex = i,
-                    brush = treeBrush1,
-                    worldPlane = worldPlaneVector,
-                    layers = mesh0.polygons[i].layerDefinition
+                    interiorCategory    = (CategoryGroupIndex)CategoryIndex.Inside,
+                    basePlaneIndex      = i,
+                    brushNodeID               = treeBrushNodeID1,
+                    worldPlane          = worldPlaneVector,
+                    layers              = mesh0.polygons[i].layerDefinition
                 };
             }
             for (int i = 0; i < surfaceCategory1.Length; i++)
@@ -365,11 +369,11 @@ namespace Chisel.Core
 
                 surfaceCategory1[i] = new SurfaceInfo()
                 {
-                    interiorCategory = (CategoryGroupIndex)CategoryIndex.Inside,
-                    basePlaneIndex = i,
-                    brush = treeBrush0,
-                    worldPlane = worldPlaneVector,
-                    layers = mesh1.polygons[i].layerDefinition
+                    interiorCategory    = (CategoryGroupIndex)CategoryIndex.Inside,
+                    basePlaneIndex      = i,
+                    brushNodeID               = treeBrushNodeID0,
+                    worldPlane          = worldPlaneVector,
+                    layers              = mesh1.polygons[i].layerDefinition
                 };
             }
 

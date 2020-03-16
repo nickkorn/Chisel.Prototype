@@ -64,12 +64,12 @@ namespace Chisel.Core
 
         #region GenerateBasePolygons
 
-        public static unsafe Bounds GenerateBasePolygons(CSGTreeBrush brush, BrushLoops outputLoops)
+        public static unsafe Bounds GenerateBasePolygons(int brushNodeID, int brushMeshID, ref NodeTransformations transform, BrushLoops outputLoops)
         {
-            if (!BrushMeshManager.IsBrushMeshIDValid(outputLoops.brush.BrushMesh.BrushMeshID))
+            if (!BrushMeshManager.IsBrushMeshIDValid(brushMeshID))
                 return new Bounds();
 
-            var mesh = BrushMeshManager.GetBrushMeshBlob(outputLoops.brush.BrushMesh.BrushMeshID);
+            var mesh = BrushMeshManager.GetBrushMeshBlob(brushMeshID);
             if (mesh == BlobAssetReference<BrushMeshBlob>.Null)
             {
                 Debug.Log("mesh == null");
@@ -78,7 +78,7 @@ namespace Chisel.Core
             ref var vertices   = ref mesh.Value.vertices;
             ref var planes     = ref mesh.Value.localPlanes;
             ref var polygons   = ref mesh.Value.polygons;
-            var nodeToTreeSpaceMatrix   = (float4x4)outputLoops.brush.NodeToTreeSpaceMatrix;
+            var nodeToTreeSpaceMatrix   = transform.nodeToTree;
             var nodeToTreeSpaceInvertedTransposedMatrix = math.transpose(math.inverse(nodeToTreeSpaceMatrix));
 
             Debug.Assert(outputLoops.basePolygons.Count == 0);
@@ -138,7 +138,7 @@ namespace Chisel.Core
                             worldPlane          = worldPlane,
                             layers              = polygon.layerDefinition,
                             basePlaneIndex      = p,
-                            brush               = outputLoops.brush,
+                            brushNodeID         = brushNodeID,
                             interiorCategory    = (CategoryGroupIndex)(int)CategoryIndex.ValidAligned,
                         },
                         holes = new List<Loop>()

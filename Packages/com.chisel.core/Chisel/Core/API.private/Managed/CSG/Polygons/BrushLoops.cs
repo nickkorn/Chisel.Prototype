@@ -14,9 +14,8 @@ using ReadOnlyAttribute = Unity.Collections.ReadOnlyAttribute;
 namespace Chisel.Core
 {
 #if USE_MANAGED_CSG_IMPLEMENTATION
-    internal sealed class BrushLoops : IDisposable
+    public sealed class BrushLoops : IDisposable
     {
-        public CSGTreeBrush brush;
         public VertexSoup   vertexSoup   = new VertexSoup();
         public List<Loop>   basePolygons = new List<Loop>();
 

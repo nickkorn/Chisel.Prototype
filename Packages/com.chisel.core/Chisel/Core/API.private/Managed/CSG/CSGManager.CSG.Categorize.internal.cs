@@ -114,8 +114,8 @@ namespace Chisel.Core
                 vertices        = brushVertices.vertices,
                 edges1          = intersectionLoop.edges,
                 edges2          = surfaceLoop.edges,
-                worldPlanes1    = ChiselLookup.Value.brushWorldPlanes[intersectionLoop.info.brush.brushNodeID - 1],
-                worldPlanes2    = ChiselLookup.Value.brushWorldPlanes[surfaceLoop.info.brush.brushNodeID - 1],
+                worldPlanes1    = ChiselLookup.Value.brushWorldPlanes[intersectionLoop.info.brushNodeID - 1],
+                worldPlanes2    = ChiselLookup.Value.brushWorldPlanes[surfaceLoop.info.brushNodeID - 1],
 
                 result          = &result,
                 outEdges        = new NativeList<Edge>(math.max(intersectionLoop.edges.Length, surfaceLoop.edges.Length), Allocator.Persistent)
@@ -158,7 +158,7 @@ namespace Chisel.Core
 
                 if (surfaceLoop.holes.Count > 0)
                 {
-                    ref var brushIntersections = ref ChiselLookup.Value.brushesTouchedByBrushes[surfaceLoop.info.brush.brushNodeID - 1].Value.brushIntersections;
+                    ref var brushIntersections = ref ChiselLookup.Value.brushesTouchedByBrushes[surfaceLoop.info.brushNodeID - 1].Value.brushIntersections;
                     for (int h = 0; h < surfaceLoop.holes.Count; h++)
                     {
                         // Need to make a copy so we can edit it without causing side effects
@@ -166,7 +166,7 @@ namespace Chisel.Core
                         if (!hole.Valid)
                             continue;
 
-                        var holeBrushNodeID = hole.info.brush.brushNodeID;
+                        var holeBrushNodeID = hole.info.brushNodeID;
 
                         // TODO: Optimize and make this a BlobAsset that's created in a pass,
                         //       this BlobAsset must make it easy to quickly determine if two
@@ -279,7 +279,7 @@ namespace Chisel.Core
                             }
                         }
 
-                        ref var worldPlanes = ref ChiselLookup.Value.brushWorldPlanes[hole.info.brush.brushNodeID - 1].Value.worldPlanes;
+                        ref var worldPlanes = ref ChiselLookup.Value.brushWorldPlanes[hole.info.brushNodeID - 1].Value.worldPlanes;
                         
                         var edgesLength = hole.edges.Length;
                         var planesLength = worldPlanes.Length;
@@ -302,7 +302,7 @@ namespace Chisel.Core
                     }
                     if (baseloop.edges.Length > 0)
                     {
-                        ref var worldPlanes = ref ChiselLookup.Value.brushWorldPlanes[baseloop.info.brush.brushNodeID - 1].Value.worldPlanes;
+                        ref var worldPlanes = ref ChiselLookup.Value.brushWorldPlanes[baseloop.info.brushNodeID - 1].Value.worldPlanes;
 
                         var planesLength    = worldPlanes.Length;
                         var edgesLength     = baseloop.edges.Length;

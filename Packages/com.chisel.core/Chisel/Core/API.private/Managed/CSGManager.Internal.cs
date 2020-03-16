@@ -86,7 +86,7 @@ namespace Chisel.Core
             }
         };
         
-        struct NodeHierarchy
+        internal struct NodeHierarchy
         {
             public List<int>	children;
             public int			treeNodeID;
