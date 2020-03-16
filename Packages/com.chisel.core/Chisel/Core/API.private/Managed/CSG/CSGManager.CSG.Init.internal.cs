@@ -60,107 +60,10 @@ namespace Chisel.Core
             }
             return false;
         }
-        
+
 
         #region GenerateBasePolygons
 
-        public static unsafe Bounds GenerateBasePolygons(int brushNodeID, int brushMeshID, ref NodeTransformations transform, BrushLoops outputLoops)
-        {
-            if (!BrushMeshManager.IsBrushMeshIDValid(brushMeshID))
-                return new Bounds();
-
-            var mesh = BrushMeshManager.GetBrushMeshBlob(brushMeshID);
-            if (mesh == BlobAssetReference<BrushMeshBlob>.Null)
-            {
-                Debug.Log("mesh == null");
-                return new Bounds();
-            }
-            ref var vertices   = ref mesh.Value.vertices;
-            ref var planes     = ref mesh.Value.localPlanes;
-            ref var polygons   = ref mesh.Value.polygons;
-            var nodeToTreeSpaceMatrix   = transform.nodeToTree;
-            var nodeToTreeSpaceInvertedTransposedMatrix = math.transpose(math.inverse(nodeToTreeSpaceMatrix));
-
-            Debug.Assert(outputLoops.basePolygons.Count == 0);
-            outputLoops.basePolygons.Clear(); 
-            if (outputLoops.basePolygons.Capacity < polygons.Length)
-                outputLoops.basePolygons.Capacity = polygons.Length;
-
-            outputLoops.vertexSoup.Initialize(vertices.Length);
-
-            var min = new float3(float.PositiveInfinity, float.PositiveInfinity, float.PositiveInfinity);
-            var max = new float3(float.NegativeInfinity, float.NegativeInfinity, float.NegativeInfinity);
-
-            var aabb = new AABB();
-
-            for (int p = 0; p < polygons.Length; p++)
-            {
-                var polygon      = polygons[p];
-
-                if (polygon.edgeCount < 3 ||
-                    p >= planes.Length)
-                    continue;
-
-                var firstEdge    = polygon.firstEdge;
-                var lastEdge     = firstEdge + polygon.edgeCount;
-                var indexCount   = lastEdge - firstEdge;
-
-                using (var edges   = new NativeList<Edge>(indexCount, Allocator.TempJob))
-                {
-                    float4 worldPlane = float4.zero;
-                    // THEORY: can end up with duplicate vertices when close enough vertices are snapped together
-                    var copyPolygonToIndicesJob = new CopyPolygonToIndicesJob
-                    {
-                        mesh                                    = mesh,
-                        polygonIndex                            = p,
-                        nodeToTreeSpaceMatrix                   = nodeToTreeSpaceMatrix,
-                        nodeToTreeSpaceInvertedTransposedMatrix = nodeToTreeSpaceInvertedTransposedMatrix,
-                        vertexSoup                              = outputLoops.vertexSoup,
-                        edges                                   = edges,
-
-                        aabb                                    = &aabb,
-
-                        worldPlane                              = &worldPlane
-                    };
-
-                    copyPolygonToIndicesJob.Run();
-
-                    if (edges.Length == 0)
-                        continue;
-
-                    min = aabb.min;
-                    max = aabb.max;
-
-                    var surfacePolygon = new Loop()
-                    {
-                        info = new SurfaceInfo()
-                        {
-                            worldPlane          = worldPlane,
-                            layers              = polygon.layerDefinition,
-                            basePlaneIndex      = p,
-                            brushNodeID         = brushNodeID,
-                            interiorCategory    = (CategoryGroupIndex)(int)CategoryIndex.ValidAligned,
-                        },
-                        holes = new List<Loop>()
-                    };
-
-                    for (int i = 0; i < edges.Length; i++)
-                        surfacePolygon.edges.Add(edges[i]);
-                    outputLoops.basePolygons.Add(surfacePolygon);
-
-                    #if false
-                    var builder = new System.Text.StringBuilder();
-                    builder.AppendLine($"{p}: {s_Indices.Count} {surfacePolygon.info.worldPlane}");
-                    CSGManagerPerformCSG.Dump(builder, surfacePolygon, outputLoops.vertexSoup, Quaternion.FromToRotation(surfacePolygon.info.worldPlane.normal, Vector3.forward));
-                    Debug.Log(builder.ToString());
-                    #endif
-                }
-            }
-            var bounds = new Bounds();
-            if (!float.IsInfinity(min.x)) 
-                bounds.SetMinMax(min, max);
-            return bounds;
-        }
         #endregion
     }
 #endif

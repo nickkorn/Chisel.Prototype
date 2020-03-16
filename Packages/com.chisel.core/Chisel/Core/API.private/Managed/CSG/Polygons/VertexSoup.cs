@@ -46,16 +46,16 @@ namespace Chisel.Core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void Initialize(int minCapacity)
+        public void Initialize(int minCapacity, Allocator allocator = Allocator.Persistent)
         {
             if (hashTable.IsCreated) hashTable.Dispose();
-            hashTable = new NativeArray<int>((int)(kHashTableSize + 1), Allocator.Persistent, NativeArrayOptions.ClearMemory);
+            hashTable = new NativeArray<int>((int)(kHashTableSize + 1), allocator, NativeArrayOptions.ClearMemory);
             
             if (chainedIndices.IsCreated) chainedIndices.Dispose();
-            chainedIndices = new NativeList<ChainedIndex>(minCapacity, Allocator.Persistent);
+            chainedIndices = new NativeList<ChainedIndex>(minCapacity, allocator);
 
             if (vertices.IsCreated) vertices.Dispose();
-            vertices = new NativeList<float3>(minCapacity, Allocator.Persistent);
+            vertices = new NativeList<float3>(minCapacity, allocator);
         }
 
         // ensure we have at least this many extra vertices in capacity

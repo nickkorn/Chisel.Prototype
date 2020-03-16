@@ -20,15 +20,6 @@ namespace Chisel.Core
         public float3 min, max;
     }
 
-    // TODO: create blob for basepolygons
-    public struct BasePolygonsBlob
-    {
-        public AABB                     aabb;
-        public BlobArray<Edge>          polygonEdges;
-        public BlobArray<int>           polygonIndices;
-        public BlobArray<SurfaceInfo>   polygonSurfaceInfos;
-    }
-
     struct CompactTopDownNode
     {
         // TODO: combine bits
@@ -262,10 +253,125 @@ namespace Chisel.Core
         }
     };
 
+
+    struct BasePolygon
+    {
+        public SurfaceInfo  surfaceInfo;
+        public int          startEdgeIndex;
+        public int          endEdgeIndex;
+    }
+
+    struct BasePolygonsBlob
+    {
+        public BlobArray<BasePolygon>   surfaces;
+        public BlobArray<Edge>          edges;
+        public BlobArray<float3>        vertices;
+        public AABB                     bounds;
+
+        public static unsafe BlobAssetReference<BasePolygonsBlob> Create(int brushNodeID, int brushMeshID, BlobAssetReference<NodeTransformations> transform)
+        {
+            var mesh = ChiselLookup.Value.brushMeshBlobs[brushMeshID - 1];
+            ref var vertices   = ref mesh.Value.vertices;
+            ref var planes     = ref mesh.Value.localPlanes;
+            ref var polygons   = ref mesh.Value.polygons;
+            var nodeToTreeSpaceMatrix   = transform.Value.nodeToTree;
+            var nodeToTreeSpaceInvertedTransposedMatrix = math.transpose(math.inverse(nodeToTreeSpaceMatrix));
+
+            var min = new float3(float.PositiveInfinity, float.PositiveInfinity, float.PositiveInfinity);
+            var max = new float3(float.NegativeInfinity, float.NegativeInfinity, float.NegativeInfinity);
+
+            var aabb = new AABB();
+
+            var edges = new NativeList<Edge>(Allocator.Temp);
+            var surfaces = new NativeList<BasePolygon>(Allocator.Temp);
+
+            var vertexSoup = new VertexSoup();
+            vertexSoup.Initialize(vertices.Length, Allocator.Temp);
+
+            var polygonEdges = new NativeList<Edge>(Allocator.Temp);
+            for (int p = 0; p < polygons.Length; p++)
+            {
+                var polygon      = polygons[p];
+
+                if (polygon.edgeCount < 3 ||
+                    p >= planes.Length)
+                    continue;
+
+                var firstEdge    = polygon.firstEdge;
+                var lastEdge     = firstEdge + polygon.edgeCount;
+                var indexCount   = lastEdge - firstEdge;
+
+                polygonEdges.Clear();
+                if (polygonEdges.Capacity < indexCount)
+                    polygonEdges.Capacity = indexCount;
+                
+                float4 worldPlane = float4.zero;
+                // THEORY: can end up with duplicate vertices when close enough vertices are snapped together
+                var copyPolygonToIndicesJob = new CopyPolygonToIndicesJob
+                {
+                    mesh                                    = mesh,
+                    polygonIndex                            = p,
+                    nodeToTreeSpaceMatrix                   = nodeToTreeSpaceMatrix,
+                    nodeToTreeSpaceInvertedTransposedMatrix = nodeToTreeSpaceInvertedTransposedMatrix,
+                    vertexSoup                              = vertexSoup,
+                    edges                                   = polygonEdges,
+
+                    aabb                                    = &aabb,
+
+                    worldPlane                              = &worldPlane
+                };
+
+                // TODO: inline this into this job
+                copyPolygonToIndicesJob.Execute(); 
+
+                if (polygonEdges.Length == 0)
+                    continue;
+
+                min = aabb.min;
+                max = aabb.max;
+
+                int startEdgeIndex = edges.Length;
+                for (int i = 0; i < polygonEdges.Length; i++)
+                    edges.Add(polygonEdges[i]);
+                var endEdgeIndex = edges.Length;
+
+                surfaces.Add(new BasePolygon()
+                {
+                    surfaceInfo = new SurfaceInfo()
+                    {
+                        worldPlane          = worldPlane,
+                        layers              = polygon.layerDefinition,
+                        basePlaneIndex      = p,
+                        brushNodeID         = brushNodeID,
+                        interiorCategory    = (CategoryGroupIndex)(int)CategoryIndex.ValidAligned,
+                    },
+                    startEdgeIndex  = startEdgeIndex,
+                    endEdgeIndex    = endEdgeIndex
+                });
+            }
+
+            var builder = new BlobBuilder(Allocator.Temp);
+            ref var root = ref builder.ConstructRoot<BasePolygonsBlob>();
+            builder.Construct(ref root.surfaces, surfaces);
+            builder.Construct(ref root.edges, edges);
+            builder.Construct(ref root.vertices, vertexSoup.vertices);
+            root.bounds = new AABB() { min = min, max = max };
+            var result = builder.CreateBlobAssetReference<BasePolygonsBlob>(Allocator.Persistent);
+            builder.Dispose();
+            vertexSoup.Dispose();
+            edges.Dispose();
+            surfaces.Dispose();
+            polygonEdges.Dispose();
+
+            return result;
+        }
+    }
+
     internal sealed unsafe class ChiselLookup : ScriptableObject
     {
         public unsafe struct ChiselLookupValues
         {
+            public NativeHashMap<int, BlobAssetReference<BasePolygonsBlob>>         basePolygons;
             public NativeHashMap<int, BlobAssetReference<RoutingTable>>             routingTableLookup;
             public NativeHashMap<int, BlobAssetReference<BrushWorldPlanes>>         brushWorldPlanes;
             public NativeHashMap<int, BlobAssetReference<BrushesTouchedByBrush>>    brushesTouchedByBrushes;
@@ -279,6 +385,12 @@ namespace Chisel.Core
                 for (int b = 0; b < treeBrushes.Length; b++)
                 {
                     var brushNodeID = treeBrushes[b];
+                    if (basePolygons.TryGetValue(brushNodeID - 1, out BlobAssetReference<BasePolygonsBlob> basePolygonsBlob))
+                    {
+                        basePolygons.Remove(brushNodeID - 1);
+                        if (basePolygonsBlob.IsCreated)
+                            basePolygonsBlob.Dispose();
+                    }
                     if (routingTableLookup.TryGetValue(brushNodeID - 1, out BlobAssetReference<RoutingTable> routingTable))
                     {
                         routingTableLookup.Remove(brushNodeID - 1);
@@ -310,6 +422,7 @@ namespace Chisel.Core
             internal void Initialize()
             {
                 // brushIndex
+                basePolygons            = new NativeHashMap<int, BlobAssetReference<BasePolygonsBlob>>(1000, Allocator.Persistent);
                 routingTableLookup      = new NativeHashMap<int, BlobAssetReference<RoutingTable>>(1000, Allocator.Persistent);
                 brushWorldPlanes        = new NativeHashMap<int, BlobAssetReference<BrushWorldPlanes>>(1000, Allocator.Persistent);
                 brushesTouchedByBrushes = new NativeHashMap<int, BlobAssetReference<BrushesTouchedByBrush>>(1000, Allocator.Persistent);
@@ -324,18 +437,31 @@ namespace Chisel.Core
 
             internal void Dispose()
             {
-                if (routingTableLookup.IsCreated)
+                if (basePolygons.IsCreated)
                 {
-                    using (var items = routingTableLookup.GetValueArray(Allocator.Temp))
+                    using (var items = basePolygons.GetValueArray(Allocator.Temp))
                     {
+                        basePolygons.Clear();
+                        basePolygons.Dispose();
                         foreach (var item in items)
                         {
                             if (item.IsCreated)
                                 item.Dispose();
                         }
                     }
-                    routingTableLookup.Clear();
-                    routingTableLookup.Dispose();
+                }
+                if (routingTableLookup.IsCreated)
+                {
+                    using (var items = routingTableLookup.GetValueArray(Allocator.Temp))
+                    {
+                        routingTableLookup.Clear();
+                        routingTableLookup.Dispose();
+                        foreach (var item in items)
+                        {
+                            if (item.IsCreated)
+                                item.Dispose();
+                        }
+                    }
                 }
                 if (brushWorldPlanes.IsCreated)
                 {

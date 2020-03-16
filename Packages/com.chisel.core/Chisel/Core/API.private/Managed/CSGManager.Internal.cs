@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Unity.Burst;
+using Unity.Entities;
 using UnityEngine;
 
 namespace Chisel.Core
@@ -162,7 +163,6 @@ namespace Chisel.Core
         }
 
         private static readonly List<int>					nodeUserIDs			= new List<int>();
-        private static readonly List<Bounds>				nodeBounds			= new List<Bounds>();
         private static readonly List<NodeFlags>				nodeFlags			= new List<NodeFlags>();
         private static readonly List<NodeTransform>			nodeTransforms		= new List<NodeTransform>();
         private static readonly List<NodeLocalTransform>	nodeLocalTransforms	= new List<NodeLocalTransform>();
@@ -186,7 +186,7 @@ namespace Chisel.Core
 
         internal static void ClearAllNodes()
         {
-            nodeUserIDs		.Clear();	nodeBounds			.Clear();
+            nodeUserIDs		.Clear();	
             nodeFlags		.Clear();	nodeTransforms		.Clear();
             nodeHierarchies	.Clear();	nodeLocalTransforms	.Clear();	
 
@@ -217,7 +217,6 @@ namespace Chisel.Core
                 var nodeIndex = nodeHierarchies.Count; // NOTE: Index, not ID
 
                 nodeUserIDs			.Add(userID); // <- setting userID here
-                nodeBounds			.Add(new Bounds());
                 nodeFlags			.Add(new NodeFlags());
                 nodeTransforms		.Add(new NodeTransform());
                 nodeLocalTransforms	.Add(new NodeLocalTransform());
@@ -252,7 +251,6 @@ namespace Chisel.Core
             var nodeType = nodeFlags[nodeIndex].nodeType;
 
             Debug.Assert(nodeUserIDs.Count == nodeHierarchies.Count);
-            Debug.Assert(nodeBounds.Count == nodeHierarchies.Count);
             Debug.Assert(nodeFlags.Count == nodeHierarchies.Count);
             Debug.Assert(nodeTransforms.Count == nodeHierarchies.Count);
             Debug.Assert(nodeLocalTransforms.Count == nodeHierarchies.Count);
@@ -294,8 +292,7 @@ namespace Chisel.Core
             
 
             nodeUserIDs		[nodeIndex] = kDefaultUserID;
-            nodeBounds		[nodeIndex] = new Bounds();
-
+            
             var flags = nodeFlags[nodeIndex];
             NodeFlags.Reset(ref flags);
             nodeFlags[nodeIndex] = flags;
@@ -331,7 +328,6 @@ namespace Chisel.Core
                     nodeIndex = nodeID - 1;
 
                     nodeUserIDs			.RemoveAt(nodeIndex);
-                    nodeBounds			.RemoveAt(nodeIndex);
                     nodeFlags			.RemoveAt(nodeIndex);
                     nodeTransforms		.RemoveAt(nodeIndex);
                     nodeLocalTransforms	.RemoveAt(nodeIndex);
@@ -456,7 +452,17 @@ namespace Chisel.Core
         internal static Int32		GetUserIDOfNode	(Int32 nodeID)	{ if (!IsValidNodeID(nodeID)) return kDefaultUserID; return nodeUserIDs[nodeID - 1]; }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal static bool		GetBrushBounds	(Int32 brushNodeID, ref Bounds bounds) { if (!AssertNodeIDValid(brushNodeID) || !AssertNodeType(brushNodeID, CSGNodeType.Brush)) return false; bounds = nodeBounds[brushNodeID - 1]; return true; }
+        internal static bool		GetBrushBounds	(Int32 brushNodeID, ref Bounds bounds)
+        {
+            if (!AssertNodeIDValid(brushNodeID) || !AssertNodeType(brushNodeID, CSGNodeType.Brush)) return false;
+            if (!ChiselLookup.Value.basePolygons.TryGetValue(brushNodeID - 1, out BlobAssetReference<BasePolygonsBlob> result))
+                return false;
+
+            bounds = new Bounds();
+            if (!float.IsInfinity(result.Value.bounds.min.x))
+                bounds.SetMinMax(result.Value.bounds.min, result.Value.bounds.max);
+            return true;
+        }
 
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1266,7 +1272,6 @@ namespace Chisel.Core
                 return allTreeNodeIDs;
 
             Debug.Assert(nodeUserIDs.Count == nodeHierarchies.Count);
-            Debug.Assert(nodeBounds.Count == nodeHierarchies.Count);
             Debug.Assert(nodeFlags.Count == nodeHierarchies.Count);
             Debug.Assert(nodeTransforms.Count == nodeHierarchies.Count);
             Debug.Assert(nodeLocalTransforms.Count == nodeHierarchies.Count);

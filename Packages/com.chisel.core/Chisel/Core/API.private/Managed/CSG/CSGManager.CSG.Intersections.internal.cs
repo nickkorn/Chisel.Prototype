@@ -283,6 +283,32 @@ namespace Chisel.Core
             ref var brushMeshBlobs = ref ChiselLookup.Value.brushMeshBlobs;
             ref var transformations = ref ChiselLookup.Value.transformations;
 
+            // TODO: get rid of this, create blobasset as an output
+            for (int b = 0; b < treeBrushes.Length; b++)
+            {
+                var brushNodeID = treeBrushes[b];
+                var result      = ChiselLookup.Value.basePolygons[brushNodeID - 1];
+                var outputLoops = CSGManager.GetBrushInfo(brushNodeID).brushOutputLoops;
+                outputLoops.Dispose();
+
+                outputLoops.basePolygons = new List<Loop>(result.Value.surfaces.Length);
+                for (int p = 0; p < result.Value.surfaces.Length; p++)
+                {
+                    ref var input = ref result.Value.surfaces[p];
+                    var surfacePolygon = new Loop()
+                    {
+                        info = input.surfaceInfo,
+                        holes = new List<Loop>()
+                    };
+                    for (int e = input.startEdgeIndex; e < input.endEdgeIndex; e++)
+                        surfacePolygon.edges.Add(result.Value.edges[e]);
+                    outputLoops.basePolygons.Add(surfacePolygon);
+                }
+                outputLoops.vertexSoup.Initialize(result.Value.vertices.Length);
+                for (int v = 0; v < result.Value.vertices.Length; v++)
+                    outputLoops.vertexSoup.Add(result.Value.vertices[v]);
+            }
+
             // TODO: - calculate all data per brush here (currently unused)
             //         and use this later on, hopefully making it possible to remove all intermediates
             //       - also get rid of all SurfaceLoops etc. in the middle, only store at the end
