@@ -4,41 +4,47 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
+using Unity.Collections;
 
 namespace Chisel.Core
 {
 #if USE_MANAGED_CSG_IMPLEMENTATION
-    internal class BrushIntersectionLookup
+    internal struct BrushIntersectionLookup : IDisposable
     {
         const int bits = 2;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public BrushIntersectionLookup(int _length)
+        public BrushIntersectionLookup(int _offset, int _length, Allocator allocator)
         {
             var size = ((_length * bits) + 31) / 32;
             if (size <= 0)
-                this.twoBits = new UInt32[0];
+                this.twoBits = new NativeArray<UInt32>(1, allocator);
             else
-                this.twoBits = new UInt32[size];
+                this.twoBits = new NativeArray<UInt32>(size, allocator);
+            Length = (twoBits.Length * 32) / bits;
+            Offset = _offset;
         }
 
-        readonly UInt32[]  twoBits;
-
-        public int Length
+        public void Dispose()
         {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get { return (twoBits.Length * 32) / bits; }
+            if (twoBits.IsCreated)
+                twoBits.Dispose();
         }
+
+        public NativeArray<UInt32> twoBits;
+        public readonly int Offset;
+        public readonly int Length;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Clear()
         {
-            Array.Clear(twoBits, 0, twoBits.Length);
+            twoBits.ClearValues();
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public IntersectionType Get(int index)
         {
+            index -= Offset;
             if (index < 0 || index >= Length)
                 return IntersectionType.InvalidValue;
                 
@@ -51,8 +57,9 @@ namespace Chisel.Core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool Is(int index, IntersectionType value) 
+        public bool Is(int index, IntersectionType value)
         {
+            index -= Offset;
             if (index < 0 || index >= Length)
 				return false;
 
@@ -70,6 +77,7 @@ namespace Chisel.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Set(int index, IntersectionType value)
         {
+            index -= Offset;
             if (index < 0 || index >= Length)
                 return;
 

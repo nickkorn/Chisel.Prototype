@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Entities;
@@ -204,34 +205,23 @@ namespace Chisel.Core
 
             public BrushOutline             brushOutline        = new BrushOutline();
 
-            // TODO: put somewhere else
-            public BlobAssetReference<BrushWorldPlanes> brushWorldPlanes;
-
-            public readonly List<BrushBrushIntersection> brushBrushIntersections = new List<BrushBrushIntersection>();
-
-            public readonly RoutingTable    routingTable        = new RoutingTable();
+            ~BrushInfo() { Dispose(); }
 
             public void Dispose()
             {
-                if (brushWorldPlanes.IsCreated)
-                    brushWorldPlanes.Dispose();
-                brushWorldPlanes = BlobAssetReference<BrushWorldPlanes>.Null;
+                if (brushSurfaceLoops != null) brushSurfaceLoops.Dispose();
+                brushSurfaceLoops = null;
+                brushOutputLoops.Dispose();
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public void Reset()
+            public void Reset() 
             {
+                Dispose();
                 brushOutlineGeneration  = 0;
                 brushOutline.Reset();
-                if (brushSurfaceLoops != null)
-                    brushSurfaceLoops.Clear();
                 brushOutputLoops.Clear();
                 renderBuffers.surfaceRenderBuffers.Clear();
-                brushBrushIntersections.Clear();
-                routingTable.Clear();
-                if (brushWorldPlanes.IsCreated)
-                    brushWorldPlanes.Dispose();
-                brushWorldPlanes = BlobAssetReference<BrushWorldPlanes>.Null;
             }
         }
 
@@ -519,32 +509,20 @@ namespace Chisel.Core
                 try
                 {
                     UpdateTreeMesh(treeNodeID);
-                }
-                finally
-                {
-                    UnityEngine.Profiling.Profiler.EndSample();
-                }
+                } finally { UnityEngine.Profiling.Profiler.EndSample(); }
             }
 
             UnityEngine.Profiling.Profiler.BeginSample("CombineSubMeshes");
             try
             {
                 CombineSubMeshes(treeInfo, meshQueries, vertexChannelMask);
-            }
-            finally
-            {
-                UnityEngine.Profiling.Profiler.EndSample();
-            }
+            } finally { UnityEngine.Profiling.Profiler.EndSample(); }
 
             UnityEngine.Profiling.Profiler.BeginSample("Clean");
             try
             {
                 CleanTree(treeNodeID);
-            }
-            finally
-            {
-                UnityEngine.Profiling.Profiler.EndSample();
-            }
+            } finally { UnityEngine.Profiling.Profiler.EndSample(); }
 
 
             {
@@ -611,9 +589,9 @@ namespace Chisel.Core
                 if (nodeType != CSGNodeType.Brush)
                     continue;
 
-                var brushOutput = nodeHierarchies[nodeIndex].brushInfo;
+                var brushInfo = nodeHierarchies[nodeIndex].brushInfo;
                 //var operation_type_bits = GetNodeOperationByIndex(nodeIndex);
-                if (brushOutput == null //||
+                if (brushInfo == null //||
                                         //brush.triangleMesh == null //||
                                         //((int)operation_type_bits & InfiniteBrushBits) == InfiniteBrushBits 
                     )
@@ -622,7 +600,7 @@ namespace Chisel.Core
                 GenerateSurfaceRenderBuffers(brushNodeID, //brushOutput.brushSurfaceLoops, 
                                              meshQueries, vertexChannelMask);
 
-                var renderBuffers = brushOutput.renderBuffers;
+                var renderBuffers = brushInfo.renderBuffers;
                 if (renderBuffers.surfaceRenderBuffers.Count == 0)
                     continue;
 
@@ -760,7 +738,7 @@ namespace Chisel.Core
                     //    continue;
 
                     var loop = surfaceLoopList[l];
-                    if (loop.edges.Count < 3)
+                    if (loop.edges.Length < 3)
                         continue;
 
                     loops.Add(loop);
@@ -791,43 +769,41 @@ namespace Chisel.Core
                 Int32[] surfaceIndices = null;
 
                 UnityEngine.Profiling.Profiler.BeginSample("Triangulate");
-                try
-                {
-                    // Ensure we have the rotation properly calculated, and have a valid normal
-                    quaternion rotation;
-                    if (((Vector3)info.worldPlane.xyz) == Vector3.forward)
-                        rotation = quaternion.identity;
-                    else
-                        rotation = (quaternion)Quaternion.FromToRotation(info.worldPlane.xyz, Vector3.forward);
+                try { 
+                    try
+                    {
+                        // Ensure we have the rotation properly calculated, and have a valid normal
+                        quaternion rotation;
+                        if (((Vector3)info.worldPlane.xyz) == Vector3.forward)
+                            rotation = quaternion.identity;
+                        else
+                            rotation = (quaternion)Quaternion.FromToRotation(info.worldPlane.xyz, Vector3.forward);
 
-                    // TODO: all separate loops on same surface should be put in same OutputSurfaceMesh!                    
+                        // TODO: all separate loops on same surface should be put in same OutputSurfaceMesh!                    
 
-                    surfaceIndices = context.TriangulateLoops(loop, brushVertices.vertices, loop.edges, rotation);
+                        surfaceIndices = context.TriangulateLoops(loop, brushVertices.vertices, loop.edges.ToArray().ToList(), rotation);
 
                     
-                    #if false
-                    var builder = new System.Text.StringBuilder();
-                    //builder.AppendLine($"{surfaceLoopList[l].loopIndex}: {s}/{l}/{surfaceLoopList[l].info.worldPlane}");
-                    builder.AppendLine($"{loop.info.basePlaneIndex}/{l}/{interiorCategory}/{loop.indices.Count}/{loop.edges.Count}");
-                    CSGManagerPerformCSG.Dump(builder, loop, brushVertices, Quaternion.FromToRotation(loop.info.worldPlane.normal, Vector3.forward));
-                    for (int i = 0; i < surfaceIndices.Length; i++)
-                    {
-                        builder.Append(i);
-                        builder.Append(", ");
+                        #if false
+                        var builder = new System.Text.StringBuilder();
+                        //builder.AppendLine($"{surfaceLoopList[l].loopIndex}: {s}/{l}/{surfaceLoopList[l].info.worldPlane}");
+                        builder.AppendLine($"{loop.info.basePlaneIndex}/{l}/{interiorCategory}/{loop.indices.Count}/{loop.edges.Count}");
+                        CSGManagerPerformCSG.Dump(builder, loop, brushVertices, Quaternion.FromToRotation(loop.info.worldPlane.normal, Vector3.forward));
+                        for (int i = 0; i < surfaceIndices.Length; i++)
+                        {
+                            builder.Append(i);
+                            builder.Append(", ");
+                        }
+                        builder.AppendLine();
+                        Debug.Log(builder.ToString());
+                        #endif
                     }
-                    builder.AppendLine();
-                    Debug.Log(builder.ToString());
-                    #endif
-                }
-                catch (System.Exception e)
-                {
-                    Debug.LogException(e);
-                    //Debug.Log($"BrushNodeID: {loop.info.brush.brushNodeID} / BasePlaneIndex: {loop.info.basePlaneIndex} / WorldPlane: {loop.info.worldPlane}");// / LoopIndex: {loop.loopIndex}");
-                }
-                finally
-                {
-                    UnityEngine.Profiling.Profiler.EndSample();
-                }
+                    catch (System.Exception e)
+                    {
+                        Debug.LogException(e);
+                        //Debug.Log($"BrushNodeID: {loop.info.brush.brushNodeID} / BasePlaneIndex: {loop.info.basePlaneIndex} / WorldPlane: {loop.info.worldPlane}");// / LoopIndex: {loop.loopIndex}");
+                    }
+                } finally { UnityEngine.Profiling.Profiler.EndSample(); }
 
                 if (surfaceIndices == null ||
                     surfaceIndices.Length < 3)

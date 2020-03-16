@@ -2,12 +2,31 @@ using UnityEditor;
 using UnityEngine;
 using Unity.Mathematics;
 using System.Runtime.CompilerServices;
+using Unity.Burst;
 
 // TODO: remove redundancy, clean up
 namespace Chisel.Core
 {
     public static class GeometryMath
     {
+        [BurstCompile(Debug = false, CompileSynchronously = true, FloatMode = FloatMode.Fast, FloatPrecision = FloatPrecision.Low)]
+        public static int GetTriangleArraySize(int size)
+        {
+            int n = size - 1;
+            return ((n * n) + n) / 2;
+        }
+
+        [BurstCompile(Debug = false, CompileSynchronously = true, FloatMode = FloatMode.Fast, FloatPrecision = FloatPrecision.Low)]
+        public static int2 GetTriangleArrayIndex(int index, int size)
+        {
+            int n = size - 1;
+            int xFactor = 2 * n + 1;
+            int yFactor = (4 * (n * n)) + (4 * n) - 7;
+
+            var y = n - 1 - ((int)(math.sqrt(yFactor - (index * 8)) - 1)) / 2;
+            var x = index + ((y * (y - xFactor + 2)) / 2) + 1;
+            return new int2(x, y);
+        }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector3 ProjectPointLine(in Vector3 point, in Vector3 lineStart, in Vector3 lineEnd)

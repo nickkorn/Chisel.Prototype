@@ -86,11 +86,11 @@ namespace Chisel.Core
         #region Node
         /// <value>Returns if the current <see cref="Chisel.Core.CSGTreeBrush"/> is valid or not.</value>
         /// <remarks><note>If <paramref name="Valid"/> is <b>false</b> that could mean that this node has been destroyed.</note></remarks>
-        public bool				Valid			{ [MethodImpl(MethodImplOptions.AggressiveInlining)] get { return brushNodeID != CSGTreeNode.InvalidNodeID && CSGTreeNode.IsNodeIDValid(brushNodeID); } }
+        public bool				Valid			{ [BurstDiscard] get { return brushNodeID != CSGTreeNode.InvalidNodeID && CSGTreeNode.IsNodeIDValid(brushNodeID); } }
 
         /// <value>Gets the <see cref="Chisel.Core.CSGTreeBrush.NodeID"/> of the <see cref="Chisel.Core.CSGTreeBrush"/>, which is a unique ID of this node.</value>
         /// <remarks><note>NodeIDs are eventually recycled, so be careful holding on to Nodes that have been destroyed.</note></remarks>
-        public Int32			NodeID			{ [MethodImpl(MethodImplOptions.AggressiveInlining)] get { return brushNodeID; } }
+        public Int32			NodeID			{ [BurstDiscard] get { return brushNodeID; } }
 
         /// <value>Gets the <see cref="Chisel.Core.CSGTreeBrush.UserID"/> set to the <see cref="Chisel.Core.CSGTreeBrush"/> at creation time.</value>
         public Int32			UserID			{ [MethodImpl(MethodImplOptions.AggressiveInlining)] get { return CSGTreeNode.GetUserIDOfNode(brushNodeID); } }
@@ -114,13 +114,13 @@ namespace Chisel.Core
 
         #region ChildNode
         /// <value>Returns the parent <see cref="Chisel.Core.CSGTreeBranch"/> this <see cref="Chisel.Core.CSGTreeBrush"/> is a child of. Returns an invalid node if it's not a child of any <see cref="Chisel.Core.CSGTreeBranch"/>.</value>
-        public CSGTreeBranch	Parent				{ [MethodImpl(MethodImplOptions.AggressiveInlining)] get { return new CSGTreeBranch { branchNodeID = CSGTreeNode.GetParentOfNode(brushNodeID) }; } }
+        public CSGTreeBranch	Parent				{ get { return new CSGTreeBranch { branchNodeID = CSGTreeNode.GetParentOfNode(brushNodeID) }; } }
         
         /// <value>Returns tree this <see cref="Chisel.Core.CSGTreeBrush"/> belongs to.</value>
-        public CSGTree			Tree				{ [MethodImpl(MethodImplOptions.AggressiveInlining)] get { return new CSGTree       { treeNodeID   = CSGTreeNode.GetTreeOfNode(brushNodeID) }; } }
+        public CSGTree			Tree				{ get { return new CSGTree       { treeNodeID   = CSGTreeNode.GetTreeOfNode(brushNodeID) }; } }
 
         /// <value>The CSG operation that this <see cref="Chisel.Core.CSGTreeBrush"/> will use.</value>
-        public CSGOperationType Operation			{ [MethodImpl(MethodImplOptions.AggressiveInlining)] get { return (CSGOperationType)CSGTreeNode.GetNodeOperationType(brushNodeID); } [MethodImpl(MethodImplOptions.AggressiveInlining)] set { CSGTreeNode.SetNodeOperationType(brushNodeID, value); } }
+        public CSGOperationType Operation			{ get { return (CSGOperationType)CSGTreeNode.GetNodeOperationType(brushNodeID); } [BurstDiscard] set { CSGTreeNode.SetNodeOperationType(brushNodeID, value); } }
         #endregion
 
         #region TreeBrush specific

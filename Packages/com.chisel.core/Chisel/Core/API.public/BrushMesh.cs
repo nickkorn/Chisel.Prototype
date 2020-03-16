@@ -157,14 +157,9 @@ namespace Chisel.Core
             public override string ToString() { return string.Format("{{ twinIndex = {0}, vertexIndex = {1} }}", twinIndex, vertexIndex); }
         }
 
-#if USE_MANAGED_CSG_IMPLEMENTATION
-        
+#if USE_MANAGED_CSG_IMPLEMENTATION        
         /// <value>The axis aligned bounding box of this <see cref="Chisel.Core.BrushMesh"/>.</value> 
         public Bounds		localBounds;
-
-        // TODO: add description
-        public int[][]		surfacesAroundVertex;
-
 #endif
 
         /// <value>The vertices of this <see cref="Chisel.Core.BrushMesh"/>.</value> 

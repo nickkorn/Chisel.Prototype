@@ -8,6 +8,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
+using Unity.Collections;
 using UnityEngine;
 
 namespace Chisel.Core
@@ -19,7 +20,7 @@ namespace Chisel.Core
         Invalid = -1
     }
 
-    internal unsafe struct CategoryRoutingRow
+    public unsafe struct CategoryRoutingRow
     {
 #if HAVE_SELF_CATEGORIES
         const CategoryGroupIndex Invalid            = CategoryGroupIndex.Invalid;
@@ -86,7 +87,7 @@ namespace Chisel.Core
 #endif
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public CategoryRoutingRow(CategoryRoutingRow[] operationTable, CategoryIndex left, in CategoryRoutingRow right)
+        public CategoryRoutingRow(NativeArray<CategoryRoutingRow> operationTable, CategoryIndex left, in CategoryRoutingRow right)
         {
 #if DEBUG_CATEGORIES
             destination = new IntArray();
