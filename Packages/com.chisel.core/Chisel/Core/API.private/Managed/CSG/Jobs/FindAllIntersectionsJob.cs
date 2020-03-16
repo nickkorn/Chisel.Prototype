@@ -15,14 +15,16 @@ using Unity.Entities;
 namespace Chisel.Core
 {
     [BurstCompile(Debug = false)]
-    unsafe struct IntersectionTestJob : IJobParallelFor
+    unsafe struct FindAllIntersectionsJob : IJobParallelFor
     {
         const double kEpsilon = CSGManagerPerformCSG.kEpsilon;
 
         [ReadOnly] public NativeArray<int>  treeBrushes;
+        // TODO: store blobs in brushMeshInstanceIDs to avoid indirection?
         [ReadOnly] public NativeArray<int>  brushMeshInstanceIDs;
         [ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushMeshBlob>> brushMeshBlobs;
         [ReadOnly] public NativeHashMap<int, BlobAssetReference<NodeTransformations>> transformations;
+        // TODO: combine bounds with something else?
         [ReadOnly] public NativeArray<AABB> bounds;
 
         //[WriteOnly] public NativeStream.Writer output;
@@ -196,6 +198,113 @@ namespace Chisel.Core
                 }
             }
             //output.EndForEachIndex();
+        }
+    }
+
+    [BurstCompile(Debug = false)]
+    unsafe struct StoreBrushIntersectionsJob : IJobParallelFor
+    {
+        [ReadOnly] public int                               treeNodeIndex;
+        [ReadOnly] public NativeArray<int>                  treeBrushes;
+        [ReadOnly] public BlobAssetReference<CompactTree>   compactTree;
+        [ReadOnly] public NativeMultiHashMap<int, BrushBrushIntersection> brushBrushIntersections;
+        [WriteOnly] public NativeHashMap<int, BlobAssetReference<BrushesTouchedByBrush>>.ParallelWriter brushesTouchedByBrushes;
+
+
+        static void SetUsedNodesBits(BlobAssetReference<CompactTree> compactTree, NativeList<BrushIntersection> brushIntersections, int brushNodeIndex, int rootNodeIndex, BrushIntersectionLookup bitset)
+        {
+            bitset.Clear();
+            bitset.Set(brushNodeIndex, IntersectionType.Intersection);
+            bitset.Set(rootNodeIndex, IntersectionType.Intersection);
+
+            var indexOffset = compactTree.Value.indexOffset;
+            ref var bottomUpNodes               = ref compactTree.Value.bottomUpNodes;
+            ref var bottomUpNodeIndices         = ref compactTree.Value.bottomUpNodeIndices;
+            ref var brushIndexToBottomUpIndex   = ref compactTree.Value.brushIndexToBottomUpIndex;
+
+            var intersectionIndex   = brushIndexToBottomUpIndex[brushNodeIndex - indexOffset];
+            var intersectionInfo    = bottomUpNodeIndices[intersectionIndex];
+            for (int b = intersectionInfo.bottomUpStart; b < intersectionInfo.bottomUpEnd; b++)
+                bitset.Set(bottomUpNodes[b], IntersectionType.Intersection);
+
+            for (int i = 0; i < brushIntersections.Length; i++)
+            {
+                var otherIntersectionInfo = brushIntersections[i];
+                bitset.Set(otherIntersectionInfo.nodeIndex, otherIntersectionInfo.type);
+                for (int b = otherIntersectionInfo.bottomUpStart; b < otherIntersectionInfo.bottomUpEnd; b++)
+                    bitset.Set(bottomUpNodes[b], IntersectionType.Intersection);
+            }
+        }
+        
+        static BlobAssetReference<BrushesTouchedByBrush> GenerateBrushesTouchedByBrush(BlobAssetReference<CompactTree> compactTree, int brushNodeIndex, int rootNodeIndex, NativeMultiHashMap<int, BrushBrushIntersection>.Enumerator touchingBrushes)
+        {
+            if (!compactTree.IsCreated)
+                return BlobAssetReference<BrushesTouchedByBrush>.Null;
+
+            var indexOffset = compactTree.Value.indexOffset;
+            ref var bottomUpNodeIndices         = ref compactTree.Value.bottomUpNodeIndices;
+            ref var brushIndexToBottomUpIndex   = ref compactTree.Value.brushIndexToBottomUpIndex;
+
+            // Intersections
+            var bitset                      = new BrushIntersectionLookup(indexOffset, bottomUpNodeIndices.Length, Allocator.Temp);
+            var brushIntersectionIndices    = new NativeList<BrushIntersectionIndex>(Allocator.Temp);
+            var brushIntersections          = new NativeList<BrushIntersection>(Allocator.Temp);
+            { 
+                var intersectionStart           = brushIntersections.Length;
+
+                while (touchingBrushes.MoveNext())
+                {
+                    var touchingBrush   = touchingBrushes.Current;
+                    int otherBrushID    = touchingBrush.brushNodeID1;
+                    var otherBrushIndex = otherBrushID - 1;
+                    if ((otherBrushIndex < indexOffset || (otherBrushIndex-indexOffset) >= brushIndexToBottomUpIndex.Length))
+                        continue;
+
+                    var otherBottomUpIndex = brushIndexToBottomUpIndex[otherBrushIndex - indexOffset];
+                    brushIntersections.Add(new BrushIntersection()
+                    {
+                        nodeIndex       = otherBrushIndex,
+                        type            = touchingBrush.type,
+                        bottomUpStart   = bottomUpNodeIndices[otherBottomUpIndex].bottomUpStart,
+                        bottomUpEnd     = bottomUpNodeIndices[otherBottomUpIndex].bottomUpEnd
+                    });
+                }
+                var bottomUpIndex = brushIndexToBottomUpIndex[brushNodeIndex - indexOffset];
+                brushIntersectionIndices.Add(new BrushIntersectionIndex()
+                {
+                    nodeIndex           = brushNodeIndex,
+                    bottomUpStart       = bottomUpNodeIndices[bottomUpIndex].bottomUpStart,
+                    bottomUpEnd         = bottomUpNodeIndices[bottomUpIndex].bottomUpEnd,    
+                    intersectionStart   = intersectionStart,
+                    intersectionEnd     = brushIntersections.Length
+                });
+
+                SetUsedNodesBits(compactTree, brushIntersections, brushNodeIndex, rootNodeIndex, bitset);
+            }
+            var builder = new BlobBuilder(Allocator.Temp);
+            ref var root = ref builder.ConstructRoot<BrushesTouchedByBrush>();
+            builder.Construct(ref root.brushIntersections, brushIntersections);
+            builder.Construct(ref root.intersectionBits, bitset.twoBits);
+            root.Length = bitset.Length;
+            root.Offset = bitset.Offset;
+            var result = builder.CreateBlobAssetReference<BrushesTouchedByBrush>(Allocator.Persistent);
+            builder.Dispose();
+            brushIntersectionIndices.Dispose();
+            brushIntersections.Dispose();
+            bitset.Dispose();
+            return result;
+        }
+
+        public void Execute(int index)
+        {
+            var brushNodeID = treeBrushes[index];
+            var brushIntersections = brushBrushIntersections.GetValuesForKey(brushNodeID);
+            {
+                var result = GenerateBrushesTouchedByBrush(compactTree, brushNodeID - 1, treeNodeIndex, brushIntersections);
+                if (result.IsCreated)
+                    brushesTouchedByBrushes.TryAdd(brushNodeID - 1, result);
+            }
+            brushIntersections.Dispose();
         }
     }
 }

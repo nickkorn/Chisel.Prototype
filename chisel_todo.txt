@@ -30,3 +30,4 @@ remove somehow (slow)
 
 
 BUG: when spiral staircase is part of different model, most geometry disappears (maybe because of categorization table -> we're doing combine on too many nodes)
+		how can the spiral staircase influence all these other nodes though?? bug in intersection code??

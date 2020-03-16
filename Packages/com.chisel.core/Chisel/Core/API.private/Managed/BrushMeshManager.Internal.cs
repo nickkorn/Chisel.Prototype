@@ -57,7 +57,6 @@ namespace Chisel.Core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        [BurstDiscard]
         internal static BlobAssetReference<BrushMeshBlob> GetBrushMeshBlob(Int32 brushMeshInstanceID)
         {
             if (!IsBrushMeshIDValid(brushMeshInstanceID))

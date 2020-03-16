@@ -173,11 +173,8 @@ namespace Chisel.Core
         private static readonly List<int>	branches		= new List<int>();// TODO: could be CSGTreeBranches
         internal static readonly List<int>	brushes			= new List<int>();// TODO: could be CSGTreeBrushes
 
-        internal static int GetMaxNodeIndex() { GetMaxNodeIndexRet(out int max); return max; }
+        internal static int GetMaxNodeIndex() { return nodeHierarchies.Count; }
 
-        [BurstDiscard]
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal static void GetMaxNodeIndexRet(out int max)   { max = nodeHierarchies.Count; }
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static int GetNodeCount()		{ return Mathf.Max(0, nodeHierarchies.Count - freeNodeIDs.Count); }
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -415,12 +412,6 @@ namespace Chisel.Core
 
         internal static bool		IsValidNodeID					(Int32 nodeID)	{ return (nodeID > 0 && nodeID <= nodeHierarchies.Count) && nodeFlags[nodeID - 1].nodeType != CSGNodeType.None; }
 
-        [BurstDiscard] //<- only works when there's no return value
-        internal static void        IsValidNodeIDRet                (Int32 nodeID, out bool result)
-        {
-            result = (nodeID > 0 && nodeID <= nodeHierarchies.Count) && nodeFlags[nodeID - 1].nodeType != CSGNodeType.None;
-        }
-
         internal static bool	    AssertNodeIDValid				(Int32 nodeID)
         {
             if (!IsValidNodeID(nodeID))
@@ -454,17 +445,10 @@ namespace Chisel.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static CSGNodeType GetTypeOfNode(Int32 nodeID)
         {
-            GetTypeOfNodeRet(nodeID, out CSGNodeType type);
-            return type;
-        }
-
-        [BurstDiscard] // <-- cannot return value
-        internal static void GetTypeOfNodeRet(Int32 nodeID, out CSGNodeType type)
-        {
             if (!IsValidNodeID(nodeID))
-                type = CSGNodeType.None;
+                return CSGNodeType.None;
             else
-                type = nodeFlags[nodeID - 1].nodeType;
+                return nodeFlags[nodeID - 1].nodeType;
         }
 
 
@@ -621,10 +605,7 @@ namespace Chisel.Core
 
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal static CSGOperationType GetNodeOperationType(Int32 nodeID) { GetNodeOperationTypeRet(nodeID, out CSGOperationType operation); return operation; }
-
-        [BurstDiscard] // <-- cannot have a return value
-        internal static void GetNodeOperationTypeRet(Int32 nodeID, out CSGOperationType operation) { if (!AssertNodeIDValid(nodeID) || !AssertNodeTypeHasOperation(nodeID)) operation = CSGOperationType.Invalid; else operation = nodeFlags[nodeID - 1].operationType; }
+        internal static CSGOperationType GetNodeOperationType(Int32 nodeID) { if (!AssertNodeIDValid(nodeID) || !AssertNodeTypeHasOperation(nodeID)) return CSGOperationType.Invalid; return nodeFlags[nodeID - 1].operationType; }
 
         internal static bool		SetNodeOperationType(Int32 nodeID, CSGOperationType operation)
         {
@@ -704,44 +685,21 @@ namespace Chisel.Core
             return nodeHierarchies[nodeID - 1].treeNodeID;
         }
 
-        [BurstDiscard]
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal static void GetTreeOfNodeUnsafe(Int32 nodeID, out Int32 treeNodeID)
-        {
-            treeNodeID = nodeHierarchies[nodeID - 1].treeNodeID;
-        }
-
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static Int32	GetChildNodeCount(Int32 nodeID)
         {
-            GetChildNodeCountRet(nodeID, out int count);
-            return count;
-        }
-
-        [BurstDiscard] // <-- cannot return value
-        internal static void GetChildNodeCountRet(Int32 nodeID, out int count)
-        {
             if (!IsValidNodeID(nodeID) ||
                 !AssertNodeTypeHasChildren(nodeID))
-                count = 0;
-            else
-                count = (nodeHierarchies[nodeID - 1].children == null) ? 0 : nodeHierarchies[nodeID - 1].children.Count;
+                return 0;
+            return (nodeHierarchies[nodeID - 1].children == null) ? 0 : nodeHierarchies[nodeID - 1].children.Count;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static Int32 GetChildNodeAtIndex(Int32 nodeID, Int32 index)
         {
-            GetChildNodeAtIndex(nodeID, index, out Int32 childNodeID);
-            return childNodeID;
-        }
-
-        [BurstDiscard] // <-- cannot return value
-        internal static void GetChildNodeAtIndex(Int32 nodeID, Int32 index, out Int32 childNodeID)
-        {
             if (!AssertNodeIDValid(nodeID) || !AssertNodeTypeHasChildren(nodeID) || nodeHierarchies[nodeID - 1].children == null || index < 0 || index >= nodeHierarchies[nodeID - 1].children.Count)
-                childNodeID = 0;
-            else
-                childNodeID = nodeHierarchies[nodeID - 1].children[index];
+                return 0;
+            return nodeHierarchies[nodeID - 1].children[index];
         }
 
         static bool SetChildrenTree(Int32 parentNodeID, Int32 treeNodeID, HashSet<Int32> passed)
