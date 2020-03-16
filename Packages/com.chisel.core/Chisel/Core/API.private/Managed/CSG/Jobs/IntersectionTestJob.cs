@@ -14,22 +14,16 @@ using Unity.Entities;
 
 namespace Chisel.Core
 {
-    public struct BrushIntersectionTestData
-    {
-        public Bounds bounds;
-//      public float4x4 treeToNodeSpaceMatrix;
-//      public float4x4 nodeToTreeSpaceMatrix;
-        public BlobAssetReference<BrushMeshBlob> brushMesh;
-    }
-
     [BurstCompile(Debug = false)]
     unsafe struct IntersectionTestJob : IJobParallelFor
     {
         const double kEpsilon = CSGManagerPerformCSG.kEpsilon;
 
-        [ReadOnly] public NativeArray<int> treeBrushes;
+        [ReadOnly] public NativeArray<int>  treeBrushes;
+        [ReadOnly] public NativeArray<int>  brushMeshInstanceIDs;
+        [ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushMeshBlob>> brushMeshBlobs;
         [ReadOnly] public NativeHashMap<int, BlobAssetReference<NodeTransformations>> transformations;
-        [ReadOnly] public NativeArray<BrushIntersectionTestData> brushData;
+        [ReadOnly] public NativeArray<AABB> bounds;
 
         //[WriteOnly] public NativeStream.Writer output;
         [WriteOnly] public NativeMultiHashMap<int, BrushBrushIntersection>.ParallelWriter output;
@@ -132,8 +126,8 @@ namespace Chisel.Core
             //output.BeginForEachIndex(index);
 
             var arrayIndex = GeometryMath.GetTriangleArrayIndex(index, treeBrushes.Length);
-            var brushIndex0 = arrayIndex.x;
-            var brushIndex1 = arrayIndex.y;
+            var index0 = arrayIndex.x;
+            var index1 = arrayIndex.y;
 
             /*
             var brushIndex0 = index % brushData.Length;
@@ -144,19 +138,19 @@ namespace Chisel.Core
                 return;
             */
             {
-                var brushMesh0 = brushData[brushIndex0].brushMesh;
-                var brushMesh1 = brushData[brushIndex1].brushMesh;
+                var brushMesh0 = brushMeshBlobs[brushMeshInstanceIDs[index0] - 1];
+                var brushMesh1 = brushMeshBlobs[brushMeshInstanceIDs[index1] - 1];
 
-                var bounds0 = brushData[brushIndex0].bounds;
-                var bounds1 = brushData[brushIndex1].bounds;
+                var bounds0 = bounds[index0];
+                var bounds1 = bounds[index1];
 
                 IntersectionType result;
                 if (brushMesh0 != BlobAssetReference<BrushMeshBlob>.Null &&
                     brushMesh1 != BlobAssetReference<BrushMeshBlob>.Null &&
                     bounds0.Intersects(bounds1, kEpsilon))
                 {
-                    var brush0NodeID = treeBrushes[brushIndex0];
-                    var brush1NodeID = treeBrushes[brushIndex1];
+                    var brush0NodeID = treeBrushes[index0];
+                    var brush1NodeID = treeBrushes[index1];
                     //*
                     var brush0NodeIndex = brush0NodeID - 1;
                     var brush1NodeIndex = brush1NodeID - 1;

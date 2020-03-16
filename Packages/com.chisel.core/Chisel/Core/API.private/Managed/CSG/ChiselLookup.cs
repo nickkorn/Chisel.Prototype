@@ -14,7 +14,11 @@ using Unity.Burst;
 
 namespace Chisel.Core
 {
-    public struct AABB { public float3 min, max; }
+    public struct AABB
+    {
+        public AABB(Bounds bounds) { min = bounds.min; max = bounds.max; }
+        public float3 min, max;
+    }
 
     // TODO: create blob for basepolygons
     public struct BasePolygonsBlob
