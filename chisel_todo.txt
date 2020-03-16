@@ -27,3 +27,6 @@ producing brushMesh assets is slow
 remove somehow (slow)
 	SortIndices
 	IsPointInPolygon
+
+
+BUG: when spiral staircase is part of different model, most geometry disappears (maybe because of categorization table -> we're doing combine on too many nodes)

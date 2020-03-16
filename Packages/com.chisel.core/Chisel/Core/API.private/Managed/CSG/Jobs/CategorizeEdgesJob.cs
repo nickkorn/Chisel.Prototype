@@ -266,7 +266,7 @@ namespace Chisel.Core
             var categories2 = new NativeArray<EdgeCategory>(edges2.Length, Allocator.Temp);
             for (int e = 0; e < edges2.Length; e++)
             {
-                var category = BooleanEdgesUtility.CategorizeEdge(edges2[e], ref worldPlanes2.Value.worldPlanes, edges1, vertices);
+                var category = BooleanEdgesUtility.CategorizeEdge(edges2[e], ref worldPlanes1.Value.worldPlanes, edges1, vertices);
                 categories2[e] = category;
                 if (category == EdgeCategory.Inside) inside2++;
                 else if (category == EdgeCategory.Outside) outside2++;
@@ -277,84 +277,67 @@ namespace Chisel.Core
             var categories1 = new NativeArray<EdgeCategory>(edges1.Length, Allocator.Temp);
             for (int e = 0; e < edges1.Length; e++)
             {
-                var category = BooleanEdgesUtility.CategorizeEdge(edges1[e], ref worldPlanes1.Value.worldPlanes, edges2, vertices);
+                var category = BooleanEdgesUtility.CategorizeEdge(edges1[e], ref worldPlanes2.Value.worldPlanes, edges2, vertices);
                 categories1[e] = category;
                 if (category == EdgeCategory.Inside) inside1++;
                 else if (category == EdgeCategory.Outside) outside1++;
             }
             var aligned1 = edges1.Length - (inside1 + outside1);
 
-            // polygon2 edges Completely outside polygon1
-            if ((inside2 + aligned2) == 0)
+            // Completely aligned
+            if ((outside1 + inside1) == 0 &&
+                (outside2 + inside2) == 0)
             {
-                // polygon1 Completely outside polygon2
-                if (outside1 > 0)
-                {
-                    categories1.Dispose();
-                    categories2.Dispose();
-                    *result = OperationResult.Outside;
-                    return;
-                }
-
+                *result = OperationResult.Overlapping;
+            } else
+            // polygon1 edges Completely inside polygon2
+            if (inside1 == 0 && outside2 == 0)
+            {
+                outEdges.AddRange(edges2);
+                *result = OperationResult.Polygon2InsidePolygon1;
+            } else
+            // polygon2 edges Completely inside polygon1
+            if (outside1 == 0 && inside2 == 0)
+            {
                 // polygon1 Completely inside polygon2
-                categories1.Dispose();
-                categories2.Dispose();
                 outEdges.AddRange(edges1);
                 *result = OperationResult.Polygon1InsidePolygon2;
-                return;
+            }  else
+            // Completely outside
+            if ((inside1 + aligned1) == 0 && (aligned2 + inside2) == 0)
+            {
+                *result = OperationResult.Outside;
             } else
-            { 
-                // Nothing outside, so completely inside
-                if (outside1 == 0)
-                {
-                    categories1.Dispose();
-                    categories2.Dispose();
-                    outEdges.AddRange(edges1);
-                    *result = OperationResult.Polygon1InsidePolygon2;
-                    return;
-                }
-            }
-
-            // Completely aligned
-            if (aligned1 == edges1.Length)
             {
-                categories1.Dispose();
-                categories2.Dispose();
-                *result = OperationResult.Overlapping;
-                return;
-            }
-
-
-
-
-            int outEdgesLength = 0; // Can't read from outEdges.Length since it's marked as WriteOnly
-            for (int e = 0; e < edges1.Length; e++)
-            {
-                var category = categories1[e];
-                if (category == EdgeCategory.Inside)
+                int outEdgesLength = 0; // Can't read from outEdges.Length since it's marked as WriteOnly
+                for (int e = 0; e < edges1.Length; e++)
                 {
-                    outEdges.Add(edges1[e]);
-                    outEdgesLength++;
+                    var category = categories1[e];
+                    if (category == EdgeCategory.Inside)
+                    {
+                        outEdges.Add(edges1[e]);
+                        outEdgesLength++;
+                    }
                 }
-            }
 
-            for (int e = 0; e < edges2.Length; e++)
-            {
-                var category = categories2[e];
-                if (category != EdgeCategory.Outside)
+                for (int e = 0; e < edges2.Length; e++)
                 {
-                    outEdges.Add(edges2[e]);
-                    outEdgesLength++;
+                    var category = categories2[e];
+                    if (category != EdgeCategory.Outside)
+                    {
+                        outEdges.Add(edges2[e]);
+                        outEdgesLength++;
+                    }
                 }
+
+                if (outEdgesLength < 3)
+                    *result = OperationResult.Outside;
+                else
+                    *result = OperationResult.Cut;
             }
 
             categories1.Dispose();
             categories2.Dispose();
-
-            if (outEdgesLength < 3)
-                *result = OperationResult.Outside;
-            else
-                *result = OperationResult.Cut;
         }
     }
 

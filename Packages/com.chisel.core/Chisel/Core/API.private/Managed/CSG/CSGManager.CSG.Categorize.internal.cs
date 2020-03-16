@@ -129,6 +129,14 @@ namespace Chisel.Core
             {
                 intersectEdgesJob.outEdges.Dispose();
             } else
+            if (result == OperationResult.Polygon2InsidePolygon1)
+            {
+                // This new piece overrides the current loop
+                surfaceLoop.edges.Clear();
+                surfaceLoop.edges.AddRange(intersectEdgesJob.outEdges);
+                surfaceLoop.info.interiorCategory = newHoleCategory;
+                intersectEdgesJob.outEdges.Dispose();
+            } else
             if (result == OperationResult.Overlapping)
             {
                 intersectEdgesJob.outEdges.Dispose();

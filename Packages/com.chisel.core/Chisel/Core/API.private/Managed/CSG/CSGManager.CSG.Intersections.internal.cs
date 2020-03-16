@@ -145,7 +145,7 @@ namespace Chisel.Core
                 for (int b0 = 0; b0 < treeBrushes.Length; b0++)
                 {
                     var brushNodeID0     = treeBrushes[b0];
-                    var brushNodeIndex0  = brushNodeID0 + 1;
+                    var brushNodeIndex0  = brushNodeID0 - 1;
                     var brushInfo = CSGManager.GetBrushInfo(brushNodeID0);
                     if (!brushesTouchedByBrushes.TryGetValue(brushNodeIndex0, out BlobAssetReference<BrushesTouchedByBrush> brushesTouchedByBrush))
                     {

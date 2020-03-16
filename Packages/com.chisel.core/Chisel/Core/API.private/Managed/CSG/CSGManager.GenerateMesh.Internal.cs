@@ -205,8 +205,6 @@ namespace Chisel.Core
 
             public BrushOutline             brushOutline        = new BrushOutline();
 
-            public readonly List<BrushBrushIntersection> brushBrushIntersections = new List<BrushBrushIntersection>();
-
             ~BrushInfo() { Dispose(); }
 
             public void Dispose()
@@ -224,7 +222,6 @@ namespace Chisel.Core
                 brushOutline.Reset();
                 brushOutputLoops.Clear();
                 renderBuffers.surfaceRenderBuffers.Clear();
-                brushBrushIntersections.Clear();
             }
         }
 
