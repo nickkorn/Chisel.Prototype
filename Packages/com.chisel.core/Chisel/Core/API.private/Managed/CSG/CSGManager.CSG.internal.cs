@@ -343,7 +343,7 @@ namespace Chisel.Core
                 allBrushSurfaces[p].Add(newLoop);
             }
 
-            var brushVertices = outputLoops.vertexSoup;
+            var brushVertices = ChiselLookup.Value.vertexSoups[brushNodeID - 1];
             for (int i = 0; i < routingLookups.Length; i++)
             {
                 var routingLookup                   = routingLookups[i];

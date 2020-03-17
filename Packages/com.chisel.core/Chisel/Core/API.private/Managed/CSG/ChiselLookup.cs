@@ -409,6 +409,7 @@ namespace Chisel.Core
             public NativeHashMap<int, BlobAssetReference<BrushWorldPlanes>>         brushWorldPlanes;
             public NativeHashMap<int, BlobAssetReference<BrushesTouchedByBrush>>    brushesTouchedByBrushes;
             public NativeHashMap<int, BlobAssetReference<NodeTransformations>>      transformations;
+            public Dictionary<int, VertexSoup>                                      vertexSoups;
 
             public NativeHashMap<int, BlobAssetReference<BrushMeshBlob>>            brushMeshBlobs;
             public NativeHashMap<int, BlobAssetReference<CompactTree>>              compactTrees;
@@ -448,6 +449,11 @@ namespace Chisel.Core
                         if (transformation.IsCreated)
                             transformation.Dispose();
                     }
+                    if (vertexSoups.TryGetValue(brushNodeID - 1, out VertexSoup vertexSoup))
+                    {
+                        vertexSoups.Remove(brushNodeID - 1);
+                        vertexSoup.Dispose();
+                    }
                 }
             }
 
@@ -460,6 +466,7 @@ namespace Chisel.Core
                 brushWorldPlanes        = new NativeHashMap<int, BlobAssetReference<BrushWorldPlanes>>(1000, Allocator.Persistent);
                 brushesTouchedByBrushes = new NativeHashMap<int, BlobAssetReference<BrushesTouchedByBrush>>(1000, Allocator.Persistent);
                 transformations         = new NativeHashMap<int, BlobAssetReference<NodeTransformations>>(1000, Allocator.Persistent);
+                vertexSoups             = new Dictionary<int, VertexSoup>();
 
                 // brushMeshIndex
                 brushMeshBlobs          = new NativeHashMap<int, BlobAssetReference<BrushMeshBlob>>(1000, Allocator.Persistent);
@@ -534,6 +541,13 @@ namespace Chisel.Core
                                 item.Dispose();
                         }
                     }
+                }
+                if (vertexSoups != null)
+                {
+                    foreach (var item in vertexSoups)
+                        item.Value.Dispose();
+                    vertexSoups.Clear();
+                    vertexSoups = null;
                 }
                 if (brushMeshBlobs.IsCreated)
                 {

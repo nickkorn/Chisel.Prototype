@@ -99,7 +99,6 @@ namespace Chisel.Core
         [ReadOnly] public int                   intersectionPlaneIndex0;
         [ReadOnly] public int                   intersectionPlaneIndex1;
         [ReadOnly] public int                   usedPlanePairIndex1;
-        [ReadOnly] public float4x4              nodeToTreeSpaceMatrix0;
 
         [WriteOnly] public NativeStream.Writer  foundVertices;
             
@@ -108,6 +107,7 @@ namespace Chisel.Core
             ref var intersectingPlanes0 = ref intersection.Value.brushes[intersectionPlaneIndex0].localSpacePlanes0;
             ref var intersectingPlanes1 = ref intersection.Value.brushes[intersectionPlaneIndex1].localSpacePlanes0;
             ref var usedPlanePairs1     = ref intersection.Value.brushes[usedPlanePairIndex1].usedPlanePairs;
+            var nodeToTreeSpaceMatrix0  = intersection.Value.brushes[0].transformation.nodeToTree;
 
             foundVertices.BeginForEachIndex(index);
             var plane2 = intersectingPlanes0[index];

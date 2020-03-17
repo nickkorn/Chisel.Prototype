@@ -7,6 +7,7 @@ using System.Runtime.InteropServices;
 using Unity.Burst;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
+using Unity.Entities;
 using Unity.Jobs;
 using Unity.Mathematics;
 using UnityEngine;
@@ -56,6 +57,51 @@ namespace Chisel.Core
 
             if (vertices.IsCreated) vertices.Dispose();
             vertices = new NativeList<float3>(minCapacity, allocator);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void Initialize(VertexSoup otherSoup, Allocator allocator = Allocator.Persistent)
+        {
+            if (hashTable.IsCreated) hashTable.Dispose();
+            hashTable = new NativeArray<int>((int)(kHashTableSize + 1), allocator, NativeArrayOptions.ClearMemory);
+
+            if (chainedIndices.IsCreated) chainedIndices.Dispose();
+            chainedIndices = new NativeList<ChainedIndex>(otherSoup.chainedIndices.Length, allocator);
+            chainedIndices.AddRangeNoResize(otherSoup.chainedIndices);
+
+            if (vertices.IsCreated) vertices.Dispose();
+            vertices = new NativeList<float3>(otherSoup.vertices.Length, allocator);
+            vertices.AddRangeNoResize(otherSoup.vertices);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void Initialize(ref BlobArray<float3> uniqueVertices, Allocator allocator = Allocator.Persistent)
+        {
+            if (hashTable.IsCreated) hashTable.Dispose();
+            hashTable = new NativeArray<int>((int)(kHashTableSize + 1), allocator, NativeArrayOptions.ClearMemory);
+
+            if (chainedIndices.IsCreated) chainedIndices.Dispose();
+            chainedIndices = new NativeList<ChainedIndex>(uniqueVertices.Length, allocator);
+
+            if (vertices.IsCreated) vertices.Dispose();
+            vertices = new NativeList<float3>(uniqueVertices.Length, allocator);
+
+
+            // Add Unique vertex
+            for (int i=0;i<uniqueVertices.Length;i++)
+            {
+                var vertex      = uniqueVertices[i];
+                var vertexIndex = (ushort)vertices.Length;
+                vertices.AddNoResize(vertex);
+
+                var centerIndex = new int3((int)(vertex.x / kCellSize), (int)(vertex.y / kCellSize), (int)(vertex.z / kCellSize));
+                var hashCode = GetHash(centerIndex);
+                var prevChainIndex = (hashTable[hashCode] - 1);
+                var newChainIndex = chainedIndices.Length;
+                var newChainedIndex = new ChainedIndex() { vertexIndex = vertexIndex, nextChainIndex = prevChainIndex };
+                chainedIndices.AddNoResize(newChainedIndex);
+                hashTable[(int)hashCode] = (newChainIndex + 1);
+            }
         }
 
         // ensure we have at least this many extra vertices in capacity

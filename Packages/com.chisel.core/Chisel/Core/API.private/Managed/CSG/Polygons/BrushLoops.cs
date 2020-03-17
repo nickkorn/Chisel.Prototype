@@ -16,7 +16,6 @@ namespace Chisel.Core
 #if USE_MANAGED_CSG_IMPLEMENTATION
     public sealed class BrushLoops : IDisposable
     {
-        public VertexSoup   vertexSoup   = new VertexSoup();
         public List<Loop>   basePolygons = new List<Loop>();
 
         public Loop[][] intersectionLoops;
@@ -36,7 +35,6 @@ namespace Chisel.Core
         ~BrushLoops() { Dispose(); }
         public void Dispose()
         {
-            vertexSoup.Dispose();
             foreach (var surfaceLoop in intersectionSurfaceLoops.Values)
                 surfaceLoop.Dispose();
             intersectionSurfaceLoops.Clear();

@@ -228,16 +228,16 @@ namespace Chisel.Core
         [ReadOnly] public BlobAssetReference<BrushPairIntersection> intersection;
         [ReadOnly] public int                   intersectionPlaneIndex1;
         [ReadOnly] public int                   usedVerticesIndex0;
-        [NativeDisableUnsafePtrRestriction] [ReadOnly] public float3* allVertices0;
-        [ReadOnly] public float4x4              nodeToTreeSpaceMatrix;
-        [ReadOnly] public float4x4              vertexToLocal0;
 
         [WriteOnly] public NativeStream.Writer vertexWriter;
 
         public void Execute(int index)
         {
             ref var intersectingPlanes1 = ref intersection.Value.brushes[intersectionPlaneIndex1].localSpacePlanes0;
-            ref var usedVertices0 = ref intersection.Value.brushes[usedVerticesIndex0].usedVertices;
+            ref var usedVertices0       = ref intersection.Value.brushes[usedVerticesIndex0].usedVertices;
+            ref var allVertices0        = ref intersection.Value.brushes[usedVerticesIndex0].blobMesh.Value.vertices;
+            var nodeToTreeSpaceMatrix   = intersection.Value.brushes[usedVerticesIndex0].transformation.nodeToTree;
+            var vertexToLocal0          = usedVerticesIndex0 == 0 ? float4x4.identity : intersection.Value.brushes[usedVerticesIndex0].toOtherBrushSpace;
 
             vertexWriter.BeginForEachIndex(index);
             var vertexIndex1 = usedVertices0[index];

@@ -98,9 +98,9 @@ namespace Chisel.Core
                         surfacePolygon.edges.Add(result.Value.edges[e]);
                     outputLoops.basePolygons.Add(surfacePolygon);
                 }
-                outputLoops.vertexSoup.Initialize(result.Value.vertices.Length);
-                for (int v = 0; v < result.Value.vertices.Length; v++)
-                    outputLoops.vertexSoup.Add(result.Value.vertices[v]);
+                var vertexSoup = new VertexSoup();
+                vertexSoup.Initialize(ref result.Value.vertices);
+                ChiselLookup.Value.vertexSoups.Add(brushNodeID - 1, vertexSoup);
             }
 
             // TODO: - calculate all data per brush here (currently unused)
@@ -140,17 +140,15 @@ namespace Chisel.Core
                         var brushNodeIndex1  = intersection.Value.brushes[1].brushNodeIndex;
                         var blobMesh0        = intersection.Value.brushes[0].blobMesh;
                         var blobMesh1        = intersection.Value.brushes[1].blobMesh;
-                        var transformations0 = intersection.Value.brushes[0].transformation;
-                        var transformations1 = intersection.Value.brushes[1].transformation;
 
                         // TODO: put this in a burstable data structure
-                        var loops01 = new SurfaceLoops(blobMesh0.Value.localPlanes.Length);
-                        var loops10 = new SurfaceLoops(blobMesh1.Value.localPlanes.Length);
+                        var loops01     = new SurfaceLoops(blobMesh0.Value.localPlanes.Length);
+                        var loops10     = new SurfaceLoops(blobMesh1.Value.localPlanes.Length);
+                        var loops01surfaces = loops01.surfaces;
+                        var loops10surfaces = loops10.surfaces;
 
-                        var brushOutputLoops0 = CSGManager.GetBrushInfo(brushNodeIndex0 + 1).brushOutputLoops;
-                        var brushOutputLoops1 = CSGManager.GetBrushInfo(brushNodeIndex1 + 1).brushOutputLoops;
-                        var vertexSoup0 = brushOutputLoops0.vertexSoup;
-                        var vertexSoup1 = brushOutputLoops1.vertexSoup;
+                        var vertexSoup0 = ChiselLookup.Value.vertexSoups[brushNodeIndex0];
+                        var vertexSoup1 = ChiselLookup.Value.vertexSoups[brushNodeIndex1];
 
                         // chain each subsection together, then chain subsections together
                         //var handleDep = new JobHandle();
@@ -181,9 +179,6 @@ namespace Chisel.Core
                                     intersection                = intersection,
                                     intersectionPlaneIndex1     = 1,
                                     usedVerticesIndex0          = 0,
-                                    allVertices0                = (float3*)blobMesh0.Value.vertices.GetUnsafePtr(),
-                                    nodeToTreeSpaceMatrix       = intersection.Value.brushes[0].transformation.nodeToTree,
-                                    vertexToLocal0              = float4x4.identity,
                                     vertexWriter                = insideVerticesStream0.AsWriter()
                                 };
                                 findInsideVerticesJob.Run(intersection.Value.brushes[0].usedVertices.Length);
@@ -204,9 +199,6 @@ namespace Chisel.Core
                                     intersection                = intersection,
                                     intersectionPlaneIndex1     = 0,
                                     usedVerticesIndex0          = 1,
-                                    allVertices0                = (float3*)blobMesh1.Value.vertices.GetUnsafePtr(),
-                                    nodeToTreeSpaceMatrix       = intersection.Value.brushes[1].transformation.nodeToTree,
-                                    vertexToLocal0              = intersection.Value.brushes[1].toOtherBrushSpace,
                                     vertexWriter                = insideVerticesStream1.AsWriter()
                                 };
                                 findInsideVerticesJob.Run(intersection.Value.brushes[1].usedVertices.Length);
@@ -229,13 +221,12 @@ namespace Chisel.Core
                                     // Find all edges of brush2 that intersect brush1, and put their intersections into the appropriate loops
                                     var findIntersectionsJob = new FindIntersectionsJob
                                     {
-                                        vertexSoup1             = vertexSoup1,
-                                        intersection            = intersection,
-                                        intersectionPlaneIndex0 = 0,
-                                        intersectionPlaneIndex1 = 1,
-                                        usedPlanePairIndex1     = 1,
-                                        nodeToTreeSpaceMatrix0  = intersection.Value.brushes[0].transformation.nodeToTree,
-                                        foundVertices           = intersectionStream0.AsWriter()
+                                        vertexSoup1                 = vertexSoup1,
+                                        intersection                = intersection,
+                                        intersectionPlaneIndex0     = 0,
+                                        intersectionPlaneIndex1     = 1,
+                                        usedPlanePairIndex1         = 1,
+                                        foundVertices               = intersectionStream0.AsWriter()
                                     };
                                     findIntersectionsJob.Run(intersection.Value.brushes[0].localSpacePlanes0.Length);
                                     var insertIntersectionVerticesJob = new InsertIntersectionVerticesJob
@@ -256,13 +247,12 @@ namespace Chisel.Core
                                     // Find all edges of brush2 that intersect brush1, and put their intersections into the appropriate loops
                                     var findIntersectionsJob = new FindIntersectionsJob
                                     {
-                                        vertexSoup1             = vertexSoup0,
-                                        intersection            = intersection,
-                                        intersectionPlaneIndex0 = 1,
-                                        intersectionPlaneIndex1 = 0,
-                                        usedPlanePairIndex1     = 0,
-                                        nodeToTreeSpaceMatrix0  = intersection.Value.brushes[0].transformation.nodeToTree,
-                                        foundVertices           = intersectionStream1.AsWriter()
+                                        vertexSoup1                 = vertexSoup0,
+                                        intersection                = intersection,
+                                        intersectionPlaneIndex0     = 1,
+                                        intersectionPlaneIndex1     = 0,
+                                        usedPlanePairIndex1         = 0,
+                                        foundVertices               = intersectionStream1.AsWriter()
                                     };
                                     findIntersectionsJob.Run(intersection.Value.brushes[1].localSpacePlanes0.Length);
                                     var insertIntersectionVerticesJob = new InsertIntersectionVerticesJob
@@ -298,7 +288,7 @@ namespace Chisel.Core
                                     intersectionSurfaceIndex    = 0,
                                     uniqueIndices               = uniqueIndices0,
                                     planeIndexOffsets           = planeIndexOffsets0,
-                                    outputSurfaces              = loops01.surfaces
+                                    outputSurfaces              = loops01surfaces
                                 };
                                 createLoopsJob0.Execute();
                             }
@@ -321,23 +311,28 @@ namespace Chisel.Core
                                     intersectionSurfaceIndex    = 1,
                                     uniqueIndices               = uniqueIndices1,
                                     planeIndexOffsets           = planeIndexOffsets1,
-                                    outputSurfaces              = loops10.surfaces
+                                    outputSurfaces              = loops10surfaces
                                 };
                                 createLoopsJob1.Execute();
                             }
                         }
 
                         // TODO: this can probably be done using a list instead of a dictionary
+
+                        var brushOutputLoops0 = CSGManager.GetBrushInfo(brushNodeIndex0 + 1).brushOutputLoops;
+                        var brushOutputLoops1 = CSGManager.GetBrushInfo(brushNodeIndex1 + 1).brushOutputLoops;
                         {
                             if (brushOutputLoops0.intersectionSurfaceLoops.TryGetValue(brushNodeIndex1 + 1, out SurfaceLoops oldLoops1))
                                 oldLoops1.Dispose();
-                            if (brushOutputLoops0.intersectionSurfaceLoops.TryGetValue(brushNodeIndex0 + 1, out SurfaceLoops oldLoops0))
+                            if (brushOutputLoops1.intersectionSurfaceLoops.TryGetValue(brushNodeIndex0 + 1, out SurfaceLoops oldLoops0))
                                 oldLoops0.Dispose();
                         }
 
                         brushOutputLoops0.intersectionSurfaceLoops[brushNodeIndex1 + 1] = loops01;
                         brushOutputLoops1.intersectionSurfaceLoops[brushNodeIndex0 + 1] = loops10;
                     }
+                    foreach (var intersection in intersectingBrushes)
+                        intersection.Dispose();
                 }
                 finally { UnityEngine.Profiling.Profiler.EndSample(); }
             }
@@ -366,7 +361,7 @@ namespace Chisel.Core
                     if (meshBlob.Value.localPlanes.Length == 0)
                         continue;
 
-                    var vertexSoup = outputLoops.vertexSoup;
+                    var vertexSoup = ChiselLookup.Value.vertexSoups[brush0NodeID - 1];
                     var transform = transformations[brush0NodeID - 1];
 
                     using (var intersectionData = new OverlapIntersectionData(brush0NodeID, transform, meshBlob, outputLoops.intersectionSurfaceLoops, outputLoops.basePolygons))

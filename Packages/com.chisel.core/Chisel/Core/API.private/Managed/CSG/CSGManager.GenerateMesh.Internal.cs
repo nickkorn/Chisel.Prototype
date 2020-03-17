@@ -599,7 +599,7 @@ namespace Chisel.Core
 
             var meshPolygons	= mesh.polygons;
             var meshPlanes	    = mesh.planes;
-            var brushVertices   = output.brushOutputLoops.vertexSoup;
+            var brushVertices   = ChiselLookup.Value.vertexSoups[brushNodeID - 1];
 
             CSGManager.GetTreeToNodeSpaceMatrix(brushNodeID, out Matrix4x4 worldToLocal);
 
