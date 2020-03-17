@@ -225,22 +225,25 @@ namespace Chisel.Core
     unsafe struct FindInsideVerticesJob : IJobParallelFor
     { 
         // Add [NativeDisableContainerSafetyRestriction] when done, for performance
-        [ReadOnly] public NativeList<float4>  intersectingPlanes1;
-        [ReadOnly] public NativeList<int>     usedVertices0;
+        [ReadOnly] public BlobAssetReference<BrushPairIntersection> intersection;
+        [ReadOnly] public int                   intersectionPlaneIndex1;
+        [ReadOnly] public int                   usedVerticesIndex0;
         [NativeDisableUnsafePtrRestriction] [ReadOnly] public float3* allVertices0;
-        [ReadOnly] public float4x4            nodeToTreeSpaceMatrix;
-        [ReadOnly] public float4x4            vertexToLocal0;
+        [ReadOnly] public float4x4              nodeToTreeSpaceMatrix;
+        [ReadOnly] public float4x4              vertexToLocal0;
 
-        //[NativeDisableUnsafePtrRestriction]
         [WriteOnly] public NativeStream.Writer vertexWriter;
 
         public void Execute(int index)
         {
+            ref var intersectingPlanes1 = ref intersection.Value.brushes[intersectionPlaneIndex1].localSpacePlanes0;
+            ref var usedVertices0 = ref intersection.Value.brushes[usedVerticesIndex0].usedVertices;
+
             vertexWriter.BeginForEachIndex(index);
             var vertexIndex1 = usedVertices0[index];
             var brushVertex1 = new float4(allVertices0[vertexIndex1], 1);
             var localVertex1 = math.mul(vertexToLocal0, brushVertex1);
-            if (!CSGManagerPerformCSG.IsOutsidePlanes(intersectingPlanes1, localVertex1))
+            if (!CSGManagerPerformCSG.IsOutsidePlanes(ref intersectingPlanes1, localVertex1))
             { 
                 var worldVertex = math.mul(nodeToTreeSpaceMatrix, brushVertex1);
                 vertexWriter.Write(localVertex1);
@@ -257,8 +260,8 @@ namespace Chisel.Core
 
         // Add [NativeDisableContainerSafetyRestriction] when done, for performance
         [ReadOnly] public NativeStream.Reader   vertexReader;
-        [ReadOnly] public NativeList<float4>    intersectingPlanes;
-        [ReadOnly] public NativeList<int>       intersectingPlaneIndices;
+        [ReadOnly] public BlobAssetReference<BrushPairIntersection> intersection;
+        [ReadOnly] public int                   intersectionPlaneIndex;
 
         public VertexSoup                       brushVertices;
 
@@ -267,6 +270,9 @@ namespace Chisel.Core
 
         public void Execute() 
         {
+            ref var intersectingPlaneIndices    = ref intersection.Value.brushes[intersectionPlaneIndex].localSpacePlaneIndices0;
+            ref var intersectingPlanes          = ref intersection.Value.brushes[intersectionPlaneIndex].localSpacePlanes0;
+
             int maxIndex = vertexReader.ForEachCount;
 
             int index = 0;

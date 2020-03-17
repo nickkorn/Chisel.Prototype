@@ -86,362 +86,6 @@ namespace Chisel.Core
     }
     
     [BurstCompile(Debug = false)]
-    unsafe struct SharedPlaneData : IJob, IDisposable
-    {
-        const float kDistanceEpsilon = CSGManagerPerformCSG.kDistanceEpsilon;
-        const float kPlaneDistanceEpsilon = CSGManagerPerformCSG.kPlaneDistanceEpsilon;
-        const float kNormalEpsilon = CSGManagerPerformCSG.kNormalEpsilon;
-
-        public NativeList<int>          intersectingPlaneIndices0;
-        public NativeList<int>          intersectingPlaneIndices1;
-
-        public NativeList<float4>       intersectingPlanes0;
-        public NativeList<float4>       intersectingPlanes1;
-
-        public NativeList<PlanePair>    usedPlanePairs0;
-        public NativeList<PlanePair>    usedPlanePairs1;
-
-        public NativeList<int>          usedVertices0;
-        public NativeList<int>          usedVertices1;
-
-        public NativeArray<SurfaceInfo> surfaceCategory0;
-        public NativeArray<SurfaceInfo> surfaceCategory1;
-
-        public BlobAssetReference<BrushPairIntersection> intersection;
-
-        public SharedPlaneData(BlobAssetReference<BrushPairIntersection> intersection, Allocator allocator)
-        {
-            this.intersection = intersection;
-            
-            ref var blobMesh0 = ref intersection.Value.brushes[0].blobMesh.Value;
-            ref var blobMesh1 = ref intersection.Value.brushes[1].blobMesh.Value;
-
-            this.intersectingPlaneIndices0   = new NativeList<int>(blobMesh0.localPlanes.Length, allocator);
-            this.intersectingPlaneIndices1   = new NativeList<int>(blobMesh1.localPlanes.Length, allocator);
-
-            this.usedPlanePairs0             = new NativeList<PlanePair>(blobMesh0.halfEdges.Length, allocator);
-            this.usedPlanePairs1             = new NativeList<PlanePair>(blobMesh1.halfEdges.Length, allocator);
-
-            this.surfaceCategory0            = new NativeArray<SurfaceInfo>(blobMesh0.localPlanes.Length, allocator, NativeArrayOptions.ClearMemory); // all set to Inside (0)
-            this.surfaceCategory1            = new NativeArray<SurfaceInfo>(blobMesh1.localPlanes.Length, allocator, NativeArrayOptions.ClearMemory); // all set to Inside (0)
-
-            this.usedVertices0               = new NativeList<int>(blobMesh0.vertices.Length, allocator);
-            this.usedVertices1               = new NativeList<int>(blobMesh1.vertices.Length, allocator);
-
-            this.intersectingPlanes0         = new NativeList<float4>(blobMesh0.localPlanes.Length, allocator);
-            this.intersectingPlanes1         = new NativeList<float4>(blobMesh1.localPlanes.Length, allocator);
-        }
-
-        public void Dispose()
-        {
-            if (intersectingPlaneIndices0.IsCreated) intersectingPlaneIndices0.Dispose();
-            if (intersectingPlaneIndices1.IsCreated) intersectingPlaneIndices1.Dispose();
-
-            if (intersectingPlanes0.IsCreated) intersectingPlanes0.Dispose();
-            if (intersectingPlanes1.IsCreated) intersectingPlanes1.Dispose();
-
-            if (usedPlanePairs0.IsCreated) usedPlanePairs0.Dispose();
-            if (usedPlanePairs1.IsCreated) usedPlanePairs1.Dispose();
-
-            if (usedVertices0.IsCreated) usedVertices0.Dispose();
-            if (usedVertices1.IsCreated) usedVertices1.Dispose();
-
-            if (surfaceCategory0.IsCreated) surfaceCategory0.Dispose();
-            if (surfaceCategory1.IsCreated) surfaceCategory1.Dispose();
-        }
-
-        // TODO: turn into job
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        unsafe static void GetIntersectingPlanes(ref BlobArray<float4> localPlanes, ref BlobArray<float3> vertices, Bounds selfBounds, float4x4 treeToNodeSpaceInverseTransposed, NativeList<int> intersectingPlanes)
-        {
-            //using (new ProfileSample("GetIntersectingPlanes"))
-            {
-                var min = (float3)selfBounds.min;
-                var max = (float3)selfBounds.max;
-
-                var verticesLength = vertices.Length;
-                var verticesPtr = (float3*)vertices.GetUnsafePtr();
-
-                for (int i = 0; i < localPlanes.Length; i++)
-                {
-                    // bring plane into local space of mesh, the same space as the bounds of the mesh
-
-                    var localPlane = localPlanes[i];
-
-                    // note: a transpose is part of this transformation
-                    var transformedPlane = math.mul(treeToNodeSpaceInverseTransposed, localPlane);
-                    //var normal            = transformedPlane.xyz; // only need the signs, so don't care about normalization
-                    //transformedPlane /= math.length(normal);      // we don't have to normalize the plane
-
-                    var corner = new float4((transformedPlane.x < 0) ? max.x : min.x,
-                                            (transformedPlane.y < 0) ? max.y : min.y,
-                                            (transformedPlane.z < 0) ? max.z : min.z,
-                                            1.0f);
-                    float forward = math.dot(transformedPlane, corner);
-                    if (forward > kDistanceEpsilon) // closest point is outside
-                    {
-                        intersectingPlanes.Clear();
-                        return;
-                    }
-
-                    // do a bounds check
-                    corner = new float4((transformedPlane.x >= 0) ? max.x : min.x,
-                                        (transformedPlane.y >= 0) ? max.y : min.y,
-                                        (transformedPlane.z >= 0) ? max.z : min.z,
-                                        1.0f);
-                    float backward = math.dot(transformedPlane, corner);
-                    if (backward < -kDistanceEpsilon) // closest point is inside
-                        continue;
-
-                    float minDistance = float.PositiveInfinity;
-                    float maxDistance = float.NegativeInfinity;
-                    int onCount = 0;
-                    for (int v = 0; v < verticesLength; v++)
-                    {
-                        float distance = math.dot(transformedPlane, new float4(verticesPtr[v], 1));
-                        minDistance = math.min(distance, minDistance);
-                        maxDistance = math.max(distance, maxDistance);
-                        onCount += (distance >= -kDistanceEpsilon && distance <= kDistanceEpsilon) ? 1 : 0;
-                    }
-
-                    // if all vertices are 'inside' this plane, then we're not truly intersecting with it
-                    if ((minDistance > kDistanceEpsilon || maxDistance < -kDistanceEpsilon))
-                        continue;
-
-                    intersectingPlanes.Add(i);
-                }
-            }
-        }
-        
-        // TODO: turn into job
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        unsafe static void FindPlanePairs(NativeList<int>       usedVertices,
-                                          NativeList<PlanePair> usedPlanePairs, 
-                                          NativeList<int>       intersectingPlanes,
-                                          float4*               localSpacePlanesPtr,
-                                          float4x4              vertexTransform,
-                                          ref BrushMeshBlob     mesh)
-        {
-            //using (new ProfileSample("FindPlanePairs"))
-            {
-                // TODO: this can be partially stored in brushmesh 
-                // TODO: optimize
-                usedPlanePairs.Clear();
-
-                var halfEdgesLength = mesh.halfEdges.Length;
-                var halfEdgesPtr = (BrushMesh.HalfEdge*)mesh.halfEdges.GetUnsafePtr();
-
-                //var edgeVertexPlanePairLength   = mesh.edgeVertexPlanePair.Length;
-                //var edgeVertexPlanePairsPtr     = (BrushMeshBlob.EdgeVertexPlanePair*)mesh.edgeVertexPlanePair.GetUnsafePtr();
-                var halfEdgePolygonIndicesPtr = (int*)mesh.halfEdgePolygonIndices.GetUnsafePtr();
-
-                var intersectingPlanesLength = intersectingPlanes.Length;
-                var intersectingPlanesPtr = (int*)intersectingPlanes.GetUnsafeReadOnlyPtr();
-
-                var vertexUsed = stackalloc byte[mesh.vertices.Length];
-                var planeAvailable = stackalloc byte[mesh.localPlanes.Length];
-                {
-                    {
-                        for (int p = 0; p < intersectingPlanesLength; p++)
-                        {
-                            planeAvailable[intersectingPlanesPtr[p]] = 1;
-                        }
-                    }
-
-                    for (int e = 0; e < halfEdgesLength; e++)
-                    {
-                        var twinIndex = halfEdgesPtr[e].twinIndex;
-                        if (twinIndex < e)
-                            continue;
-
-                        //var planeIndex0 = edgeVertexPlanePairsPtr[e].planeIndex0;
-                        //var planeIndex1 = edgeVertexPlanePairsPtr[e].planeIndex1;
-
-                        var planeIndex0 = halfEdgePolygonIndicesPtr[e];
-                        var planeIndex1 = halfEdgePolygonIndicesPtr[twinIndex];
-
-                        Debug.Assert(planeIndex0 != planeIndex1);
-
-                        if (planeAvailable[planeIndex0] == 0 ||
-                            planeAvailable[planeIndex1] == 0)
-                            continue;
-
-                        var plane0 = localSpacePlanesPtr[planeIndex0];
-                        var plane1 = localSpacePlanesPtr[planeIndex1];
-                        //var vertexIndex0 = edgeVertexPlanePairsPtr[e].vertexIndex0;
-                        //var vertexIndex1 = edgeVertexPlanePairsPtr[e].vertexIndex1;
-
-                        var vertexIndex0 = halfEdgesPtr[e].vertexIndex;
-                        var vertexIndex1 = halfEdgesPtr[twinIndex].vertexIndex;
-
-                        var vertex0 = math.mul(vertexTransform, new float4(mesh.vertices[vertexIndex0], 1));
-                        var vertex1 = math.mul(vertexTransform, new float4(mesh.vertices[vertexIndex1], 1));
-
-                        //PlaneExtensions.IntersectionFirst(localSpacePlanes1[pI0], localSpacePlanes1[pI1], out double4 N0, out double4 N1);
-                        if (vertexUsed[vertexIndex0] == 0) { vertexUsed[vertexIndex0] = 1; usedVertices.Add(vertexIndex0); }
-                        if (vertexUsed[vertexIndex1] == 0) { vertexUsed[vertexIndex1] = 1; usedVertices.Add(vertexIndex1); }
-                        usedPlanePairs.Add(new PlanePair()
-                        {
-                            plane0 = plane0,
-                            plane1 = plane1,
-                            edgeVertex0 = vertex0,
-                            edgeVertex1 = vertex1,
-                            planeIndex0 = planeIndex0,
-                            planeIndex1 = planeIndex1
-                        });
-                    }
-                }
-            }
-        }
-
-        public void Execute()
-        {
-            ref var mesh0 = ref intersection.Value.brushes[0].blobMesh.Value;
-            ref var mesh1 = ref intersection.Value.brushes[1].blobMesh.Value;
-
-            var inversedNode1ToNode0            = math.transpose(intersection.Value.brushes[0].toOtherBrushSpace);
-            var inversedNode0ToNode1            = math.transpose(intersection.Value.brushes[1].toOtherBrushSpace);
-            var inverseNodeToTreeSpaceMatrix0   = math.transpose(intersection.Value.brushes[0].transformation.treeToNode);
-            var inverseNodeToTreeSpaceMatrix1   = math.transpose(intersection.Value.brushes[1].transformation.treeToNode);
-
-            for (int i = 0; i < surfaceCategory0.Length; i++)
-            {
-                var localPlaneVector = mesh0.localPlanes[i];
-                var worldPlaneVector = math.mul(inverseNodeToTreeSpaceMatrix0, localPlaneVector);
-                var length = math.length(worldPlaneVector.xyz);
-                worldPlaneVector /= length;
-
-                surfaceCategory0[i] = new SurfaceInfo()
-                {
-                    interiorCategory    = (CategoryGroupIndex)CategoryIndex.Inside,
-                    basePlaneIndex      = i,
-                    brushNodeIndex      = intersection.Value.brushes[1].brushNodeIndex,
-                    worldPlane          = worldPlaneVector,
-                    layers              = mesh0.polygons[i].layerDefinition
-                };
-            }
-            for (int i = 0; i < surfaceCategory1.Length; i++)
-            {
-                var localPlaneVector = mesh1.localPlanes[i];
-                var worldPlaneVector = math.mul(inverseNodeToTreeSpaceMatrix1, localPlaneVector);
-                var length = math.length(worldPlaneVector.xyz);
-                worldPlaneVector /= length;
-
-                surfaceCategory1[i] = new SurfaceInfo()
-                {
-                    interiorCategory    = (CategoryGroupIndex)CategoryIndex.Inside,
-                    basePlaneIndex      = i,
-                    brushNodeIndex      = intersection.Value.brushes[0].brushNodeIndex,
-                    worldPlane          = worldPlaneVector,
-                    layers              = mesh1.polygons[i].layerDefinition
-                };
-            }
-
-            if (intersection.Value.type == IntersectionType.Intersection)
-            {
-                GetIntersectingPlanes(ref mesh0.localPlanes, ref mesh1.vertices, mesh1.localBounds, inversedNode0ToNode1, intersectingPlaneIndices0);
-                GetIntersectingPlanes(ref mesh1.localPlanes, ref mesh0.vertices, mesh0.localBounds, inversedNode1ToNode0, intersectingPlaneIndices1);
-            }
-
-            // TODO: we don't actually use ALL of these planes .. Optimize this
-            var localSpacePlanes0Length = mesh0.localPlanes.Length;
-            var localSpacePlanes0 = stackalloc float4[localSpacePlanes0Length];
-            for (int p = 0; p < localSpacePlanes0Length; p++)
-                localSpacePlanes0[p] = mesh0.localPlanes[p];
-
-            // TODO: we don't actually use ALL of these planes .. Optimize this
-            var localSpacePlanes1Length = mesh1.localPlanes.Length;
-            var localSpacePlanes1 = stackalloc float4[localSpacePlanes1Length];
-            for (int p = 0; p < localSpacePlanes1Length; p++)
-            {
-                var transformedPlane = math.mul(inversedNode1ToNode0, mesh1.localPlanes[p]);
-                localSpacePlanes1[p] = transformedPlane / math.length(transformedPlane.xyz);
-            }
-
-            if (intersectingPlaneIndices0.Length == 0 ||
-                intersectingPlaneIndices1.Length == 0)
-            {
-                if (intersection.Value.type == IntersectionType.Intersection)
-                {
-#if UNITY_EDITOR
-                    //Debug.Assert(intersectingPlaneIndices1.Length == 0 && intersectingPlaneIndices0.Length == 0, $"Expected intersection, but no intersection found between {brush0.NodeID} & {brush1.NodeID}");
-                    //Debug.LogError($"{brush0.NodeID}", UnityEditor.EditorUtility.InstanceIDToObject(brush0.UserID));
-                    //Debug.LogError($"{brush1.NodeID}", UnityEditor.EditorUtility.InstanceIDToObject(brush1.UserID));
-#endif
-                    intersection.Value.type = IntersectionType.NoIntersection;
-                }
-
-                intersectingPlaneIndices0.ResizeUninitialized(mesh0.localPlanes.Length);
-                intersectingPlaneIndices1.ResizeUninitialized(mesh1.localPlanes.Length);
-
-                for (int i = 0; i < intersectingPlaneIndices0.Length; i++) intersectingPlaneIndices0[i] = i;
-                for (int i = 0; i < intersectingPlaneIndices1.Length; i++) intersectingPlaneIndices1[i] = i;
-
-                usedVertices0.ResizeUninitialized(mesh0.vertices.Length);
-                usedVertices1.ResizeUninitialized(mesh1.vertices.Length);
-                for (int i = 0; i < usedVertices0.Length; i++) usedVertices0[i] = i;
-                for (int i = 0; i < usedVertices1.Length; i++) usedVertices1[i] = i;
-
-                intersectingPlanes0.AddRange(localSpacePlanes0, localSpacePlanes0Length);
-                intersectingPlanes1.AddRange(localSpacePlanes1, localSpacePlanes1Length);
-
-                return;
-            }
-
-
-            intersectingPlanes0.ResizeUninitialized(intersectingPlaneIndices0.Length);
-            intersectingPlanes1.ResizeUninitialized(intersectingPlaneIndices1.Length);
-            for (int i = 0; i < intersectingPlaneIndices0.Length; i++)
-                intersectingPlanes0[i] = localSpacePlanes0[intersectingPlaneIndices0[i]];
-
-            for (int i = 0; i < intersectingPlaneIndices1.Length; i++)
-                intersectingPlanes1[i] = localSpacePlanes1[intersectingPlaneIndices1[i]];
-
-
-            FindPlanePairs(usedVertices0, usedPlanePairs0, intersectingPlaneIndices0, localSpacePlanes0, float4x4.identity, ref mesh0);
-            FindPlanePairs(usedVertices1, usedPlanePairs1, intersectingPlaneIndices1, localSpacePlanes1, intersection.Value.brushes[1].toOtherBrushSpace, ref mesh1);
-            
-            // decide which planes of brush1 align with brush2
-            // TODO: optimize
-            // TODO: should do this as a separate pass
-            for (int i1 = 0; i1 < intersectingPlaneIndices0.Length; i1++)
-            {
-                var p1          = intersectingPlaneIndices0[i1];
-                var localPlane1 = localSpacePlanes0[p1];
-                for (int i2 = 0; i2 < intersectingPlaneIndices1.Length; i2++)
-                {
-                    var p2          = intersectingPlaneIndices1[i2];
-                    var localPlane2 = localSpacePlanes1[p2];
-                    if (math.abs(localPlane1.w - localPlane2.w) >= kPlaneDistanceEpsilon ||
-                        math.dot(localPlane1.xyz, localPlane2.xyz) < kNormalEpsilon)
-                    {
-                        localPlane2 = -localPlane2;
-                        if (math.abs(localPlane1.w - localPlane2.w) >= kPlaneDistanceEpsilon ||
-                            math.dot(localPlane1.xyz, localPlane2.xyz) < kNormalEpsilon)
-                            continue;
-
-                        var surfaceInfo0 = surfaceCategory0[p1];
-                        surfaceInfo0.interiorCategory = (CategoryGroupIndex)CategoryIndex.ReverseAligned;
-                        surfaceCategory0[p1] = surfaceInfo0;
-                        var surfaceInfo1 = surfaceCategory1[p2];
-                        surfaceInfo1.interiorCategory = (CategoryGroupIndex)CategoryIndex.ReverseAligned;
-                        surfaceCategory1[p2] = surfaceInfo1;
-                    } else
-                    {
-                        var surfaceInfo0 = surfaceCategory0[p1];
-                        surfaceInfo0.interiorCategory = (CategoryGroupIndex)CategoryIndex.Aligned;
-                        surfaceCategory0[p1] = surfaceInfo0;
-                        var surfaceInfo1 = surfaceCategory1[p2];
-                        surfaceInfo1.interiorCategory = (CategoryGroupIndex)CategoryIndex.Aligned;
-                        surfaceCategory1[p2] = surfaceInfo1;
-                    }
-                }
-            }
-        }
-    }
-
-
-    [BurstCompile(Debug = false)]
     unsafe struct FindIntersectionsJob : IJobParallelFor
     {
         const float kPlaneDistanceEpsilon   = CSGManagerPerformCSG.kPlaneDistanceEpsilon;
@@ -449,16 +93,22 @@ namespace Chisel.Core
         const float kNormalEpsilon          = CSGManagerPerformCSG.kNormalEpsilon;
 
         // Add [NativeDisableContainerSafetyRestriction] when done, for performance
-        [ReadOnly] public NativeList<PlanePair> usedPlanePairs1;
+        //[ReadOnly] public NativeList<PlanePair> usedPlanePairs1;
         [ReadOnly] public VertexSoup            vertexSoup1;
-        [ReadOnly] public NativeList<float4>    intersectingPlanes0;
-        [ReadOnly] public NativeList<float4>    intersectingPlanes1;
+        [ReadOnly] public BlobAssetReference<BrushPairIntersection> intersection;
+        [ReadOnly] public int                   intersectionPlaneIndex0;
+        [ReadOnly] public int                   intersectionPlaneIndex1;
+        [ReadOnly] public int                   usedPlanePairIndex1;
         [ReadOnly] public float4x4              nodeToTreeSpaceMatrix0;
 
         [WriteOnly] public NativeStream.Writer  foundVertices;
             
         public void Execute(int index)
         {
+            ref var intersectingPlanes0 = ref intersection.Value.brushes[intersectionPlaneIndex0].localSpacePlanes0;
+            ref var intersectingPlanes1 = ref intersection.Value.brushes[intersectionPlaneIndex1].localSpacePlanes0;
+            ref var usedPlanePairs1     = ref intersection.Value.brushes[usedPlanePairIndex1].usedPlanePairs;
+
             foundVertices.BeginForEachIndex(index);
             var plane2 = intersectingPlanes0[index];
 
@@ -532,8 +182,8 @@ namespace Chisel.Core
 
                     var worldVertex = math.mul(nodeToTreeSpaceMatrix0, localVertex).xyz;
 
-                    if (!CSGManagerPerformCSG.IsOutsidePlanes(intersectingPlanes1, localVertex) &&
-                        !CSGManagerPerformCSG.IsOutsidePlanes(intersectingPlanes0, localVertex))
+                    if (!CSGManagerPerformCSG.IsOutsidePlanes(ref intersectingPlanes1, localVertex) &&
+                        !CSGManagerPerformCSG.IsOutsidePlanes(ref intersectingPlanes0, localVertex))
                     {
                         foundVertices.Write(new VertexAndPlanePair()
                         {
@@ -554,7 +204,8 @@ namespace Chisel.Core
     {
         // Add [NativeDisableContainerSafetyRestriction] when done, for performance
         [ReadOnly] public NativeStream.Reader vertexReader;
-        [ReadOnly] public NativeList<int> intersectingPlaneIndices0;
+        [ReadOnly] public BlobAssetReference<BrushPairIntersection> intersection;
+        [ReadOnly] public int intersectionPlaneIndex0;
         
         public VertexSoup brushVertices0;
         public VertexSoup brushVertices1;
@@ -564,6 +215,7 @@ namespace Chisel.Core
 
         public void Execute() 
         {
+            ref var intersectingPlaneIndices0 = ref intersection.Value.brushes[intersectionPlaneIndex0].localSpacePlaneIndices0;
             int maxIndex = vertexReader.ForEachCount;
 
             int index = 0;
@@ -595,7 +247,7 @@ namespace Chisel.Core
     unsafe struct SortLoopsJob : IJob
     {
         // Add [NativeDisableContainerSafetyRestriction] when done, for performance
-        [ReadOnly] public NativeArray<SurfaceInfo>  surfaceCategory; // TODO: only use plane information here
+        [ReadOnly] public BlobAssetReference<BrushWorldPlanes> brushWorldPlanes;
         [ReadOnly] public VertexSoup                vertexSoup;
 
         // Cannot be ReadOnly because we sort it
@@ -609,7 +261,7 @@ namespace Chisel.Core
         public NativeList<PlaneIndexOffsetLength>   planeIndexOffsets;
 
 
-#region Sort
+        #region Sort
         static float3 FindPolygonCentroid(float3* vertices, ushort* indicesPtr, int offset, int indicesCount)
         {
             var centroid = float3.zero;
@@ -723,16 +375,17 @@ namespace Chisel.Core
             }
             UnsafeUtility.Free(sortedStack, Allocator.TempJob);
         }
-#endregion
+        #endregion
 
 
         public void Execute()
         {
-            if (foundIndices.Length < 3)
+            if (foundIndices.Length < 3) 
             {
                 foundIndices.Clear();
                 return;
             }
+
             NativeSortExtension.Sort(foundIndices); // <- we can only do this if it's readonly!
 
             // Now that our indices are sorted by planeIndex, we can segment them by start/end offset
@@ -794,7 +447,7 @@ namespace Chisel.Core
                 var offset      = planeIndexOffset.offset;
                 var planeIndex  = planeIndexOffset.planeIndex;
                 // TODO: use plane information instead
-                SortIndices(indicesPtr, offset, length, surfaceCategory[planeIndex].worldPlane.xyz);
+                SortIndices(indicesPtr, offset, length, brushWorldPlanes.Value.worldPlanes[planeIndex].xyz);
             }
         }
     }
@@ -803,9 +456,10 @@ namespace Chisel.Core
     unsafe struct CreateLoopsJob : IJob
     {
         // Add [NativeDisableContainerSafetyRestriction] when done, for performance
+        [ReadOnly] public BlobAssetReference<BrushPairIntersection> intersection;
+        [ReadOnly] public int                                   intersectionSurfaceIndex;
         [ReadOnly] public NativeList<ushort>                    uniqueIndices;
         [ReadOnly] public NativeList<PlaneIndexOffsetLength>    planeIndexOffsets;
-        [ReadOnly] public NativeArray<SurfaceInfo>              surfaceCategories;
 
         [WriteOnly] public List<Loop>[]     outputSurfaces;
 
@@ -817,10 +471,11 @@ namespace Chisel.Core
             if (outputSurfaces == null)
                 return;
 
+            ref var surfaceCategories = ref intersection.Value.brushes[intersectionSurfaceIndex].surfaceInfos;
+
             var indicesPtr              = (ushort*)uniqueIndices.GetUnsafeReadOnlyPtr();
             var planeIndexOffsetsPtr    = (PlaneIndexOffsetLength*)planeIndexOffsets.GetUnsafeReadOnlyPtr();
             var planeIndexOffsetsLength = planeIndexOffsets.Length;
-            var surfaceCategoriesPtr    = (SurfaceInfo*)surfaceCategories.GetUnsafeReadOnlyPtr();
 
             for (int n = 0; n < planeIndexOffsetsLength; n++)
             {
@@ -828,7 +483,7 @@ namespace Chisel.Core
                 var offset              = planeIndexLength.offset;
                 var loopLength          = planeIndexLength.length;
                 var basePlaneIndex      = planeIndexLength.planeIndex;
-                var surfaceCategory     = surfaceCategoriesPtr[basePlaneIndex];
+                var surfaceCategory     = surfaceCategories[basePlaneIndex];
                 if (outputSurfaces[basePlaneIndex] != null)
                     outputSurfaces[basePlaneIndex].Add(new Loop(surfaceCategory, indicesPtr, offset, loopLength));
             }
