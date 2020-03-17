@@ -268,7 +268,7 @@ namespace Chisel.Core
         public BlobArray<float3>        vertices;
         public AABB                     bounds;
 
-        public static unsafe BlobAssetReference<BasePolygonsBlob> Create(int brushNodeID, int brushMeshID, BlobAssetReference<NodeTransformations> transform)
+        public static unsafe BlobAssetReference<BasePolygonsBlob> Create(int brushNodeIndex, int brushMeshID, BlobAssetReference<NodeTransformations> transform)
         {
             var mesh = ChiselLookup.Value.brushMeshBlobs[brushMeshID - 1];
             ref var vertices   = ref mesh.Value.vertices;
@@ -342,7 +342,7 @@ namespace Chisel.Core
                         worldPlane          = worldPlane,
                         layers              = polygon.layerDefinition,
                         basePlaneIndex      = p,
-                        brushNodeID         = brushNodeID,
+                        brushNodeIndex      = brushNodeIndex,
                         interiorCategory    = (CategoryGroupIndex)(int)CategoryIndex.ValidAligned,
                     },
                     startEdgeIndex  = startEdgeIndex,
@@ -366,6 +366,33 @@ namespace Chisel.Core
             return result;
         }
     }
+    
+    public enum IntersectionType
+    {
+        NoIntersection,
+        Intersection,
+        AInsideB,
+        BInsideA,
+
+        InvalidValue
+    };
+
+    public struct BrushIntersectionInfo
+    {
+        public int                                  brushNodeIndex;
+        public BlobAssetReference<BrushMeshBlob>    blobMesh;
+        public NodeTransformations                  transformation;
+        public float4x4                             toOtherBrushSpace;
+        public BlobArray<int>                       localSpacePlanes0; // planes in local space of >brush0<
+    }
+
+    public struct BrushPairIntersection
+    {
+        public IntersectionType type;
+        // Note: that the localSpacePlanes0 parameter for both brush0 and brush1 are in localspace of >brush0<
+        public BlobArray<BrushIntersectionInfo> brushes;
+    }
+
 
     internal sealed unsafe class ChiselLookup : ScriptableObject
     {

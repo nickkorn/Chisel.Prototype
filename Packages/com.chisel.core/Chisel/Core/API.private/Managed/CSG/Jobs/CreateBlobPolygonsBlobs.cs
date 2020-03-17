@@ -24,11 +24,12 @@ namespace Chisel.Core
         public void Execute(int b)
         {
             var brushNodeID     = treeBrushes[b];
+            var brushNodeIndex  = brushNodeID - 1;
             var brushMeshID     = brushMeshInstanceIDs[b];
             var transform       = transformations[brushNodeID - 1];
 
-            var result = BasePolygonsBlob.Create(brushNodeID, brushMeshID, transform);
-            basePolygons.TryAdd(brushNodeID - 1, result);
+            var result = BasePolygonsBlob.Create(brushNodeIndex, brushMeshID, transform);
+            basePolygons.TryAdd(brushNodeIndex, result);
         }
     }
 }

@@ -19,7 +19,7 @@ namespace Chisel.Core
         public float4               worldPlane;
         public SurfaceLayers        layers;
         public int                  basePlaneIndex;
-        public int                  brushNodeID;
+        public int                  brushNodeIndex;
         public CategoryGroupIndex   interiorCategory;
     }
 
@@ -92,19 +92,6 @@ namespace Chisel.Core
         const float kPlaneDistanceEpsilon = CSGManagerPerformCSG.kPlaneDistanceEpsilon;
         const float kNormalEpsilon = CSGManagerPerformCSG.kNormalEpsilon;
 
-        public int                      treeBrushNodeID0;
-        public int                      treeBrushNodeID1;
-        public IntersectionType         intersectionType;
-
-        public BlobAssetReference<BrushMeshBlob> blobMesh0;
-        public BlobAssetReference<BrushMeshBlob> blobMesh1;
-
-        public float4x4                 nodeToTreeSpaceMatrix0;
-        public float4x4                 treeToNodeSpaceMatrix0;
-        public float4x4                 nodeToTreeSpaceMatrix1;
-        public float4x4                 treeToNodeSpaceMatrix1;
-        public float4x4                 node1ToNode0;
-            
         public NativeList<int>          intersectingPlaneIndices0;
         public NativeList<int>          intersectingPlaneIndices1;
 
@@ -120,54 +107,29 @@ namespace Chisel.Core
         public NativeArray<SurfaceInfo> surfaceCategory0;
         public NativeArray<SurfaceInfo> surfaceCategory1;
 
-        public VertexSoup               vertexSoup0;
-        public VertexSoup               vertexSoup1;
-            
+        public BlobAssetReference<BrushPairIntersection> intersection;
 
-        public SharedPlaneData(VertexSoup vertexSoup0, int treeBrushNodeID0, 
-                                          BlobAssetReference<BrushMeshBlob> blobMesh0, BlobAssetReference<NodeTransformations> transform0,
-                               VertexSoup vertexSoup1, int treeBrushNodeID1, 
-                                          BlobAssetReference<BrushMeshBlob> blobMesh1, BlobAssetReference<NodeTransformations> transform1,
-                               IntersectionType intersectionType, Allocator allocator)
+        public SharedPlaneData(BlobAssetReference<BrushPairIntersection> intersection, Allocator allocator)
         {
-            var nodeToTreeSpaceMatrix0 = transform0.Value.nodeToTree;
-            var treeToNodeSpaceMatrix0 = transform0.Value.treeToNode;
-            var nodeToTreeSpaceMatrix1 = transform1.Value.nodeToTree;
-            var treeToNodeSpaceMatrix1 = transform1.Value.treeToNode;
+            this.intersection = intersection;
+            
+            ref var blobMesh0 = ref intersection.Value.brushes[0].blobMesh.Value;
+            ref var blobMesh1 = ref intersection.Value.brushes[1].blobMesh.Value;
 
-            ref var mesh0 = ref blobMesh0.Value;
-            ref var mesh1 = ref blobMesh1.Value;
+            this.intersectingPlaneIndices0   = new NativeList<int>(blobMesh0.localPlanes.Length, allocator);
+            this.intersectingPlaneIndices1   = new NativeList<int>(blobMesh1.localPlanes.Length, allocator);
 
-            this.treeBrushNodeID0            = treeBrushNodeID0;
-            this.treeBrushNodeID1            = treeBrushNodeID1;
-            this.blobMesh0                   = blobMesh0;
-            this.blobMesh1                   = blobMesh1;
+            this.usedPlanePairs0             = new NativeList<PlanePair>(blobMesh0.halfEdges.Length, allocator);
+            this.usedPlanePairs1             = new NativeList<PlanePair>(blobMesh1.halfEdges.Length, allocator);
 
-            this.vertexSoup0                 = vertexSoup0;
-            this.vertexSoup1                 = vertexSoup1;
+            this.surfaceCategory0            = new NativeArray<SurfaceInfo>(blobMesh0.localPlanes.Length, allocator, NativeArrayOptions.ClearMemory); // all set to Inside (0)
+            this.surfaceCategory1            = new NativeArray<SurfaceInfo>(blobMesh1.localPlanes.Length, allocator, NativeArrayOptions.ClearMemory); // all set to Inside (0)
 
-            this.nodeToTreeSpaceMatrix0      = nodeToTreeSpaceMatrix0;
-            this.treeToNodeSpaceMatrix0      = treeToNodeSpaceMatrix0;
-            this.nodeToTreeSpaceMatrix1      = nodeToTreeSpaceMatrix1;
-            this.treeToNodeSpaceMatrix1      = treeToNodeSpaceMatrix1;
-            this.node1ToNode0                = math.mul(treeToNodeSpaceMatrix0, nodeToTreeSpaceMatrix1);
+            this.usedVertices0               = new NativeList<int>(blobMesh0.vertices.Length, allocator);
+            this.usedVertices1               = new NativeList<int>(blobMesh1.vertices.Length, allocator);
 
-            this.intersectionType            = intersectionType;
-
-            this.intersectingPlaneIndices0   = new NativeList<int>(mesh0.localPlanes.Length, allocator);
-            this.intersectingPlaneIndices1   = new NativeList<int>(mesh1.localPlanes.Length, allocator);
-
-            this.usedPlanePairs0             = new NativeList<PlanePair>(mesh0.halfEdges.Length, allocator);
-            this.usedPlanePairs1             = new NativeList<PlanePair>(mesh1.halfEdges.Length, allocator);
-
-            this.surfaceCategory0            = new NativeArray<SurfaceInfo>(mesh0.localPlanes.Length, allocator, NativeArrayOptions.ClearMemory); // all set to Inside (0)
-            this.surfaceCategory1            = new NativeArray<SurfaceInfo>(mesh1.localPlanes.Length, allocator, NativeArrayOptions.ClearMemory); // all set to Inside (0)
-
-            this.usedVertices0               = new NativeList<int>(mesh0.vertices.Length, allocator);
-            this.usedVertices1               = new NativeList<int>(mesh1.vertices.Length, allocator);
-
-            this.intersectingPlanes0         = new NativeList<float4>(mesh0.localPlanes.Length, allocator);
-            this.intersectingPlanes1         = new NativeList<float4>(mesh1.localPlanes.Length, allocator);
+            this.intersectingPlanes0         = new NativeList<float4>(blobMesh0.localPlanes.Length, allocator);
+            this.intersectingPlanes1         = new NativeList<float4>(blobMesh1.localPlanes.Length, allocator);
         }
 
         public void Dispose()
@@ -334,15 +296,13 @@ namespace Chisel.Core
 
         public void Execute()
         {
-            ref var mesh0 = ref blobMesh0.Value;
-            ref var mesh1 = ref blobMesh1.Value;
+            ref var mesh0 = ref intersection.Value.brushes[0].blobMesh.Value;
+            ref var mesh1 = ref intersection.Value.brushes[1].blobMesh.Value;
 
-            var node0ToNode1 = math.mul(treeToNodeSpaceMatrix1, nodeToTreeSpaceMatrix0);
-            var inversedNode1ToNode0 = math.transpose(node0ToNode1);
-
-            var inversedNode0ToNode1 = math.transpose(node1ToNode0);
-            var inverseNodeToTreeSpaceMatrix0 = math.transpose(treeToNodeSpaceMatrix0);
-            var inverseNodeToTreeSpaceMatrix1 = math.transpose(treeToNodeSpaceMatrix1);
+            var inversedNode1ToNode0            = math.transpose(intersection.Value.brushes[0].toOtherBrushSpace);
+            var inversedNode0ToNode1            = math.transpose(intersection.Value.brushes[1].toOtherBrushSpace);
+            var inverseNodeToTreeSpaceMatrix0   = math.transpose(intersection.Value.brushes[0].transformation.treeToNode);
+            var inverseNodeToTreeSpaceMatrix1   = math.transpose(intersection.Value.brushes[1].transformation.treeToNode);
 
             for (int i = 0; i < surfaceCategory0.Length; i++)
             {
@@ -355,7 +315,7 @@ namespace Chisel.Core
                 {
                     interiorCategory    = (CategoryGroupIndex)CategoryIndex.Inside,
                     basePlaneIndex      = i,
-                    brushNodeID               = treeBrushNodeID1,
+                    brushNodeIndex      = intersection.Value.brushes[1].brushNodeIndex,
                     worldPlane          = worldPlaneVector,
                     layers              = mesh0.polygons[i].layerDefinition
                 };
@@ -371,13 +331,13 @@ namespace Chisel.Core
                 {
                     interiorCategory    = (CategoryGroupIndex)CategoryIndex.Inside,
                     basePlaneIndex      = i,
-                    brushNodeID               = treeBrushNodeID0,
+                    brushNodeIndex      = intersection.Value.brushes[0].brushNodeIndex,
                     worldPlane          = worldPlaneVector,
                     layers              = mesh1.polygons[i].layerDefinition
                 };
             }
 
-            if (intersectionType == IntersectionType.Intersection)
+            if (intersection.Value.type == IntersectionType.Intersection)
             {
                 GetIntersectingPlanes(ref mesh0.localPlanes, ref mesh1.vertices, mesh1.localBounds, inversedNode0ToNode1, intersectingPlaneIndices0);
                 GetIntersectingPlanes(ref mesh1.localPlanes, ref mesh0.vertices, mesh0.localBounds, inversedNode1ToNode0, intersectingPlaneIndices1);
@@ -401,14 +361,14 @@ namespace Chisel.Core
             if (intersectingPlaneIndices0.Length == 0 ||
                 intersectingPlaneIndices1.Length == 0)
             {
-                if (intersectionType == IntersectionType.Intersection)
+                if (intersection.Value.type == IntersectionType.Intersection)
                 {
 #if UNITY_EDITOR
                     //Debug.Assert(intersectingPlaneIndices1.Length == 0 && intersectingPlaneIndices0.Length == 0, $"Expected intersection, but no intersection found between {brush0.NodeID} & {brush1.NodeID}");
                     //Debug.LogError($"{brush0.NodeID}", UnityEditor.EditorUtility.InstanceIDToObject(brush0.UserID));
                     //Debug.LogError($"{brush1.NodeID}", UnityEditor.EditorUtility.InstanceIDToObject(brush1.UserID));
 #endif
-                    intersectionType = IntersectionType.NoIntersection;
+                    intersection.Value.type = IntersectionType.NoIntersection;
                 }
 
                 intersectingPlaneIndices0.ResizeUninitialized(mesh0.localPlanes.Length);
@@ -439,7 +399,7 @@ namespace Chisel.Core
 
 
             FindPlanePairs(usedVertices0, usedPlanePairs0, intersectingPlaneIndices0, localSpacePlanes0, float4x4.identity, ref mesh0);
-            FindPlanePairs(usedVertices1, usedPlanePairs1, intersectingPlaneIndices1, localSpacePlanes1, node1ToNode0, ref mesh1);
+            FindPlanePairs(usedVertices1, usedPlanePairs1, intersectingPlaneIndices1, localSpacePlanes1, intersection.Value.brushes[1].toOtherBrushSpace, ref mesh1);
             
             // decide which planes of brush1 align with brush2
             // TODO: optimize
