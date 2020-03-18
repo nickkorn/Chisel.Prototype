@@ -223,6 +223,7 @@ namespace Chisel.Core
             {
                 treeBrushes             = treeBrushes,
                 brushMeshInstanceIDs    = brushMeshInstanceIDs,
+                brushMeshBlobs          = ChiselLookup.Value.brushMeshBlobs,
                 transformations         = ChiselLookup.Value.transformations,
                 basePolygons            = ChiselLookup.Value.basePolygons.AsParallelWriter()
             };
@@ -237,7 +238,7 @@ namespace Chisel.Core
 
             var triangleArraySize = GeometryMath.GetTriangleArraySize(treeBrushes.Length);
 
-            using (var brushBrushIntersections  = new NativeMultiHashMap<int, BrushPair>(triangleArraySize, Allocator.TempJob))
+            using (var brushBrushIntersections  = new NativeMultiHashMap<int, BrushPair>(triangleArraySize * 2, Allocator.TempJob))
             {
                 var findAllIntersectionsJob = new FindAllIntersectionsJob()
                 {

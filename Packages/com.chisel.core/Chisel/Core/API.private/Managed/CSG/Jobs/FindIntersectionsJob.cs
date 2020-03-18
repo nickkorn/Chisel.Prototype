@@ -452,40 +452,78 @@ namespace Chisel.Core
         }
     }
 
-    // TODO: make burstable (somehow)
-    unsafe struct CreateLoopsJob : IJob
+    internal struct BrushSurfacePair : IEquatable<BrushSurfacePair>
+    {
+        public int brushNodeIndex0;
+        public int brushNodeIndex1;
+        public int basePlaneIndex;
+
+        #region Equals
+        public bool Equals(BrushSurfacePair other)
+        {
+            return (brushNodeIndex0 == other.brushNodeIndex0 && brushNodeIndex1 == other.brushNodeIndex1 && basePlaneIndex == other.basePlaneIndex);
+        }
+
+        public override bool Equals(object obj)
+        {
+            if (!(obj is BrushSurfacePair))
+                return false;
+            return base.Equals((BrushSurfacePair)obj);
+        }
+        #endregion
+
+        public override int GetHashCode()
+        {
+            return (int)math.hash(new int3(brushNodeIndex0, brushNodeIndex1, basePlaneIndex));
+        }
+    }
+
+    // TODO: merge with SortLoopsJob
+    [BurstCompile]
+    unsafe struct CreateLoopsJob : IJobParallelFor
     {
         // Add [NativeDisableContainerSafetyRestriction] when done, for performance
+        [ReadOnly] public int                                   brushIndex0;
+        [ReadOnly] public int                                   brushIndex1;
         [ReadOnly] public BlobAssetReference<BrushPairIntersection> intersection;
         [ReadOnly] public int                                   intersectionSurfaceIndex;
+        [ReadOnly] public VertexSoup                            vertexSoup;
         [ReadOnly] public NativeList<ushort>                    uniqueIndices;
         [ReadOnly] public NativeList<PlaneIndexOffsetLength>    planeIndexOffsets;
 
-        [WriteOnly] public List<Loop>[]     outputSurfaces;
+        [WriteOnly] public NativeHashMap<BrushSurfacePair, BlobAssetReference<BrushIntersectionLoop>>.ParallelWriter outputSurfaces;
 
-        public void Execute()
+        public void Execute(int index)
         {
             if (uniqueIndices.Length < 3)
                 return;
 
-            if (outputSurfaces == null)
-                return;
-
-            ref var surfaceCategories = ref intersection.Value.brushes[intersectionSurfaceIndex].surfaceInfos;
+            ref var surfaceInfos = ref intersection.Value.brushes[intersectionSurfaceIndex].surfaceInfos;
 
             var indicesPtr              = (ushort*)uniqueIndices.GetUnsafeReadOnlyPtr();
             var planeIndexOffsetsPtr    = (PlaneIndexOffsetLength*)planeIndexOffsets.GetUnsafeReadOnlyPtr();
             var planeIndexOffsetsLength = planeIndexOffsets.Length;
 
-            for (int n = 0; n < planeIndexOffsetsLength; n++)
+            //for (int index = 0; index < planeIndexOffsetsLength; index++)
             {
-                var planeIndexLength    = planeIndexOffsetsPtr[n];
+                var planeIndexLength    = planeIndexOffsetsPtr[index];
                 var offset              = planeIndexLength.offset;
                 var loopLength          = planeIndexLength.length;
                 var basePlaneIndex      = planeIndexLength.planeIndex;
-                var surfaceCategory     = surfaceCategories[basePlaneIndex];
-                if (outputSurfaces[basePlaneIndex] != null)
-                    outputSurfaces[basePlaneIndex].Add(new Loop(surfaceCategory, indicesPtr, offset, loopLength));
+                var surfaceInfo         = surfaceInfos[basePlaneIndex];
+
+                var builder = new BlobBuilder(Allocator.Temp);
+                ref var root = ref builder.ConstructRoot<BrushIntersectionLoop>();
+                root.surfaceInfo = surfaceInfo;
+                var vertices = builder.Allocate(ref root.loopVertices, loopLength);
+                for (int j = 0; j < loopLength; j++)
+                    vertices[j] = vertexSoup.vertices[indicesPtr[offset + j]];
+
+                var outputSurface = builder.CreateBlobAssetReference<BrushIntersectionLoop>(Allocator.Persistent);
+                builder.Dispose();
+
+                var item          = new BrushSurfacePair() { brushNodeIndex0 = brushIndex0, brushNodeIndex1 = brushIndex1, basePlaneIndex = basePlaneIndex };
+                outputSurfaces.TryAdd(item, outputSurface);
             }
         }
     }

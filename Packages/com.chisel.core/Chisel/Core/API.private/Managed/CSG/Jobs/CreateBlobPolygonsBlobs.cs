@@ -14,11 +14,13 @@ using ReadOnlyAttribute = Unity.Collections.ReadOnlyAttribute;
 
 namespace Chisel.Core
 {
+    [BurstCompile]
     struct CreateBlobPolygonsBlobs : IJobParallelFor
     {
         [ReadOnly] public NativeArray<int> treeBrushes;
         [ReadOnly] public NativeArray<int> brushMeshInstanceIDs;
         [ReadOnly] public NativeHashMap<int, BlobAssetReference<NodeTransformations>> transformations;
+        [ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushMeshBlob>> brushMeshBlobs;
         [WriteOnly] public NativeHashMap<int, BlobAssetReference<BasePolygonsBlob>>.ParallelWriter basePolygons;
 
         public void Execute(int b)
@@ -28,7 +30,8 @@ namespace Chisel.Core
             var brushMeshID     = brushMeshInstanceIDs[b];
             var transform       = transformations[brushNodeID - 1];
 
-            var result = BasePolygonsBlob.Create(brushNodeIndex, brushMeshID, transform);
+            var mesh    = brushMeshBlobs[brushMeshID - 1];
+            var result  = BasePolygonsBlob.Create(brushNodeIndex, mesh, transform);
             basePolygons.TryAdd(brushNodeIndex, result);
         }
     }

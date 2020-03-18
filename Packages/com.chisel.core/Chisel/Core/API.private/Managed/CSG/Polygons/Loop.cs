@@ -8,6 +8,7 @@ using System.Runtime.InteropServices;
 using Unity.Burst;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
+using Unity.Entities;
 using Unity.Jobs;
 using Unity.Mathematics;
 using UnityEngine;
@@ -53,18 +54,26 @@ namespace Chisel.Core
             this.info = info;
         }
 
-        ~Loop()
-        {
-            Dispose();
-        }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public unsafe Loop(BlobAssetReference<BrushIntersectionLoop> brushIntersectionLoop, VertexSoup vertexSoup)
+        {            
+            ref var vertices = ref brushIntersectionLoop.Value.loopVertices;
+            var srcIndices = new ushort[vertices.Length];
+            for (int j = 0; j < srcIndices.Length; j++)
+                srcIndices[j] = vertexSoup.Add(vertices[j]);
 
-        public void Dispose()
-        {
-            if (edges.IsCreated)
-                edges.Dispose();
-            foreach (var loop in holes)
-                loop.Dispose();
-            holes.Clear();
+            var surfaceInfo = brushIntersectionLoop.Value.surfaceInfo;
+            {
+                edges = new NativeList<Edge>(Allocator.Persistent);
+                edges.Capacity = srcIndices.Length;
+                for (int j = 1; j < srcIndices.Length; j++)
+                {
+                    edges.Add(new Edge() { index1 = srcIndices[j - 1], index2 = srcIndices[j] });
+                }
+                edges.Add(new Edge() { index1 = srcIndices[srcIndices.Length - 1], index2 = srcIndices[0] });
+
+                this.info = surfaceInfo;
+            }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -96,6 +105,20 @@ namespace Chisel.Core
             edges.Add(new Edge() { index1 = srcIndices[offset + length - 1], index2 = srcIndices[offset] });
 
             this.info = surfaceInfo;
+        }
+
+        ~Loop()
+        {
+            Dispose();
+        }
+
+        public void Dispose()
+        {
+            if (edges.IsCreated)
+                edges.Dispose();
+            foreach (var loop in holes)
+                loop.Dispose();
+            holes.Clear();
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

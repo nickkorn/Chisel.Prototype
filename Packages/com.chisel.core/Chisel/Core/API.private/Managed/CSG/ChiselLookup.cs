@@ -268,9 +268,8 @@ namespace Chisel.Core
         public BlobArray<float3>        vertices;
         public AABB                     bounds;
 
-        public static unsafe BlobAssetReference<BasePolygonsBlob> Create(int brushNodeIndex, int brushMeshID, BlobAssetReference<NodeTransformations> transform)
+        public static unsafe BlobAssetReference<BasePolygonsBlob> Create(int brushNodeIndex, BlobAssetReference<BrushMeshBlob> mesh, BlobAssetReference<NodeTransformations> transform)
         {
-            var mesh = ChiselLookup.Value.brushMeshBlobs[brushMeshID - 1];
             ref var vertices   = ref mesh.Value.vertices;
             ref var planes     = ref mesh.Value.localPlanes;
             ref var polygons   = ref mesh.Value.polygons;
@@ -390,6 +389,12 @@ namespace Chisel.Core
         public BlobArray<PlanePair>              usedPlanePairs;
         public BlobArray<int>                    usedVertices;
         public BlobArray<SurfaceInfo>            surfaceInfos;
+    }
+    
+    public struct BrushIntersectionLoop
+    {
+        public SurfaceInfo          surfaceInfo;
+        public BlobArray<float3>    loopVertices;
     }
 
     public struct BrushPairIntersection
