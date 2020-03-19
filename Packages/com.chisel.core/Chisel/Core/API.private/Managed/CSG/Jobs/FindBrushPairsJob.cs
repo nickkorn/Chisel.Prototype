@@ -19,14 +19,14 @@ namespace Chisel.Core
     {
         public struct Empty { }
 
-        [ReadOnly] public NativeArray<int>       treeBrushes;
+        [ReadOnly] public NativeArray<int>      treeBrushes;
         [ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushesTouchedByBrush>> brushesTouchedByBrushes;
-        [WriteOnly] public NativeList<BrushPair> brushPairs;
+        [WriteOnly] public NativeHashMap<BrushPair, FindBrushPairsJob.Empty>.ParallelWriter brushPairMap;
+        //[WriteOnly] public NativeList<BrushPair> uniqueBrushPairs;
 
         public void Execute()
         {
             var empty = new Empty();
-            var brushPairMap = new NativeHashMap<BrushPair, FindBrushPairsJob.Empty>(GeometryMath.GetTriangleArraySize(treeBrushes.Length), Allocator.Temp);
             for (int b0 = 0; b0 < treeBrushes.Length; b0++)
             {
                 var brushNodeID0     = treeBrushes[b0];
@@ -44,26 +44,22 @@ namespace Chisel.Core
                     var intersection    = intersections[i];
                     var brushNodeIndex1 = intersection.nodeIndex;
 
-                    var reverseOrder    = brushNodeIndex0 > brushNodeIndex1; // ensures we do calculations exactly the same for each brush pair
-                    var type            = intersection.type;
-
                     var brushPair       = new BrushPair()
                     {
-                        type            = type,
+                        type            = intersection.type,
                         brushNodeIndex0 = brushNodeIndex0,
                         brushNodeIndex1 = brushNodeIndex1
                     };
 
-                    if (reverseOrder)
+                    if (brushNodeIndex0 > brushNodeIndex1) // ensures we do calculations exactly the same for each brush pair
                         brushPair.Flip();
 
                     if (brushPairMap.TryAdd(brushPair, empty))
                     {
-                        brushPairs.Add(brushPair);
+                        //uniqueBrushPairs.AddNoResize(brushPair);
                     }
                 }
             }
-            brushPairMap.Dispose();
         }
     }
 
@@ -76,7 +72,7 @@ namespace Chisel.Core
 
         public struct Empty { }
 
-        [ReadOnly] public NativeArray<BrushPair> brushPairs;
+        [ReadOnly] public NativeArray<BrushPair> uniqueBrushPairs;
 
         [ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushMeshBlob>>         brushMeshBlobLookup;
         [ReadOnly] public NativeHashMap<int, BlobAssetReference<NodeTransformations>>   transformations;
@@ -237,14 +233,14 @@ namespace Chisel.Core
             var usedPlanePairs0             = new NativeList<PlanePair>(Allocator.Temp);
             var usedPlanePairs1             = new NativeList<PlanePair>(Allocator.Temp);
 
-            var surfaceInfos0            = new NativeList<SurfaceInfo>(Allocator.Temp);
-            var surfaceInfos1            = new NativeList<SurfaceInfo>(Allocator.Temp);
+            var surfaceInfos0               = new NativeList<SurfaceInfo>(Allocator.Temp);
+            var surfaceInfos1               = new NativeList<SurfaceInfo>(Allocator.Temp);
 
             var usedVertices0               = new NativeList<int>(Allocator.Temp);
             var usedVertices1               = new NativeList<int>(Allocator.Temp);
-            for (int index = 0; index < brushPairs.Length; index++)
+            for (int index = 0; index < uniqueBrushPairs.Length; index++)
             {
-                var brushPair       = brushPairs[index];
+                var brushPair       = uniqueBrushPairs[index];
                 var brushNodeIndex0 = brushPair.brushNodeIndex0;
                 var brushNodeIndex1 = brushPair.brushNodeIndex1;
 

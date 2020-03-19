@@ -54,7 +54,8 @@ namespace Chisel.Core
         [ReadOnly] public float4x4  nodeToTreeSpaceMatrix;
         [ReadOnly] public float4x4  nodeToTreeSpaceInvertedTransposedMatrix;
 
-        public VertexSoup           vertexSoup;
+        [NativeDisableContainerSafetyRestriction]
+        public VertexSoup           vertexSoup; // <-- TODO: we're reading AND writing to the same NativeList!?!?!
         public NativeList<Edge>     edges;
 
         // TODO: do this in separate loop so we don't need to rely on pointers to make this work

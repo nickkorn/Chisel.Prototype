@@ -22,7 +22,7 @@ namespace Chisel.Core
 
         // Add [NativeDisableContainerSafetyRestriction] when done, for performance
         [ReadOnly] public NativeArray<float4>   selfPlanes;
-        [ReadOnly] public VertexSoup            vertexSoup;
+        [ReadOnly] public NativeArray<float3>   vertices;
         [ReadOnly] public NativeList<Edge>      otherEdges;
         public NativeList<Edge>                 edges;
 
@@ -31,8 +31,6 @@ namespace Chisel.Core
             if (edges.Length < 3 ||
                 otherEdges.Length < 3)
                 return;
-
-            var vertices = vertexSoup.vertices;
 
             var otherVerticesLength = 0;
             var otherVertices       = (ushort*)UnsafeUtility.Malloc(otherEdges.Length * sizeof(ushort), 4, Allocator.TempJob);
@@ -82,8 +80,8 @@ namespace Chisel.Core
                     var vertexIndex0 = inputEdges[e].index1;
                     var vertexIndex1 = inputEdges[e].index2;
 
-                    var vertex0 = vertexSoup.vertices[vertexIndex0];
-                    var vertex1 = vertexSoup.vertices[vertexIndex1];
+                    var vertex0 = vertices[vertexIndex0];
+                    var vertex1 = vertices[vertexIndex1];
 
                     var vertex0w = new float4(vertex0, 1);
                     var vertex1w = new float4(vertex1, 1);

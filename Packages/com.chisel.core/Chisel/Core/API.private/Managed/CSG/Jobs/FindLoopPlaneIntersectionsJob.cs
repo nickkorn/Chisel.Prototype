@@ -22,14 +22,12 @@ namespace Chisel.Core
         const float kVertexEqualEpsilonSqr  = (float)CSGManagerPerformCSG.kEpsilonSqr;
         const float kPlaneDistanceEpsilon   = CSGManagerPerformCSG.kDistanceEpsilon;
              
-
-        // Add [NativeDisableContainerSafetyRestriction] when done, for performance
-
         [ReadOnly] public NativeList<float4>    allWorldSpacePlanes;
         [ReadOnly] public int2                  otherPlanesSegment;
         [ReadOnly] public int2                  selfPlanesSegment;
-        
-        public VertexSoup                       vertexSoup;
+
+        [NativeDisableContainerSafetyRestriction]
+        public VertexSoup                       vertexSoup; // <-- TODO: we're reading AND writing to the same NativeList!?!?!
         public NativeList<Edge>                 edges;
 
         // TODO: find a way to share found intersections between loops, to avoid accuracy issues
@@ -52,6 +50,8 @@ namespace Chisel.Core
 
                     var otherPlaneCount = otherPlanesSegment.y;
                     var selfPlaneCount  = selfPlanesSegment.y;
+
+                    vertexSoup.Reserve(otherPlaneCount); // ensure we have at least this many extra vertices in capacity
 
 
                     // TODO: Optimize the hell out of this
@@ -128,7 +128,7 @@ namespace Chisel.Core
                                     goto SkipEdge;
                             }
 
-                            var tempVertexIndex = vertexSoup.Add(newVertex);
+                            var tempVertexIndex = vertexSoup.AddNoResize(newVertex);
                             if ((foundVertices == 0 || tempVertexIndex != tempVertices[1]) &&
                                 vertexIndex0 != tempVertexIndex &&
                                 vertexIndex1 != tempVertexIndex)

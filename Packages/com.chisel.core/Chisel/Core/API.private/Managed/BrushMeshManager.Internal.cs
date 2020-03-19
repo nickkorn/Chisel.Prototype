@@ -6,6 +6,7 @@ using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
 using UnityEngine;
+using UnityEngine.Profiling;
 
 namespace Chisel.Core
 {
@@ -96,7 +97,10 @@ namespace Chisel.Core
                 if (item.IsCreated)
                     item.Dispose();
             }
+
+            Profiler.BeginSample("BrushMeshBlob.Build");
             ChiselLookup.Value.brushMeshBlobs[brushMeshIndex] = BrushMeshBlob.Build(brushMesh);
+            Profiler.EndSample();
             return brushMeshID;
         }
 
@@ -132,7 +136,9 @@ namespace Chisel.Core
                     item.Dispose();
             }
             ChiselLookup.Value.brushMeshBlobs[brushMeshIndex] = BrushMeshBlob.Build(brushMesh);
+            Profiler.BeginSample("BrushMeshBlob.Build");
             CSGManager.NotifyBrushMeshModified(brushMeshInstanceID);
+            Profiler.EndSample();
             return true;
         }
 

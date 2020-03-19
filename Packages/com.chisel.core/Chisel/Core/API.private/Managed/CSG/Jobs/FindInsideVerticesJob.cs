@@ -221,15 +221,20 @@ namespace Chisel.Core
         }
     }
 
+    struct LocalWorldPair
+    {
+        public float4 localVertex1;
+        public float4 worldVertex;
+    }
+
     [BurstCompile(Debug = false)]
     unsafe struct FindInsideVerticesJob : IJobParallelFor
     { 
-        // Add [NativeDisableContainerSafetyRestriction] when done, for performance
         [ReadOnly] public BlobAssetReference<BrushPairIntersection> intersection;
         [ReadOnly] public int                   intersectionPlaneIndex1;
         [ReadOnly] public int                   usedVerticesIndex0;
 
-        [WriteOnly] public NativeStream.Writer vertexWriter;
+        [WriteOnly] public NativeList<LocalWorldPair>.ParallelWriter vertexWriter;
 
         public void Execute(int index)
         {
@@ -239,50 +244,40 @@ namespace Chisel.Core
             var nodeToTreeSpaceMatrix   = intersection.Value.brushes[usedVerticesIndex0].transformation.nodeToTree;
             var vertexToLocal0          = usedVerticesIndex0 == 0 ? float4x4.identity : intersection.Value.brushes[usedVerticesIndex0].toOtherBrushSpace;
 
-            vertexWriter.BeginForEachIndex(index);
             var vertexIndex1 = usedVertices0[index];
             var brushVertex1 = new float4(allVertices0[vertexIndex1], 1);
             var localVertex1 = math.mul(vertexToLocal0, brushVertex1);
             if (!CSGManagerPerformCSG.IsOutsidePlanes(ref intersectingPlanes1, localVertex1))
             { 
                 var worldVertex = math.mul(nodeToTreeSpaceMatrix, brushVertex1);
-                vertexWriter.Write(localVertex1);
-                vertexWriter.Write(worldVertex);
+                vertexWriter.AddNoResize(new LocalWorldPair() { localVertex1 = localVertex1, worldVertex = worldVertex });
             }
-            vertexWriter.EndForEachIndex();
         }
     }
     
     [BurstCompile(Debug = false)]
-    unsafe struct InsertInsideVerticesJob : IJob
+    unsafe struct InsertInsideVerticesJob : IJobParallelFor
     {
         const float kPlaneDistanceEpsilon = CSGManagerPerformCSG.kPlaneDistanceEpsilon;
 
-        // Add [NativeDisableContainerSafetyRestriction] when done, for performance
-        [ReadOnly] public NativeStream.Reader   vertexReader;
+        [ReadOnly] public NativeList<LocalWorldPair>                vertexReader;
         [ReadOnly] public BlobAssetReference<BrushPairIntersection> intersection;
         [ReadOnly] public int                   intersectionPlaneIndex;
 
         public VertexSoup                       brushVertices;
 
-        [WriteOnly] public NativeList<PlaneVertexIndexPair> outputIndices;
+        [WriteOnly] public NativeList<PlaneVertexIndexPair>.ParallelWriter outputIndices;
 
 
-        public void Execute() 
+        public void Execute(int index) 
         {
             ref var intersectingPlaneIndices    = ref intersection.Value.brushes[intersectionPlaneIndex].localSpacePlaneIndices0;
             ref var intersectingPlanes          = ref intersection.Value.brushes[intersectionPlaneIndex].localSpacePlanes0;
 
-            int maxIndex = vertexReader.ForEachCount;
-
-            int index = 0;
-            vertexReader.BeginForEachIndex(index++);
-            while (vertexReader.RemainingItemCount == 0 && index < maxIndex)
-                vertexReader.BeginForEachIndex(index++);
-            while (vertexReader.RemainingItemCount > 0)
+            //for (int index = 0; index < vertexReader.Length; index++)
             {
-                var localVertex1    = vertexReader.Read<float4>();
-                var worldVertex     = vertexReader.Read<float4>();
+                var localVertex1    = vertexReader[index].localVertex1;
+                var worldVertex     = vertexReader[index].worldVertex;
 
                 var worldVertexIndex = -1;
                 // TODO: optimize this, we already know these vertices are ON the planes of this brush, just not which: this can be precalculated
@@ -294,13 +289,10 @@ namespace Chisel.Core
                     {
                         var planeIndex = intersectingPlaneIndices[i];
                         if (worldVertexIndex == -1)
-                            worldVertexIndex = brushVertices.Add(worldVertex.xyz);
-                        outputIndices.Add(new PlaneVertexIndexPair() { planeIndex = (ushort)planeIndex, vertexIndex = (ushort)worldVertexIndex });
+                            worldVertexIndex = brushVertices.AddNoResize(worldVertex.xyz);
+                        outputIndices.AddNoResize(new PlaneVertexIndexPair() { planeIndex = (ushort)planeIndex, vertexIndex = (ushort)worldVertexIndex });
                     }
                 }
-
-                while (vertexReader.RemainingItemCount == 0 && index < maxIndex)
-                    vertexReader.BeginForEachIndex(index++);
             }
         }
     }

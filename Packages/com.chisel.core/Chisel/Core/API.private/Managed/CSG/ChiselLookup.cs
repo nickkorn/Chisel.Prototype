@@ -407,7 +407,7 @@ namespace Chisel.Core
 
     internal sealed unsafe class ChiselLookup : ScriptableObject
     {
-        public unsafe struct ChiselLookupValues
+        public unsafe struct Data
         {
             public NativeHashMap<int, BlobAssetReference<BasePolygonsBlob>>         basePolygons;
             public NativeHashMap<int, BlobAssetReference<RoutingTable>>             routingTableLookup;
@@ -594,20 +594,20 @@ namespace Chisel.Core
                 _singleton = ScriptableObject.CreateInstance<ChiselLookup>();
                 _singleton.hideFlags = HideFlags.HideAndDontSave;
             }
-            _instance = UnsafeUtility.AddressOf<ChiselLookupValues>(ref _singleton.chiselLookup);
+            _instance = UnsafeUtility.AddressOf<Data>(ref _singleton.chiselLookup);
         }
 
-        public static ref ChiselLookupValues Value
+        public static ref Data Value
         {
             get
             {
                 if (_instance == null)
                     UpdateValue();
-                return ref UnsafeUtilityEx.AsRef<ChiselLookupValues>(_instance);
+                return ref UnsafeUtilityEx.AsRef<Data>(_instance);
             }
         }
 
-        ChiselLookupValues chiselLookup = new ChiselLookupValues();
+        Data chiselLookup = new Data();
 
         internal void OnEnable() { chiselLookup.Initialize(); }
         internal void OnDisable() { chiselLookup.Dispose(); _singleton = null; }

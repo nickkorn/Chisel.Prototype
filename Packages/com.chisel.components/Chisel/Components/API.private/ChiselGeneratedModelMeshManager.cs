@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using UnityEngine;
+using UnityEngine.Profiling;
 
 namespace Chisel.Components
 {
@@ -106,12 +107,20 @@ namespace Chisel.Components
         public static void UpdateModels()
         {
             // Update the tree meshes
-            if (!CSGManager.Flush())
+            Profiler.BeginSample("Flush");
+            try
             {
-                ChiselGeneratedComponentManager.DelayedUVGeneration();
-                if (sharedUnityMeshes.FindAllUnusedUnityMeshes())
-                    sharedUnityMeshes.DestroyNonRecycledUnusedUnityMeshes();
-                return; // Nothing to update ..
+                if (!CSGManager.Flush())
+                {
+                    ChiselGeneratedComponentManager.DelayedUVGeneration();
+                    if (sharedUnityMeshes.FindAllUnusedUnityMeshes())
+                        sharedUnityMeshes.DestroyNonRecycledUnusedUnityMeshes();
+                    return; // Nothing to update ..
+                }
+            }
+            finally
+            {
+                Profiler.EndSample();
             }
 
             for (int m = 0; m < registeredModels.Count; m++)
@@ -136,7 +145,9 @@ namespace Chisel.Components
                     Debug.LogException(ex);
                 }
 
+                Profiler.BeginSample("UpdateModelMeshDescriptions");
                 UpdateModelMeshDescriptions(model);
+                Profiler.EndSample();
 
                 // Re-use existing UnityEngine.Mesh if they exist
                 sharedUnityMeshes.ReuseExistingMeshes(model);

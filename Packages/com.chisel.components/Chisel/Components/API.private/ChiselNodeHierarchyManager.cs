@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using UnityEngine;
+using UnityEngine.Profiling;
 using UnityEngine.SceneManagement;
 
 
@@ -98,14 +99,27 @@ namespace Chisel.Components
         // TODO: Clean up API
         public static void Rebuild()
         {
+            Profiler.BeginSample("Reset");
             CSGManager.Clear();
             ChiselBrushContainerAssetManager.Reset();
             ChiselBrushMaterialManager.Reset();
+            Profiler.EndSample();
 
+            Profiler.BeginSample("FindAndReregisterAllNodes");
             ChiselNodeHierarchyManager.FindAndReregisterAllNodes();
+            Profiler.EndSample();
+
+            Profiler.BeginSample("UpdateAllTransformations");
             ChiselNodeHierarchyManager.UpdateAllTransformations();
+            Profiler.EndSample();
+
+            Profiler.BeginSample("Update");
             ChiselNodeHierarchyManager.Update();
+            Profiler.EndSample();
+
+            Profiler.BeginSample("UpdateModels");
             ChiselGeneratedModelMeshManager.UpdateModels();
+            Profiler.EndSample();
         }
 
         // TODO: Probably needs to be internal?
@@ -663,13 +677,30 @@ namespace Chisel.Components
 
             try
             {
+                Profiler.BeginSample("ChiselBrushContainerAssetManager.Update");
                 ChiselBrushContainerAssetManager.Update();
+                Profiler.EndSample();
+
+                Profiler.BeginSample("ChiselBrushMaterialManager.Update");
                 ChiselBrushMaterialManager.Update();
+                Profiler.EndSample();
+
+                Profiler.BeginSample("UpdateTrampoline");
                 UpdateTrampoline();
+                Profiler.EndSample();
+
                 // TODO: fix that generators create brushes inside the trampoline, requiring us to call things twice
+                Profiler.BeginSample("ChiselBrushContainerAssetManager.Update");
                 ChiselBrushContainerAssetManager.Update();
+                Profiler.EndSample();
+
+                Profiler.BeginSample("ChiselBrushMaterialManager.Update");
                 ChiselBrushMaterialManager.Update();
+                Profiler.EndSample();
+
+                Profiler.BeginSample("UpdateTrampoline");
                 UpdateTrampoline();
+                Profiler.EndSample();
             }
             // If we get an exception we don't want to end up infinitely spawning this exception ..
             finally
