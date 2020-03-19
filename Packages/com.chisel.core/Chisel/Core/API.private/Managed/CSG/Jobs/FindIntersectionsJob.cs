@@ -197,33 +197,36 @@ namespace Chisel.Core
     }
 
     [BurstCompile(Debug = false)]
-    unsafe struct InsertIntersectionVerticesJob : IJobParallelFor
+    unsafe struct InsertIntersectionVerticesJob : IJob
     {
         [ReadOnly] public NativeArray<VertexAndPlanePair> vertexReader;
         [ReadOnly] public BlobAssetReference<BrushPairIntersection> intersection;
         [ReadOnly] public int intersectionPlaneIndex0;
-        
-        public VertexSoup brushVertices0;
-        public VertexSoup brushVertices1;
+
+        [WriteOnly] public VertexSoup brushVertices0;
+        [WriteOnly] public VertexSoup brushVertices1;
 
         [WriteOnly] public NativeList<PlaneVertexIndexPair>.ParallelWriter outputIndices0;
         [WriteOnly] public NativeList<PlaneVertexIndexPair>.ParallelWriter outputIndices1;
 
-        public void Execute(int index) 
+        public void Execute() 
         {
-            var worldVertex = vertexReader[index].vertex;
-            var plane0      = vertexReader[index].plane0;
-            var plane1      = vertexReader[index].plane1; 
-            var plane2      = vertexReader[index].plane2;
+            for (int index = 0; index < vertexReader.Length; index++)
+            { 
+                var worldVertex = vertexReader[index].vertex;
+                var plane0      = vertexReader[index].plane0;
+                var plane1      = vertexReader[index].plane1; 
+                var plane2      = vertexReader[index].plane2;
 
-            // TODO: should be having a Loop for each plane that intersects this vertex, and add that vertex 
-            //       to ensure they are identical
-            var vertexIndex1 = brushVertices0.AddNoResize(worldVertex);
-            var vertexIndex2 = brushVertices1.AddNoResize(worldVertex);
+                // TODO: should be having a Loop for each plane that intersects this vertex, and add that vertex 
+                //       to ensure they are identical
+                var vertexIndex1 = brushVertices0.AddNoResize(worldVertex);
+                var vertexIndex2 = brushVertices1.AddNoResize(worldVertex);
 
-            outputIndices0.AddNoResize(new PlaneVertexIndexPair() { planeIndex = plane2, vertexIndex = vertexIndex1 });
-            outputIndices1.AddNoResize(new PlaneVertexIndexPair() { planeIndex = plane0, vertexIndex = vertexIndex2 });
-            outputIndices1.AddNoResize(new PlaneVertexIndexPair() { planeIndex = plane1, vertexIndex = vertexIndex2 });
+                outputIndices0.AddNoResize(new PlaneVertexIndexPair() { planeIndex = plane2, vertexIndex = vertexIndex1 });
+                outputIndices1.AddNoResize(new PlaneVertexIndexPair() { planeIndex = plane0, vertexIndex = vertexIndex2 });
+                outputIndices1.AddNoResize(new PlaneVertexIndexPair() { planeIndex = plane1, vertexIndex = vertexIndex2 });
+            }
         }
     }
 
@@ -233,7 +236,7 @@ namespace Chisel.Core
         [ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushWorldPlanes>> allBrushWorldPlanes;
         [ReadOnly] public BlobAssetReference<BrushPairIntersection> intersection;
         [ReadOnly] public int                       brushNodeIndex;
-        [ReadOnly] public NativeList<float3>        vertexSoup;
+        [ReadOnly] public VertexSoup                vertices;
 
         // Cannot be ReadOnly because we sort it
         //[ReadOnly] 
@@ -247,7 +250,7 @@ namespace Chisel.Core
 
 
         #region Sort
-        static float3 FindPolygonCentroid(float3* vertices, ushort* indicesPtr, int offset, int indicesCount)
+        static float3 FindPolygonCentroid(VertexSoup vertices, ushort* indicesPtr, int offset, int indicesCount)
         {
             var centroid = float3.zero;
             for (int i = 0; i < indicesCount; i++, offset++)
@@ -256,7 +259,7 @@ namespace Chisel.Core
         }
 
         // TODO: sort by using plane information instead of unreliable floating point math ..
-        unsafe void SortIndices(int2* sortedStack, ushort* indicesPtr, int offset, int indicesCount, float3 normal)
+        unsafe void SortIndices(VertexSoup vertices, int2* sortedStack, ushort* indicesPtr, int offset, int indicesCount, float3 normal)
         {
             // There's no point in trying to sort a point or a line 
             if (indicesCount < 3)
@@ -288,8 +291,7 @@ namespace Chisel.Core
                 }
             }
 
-            var verticesPtr = (float3*)vertexSoup.GetUnsafeReadOnlyPtr();
-            var centroid = FindPolygonCentroid(verticesPtr, indicesPtr, offset, indicesCount);
+            var centroid = FindPolygonCentroid(vertices, indicesPtr, offset, indicesCount);
             var center = new float2(math.dot(tangentX, centroid), // distance in direction of tangentX
                                     math.dot(tangentY, centroid)); // distance in direction of tangentY
 
@@ -304,29 +306,29 @@ namespace Chisel.Core
                 var r = top.y;
                 var left = l;
                 var right = r;
-                var va = (float3)verticesPtr[indicesPtr[offset + (left + right) / 2]];
+                var va = vertices[indicesPtr[offset + (left + right) / 2]];
                 while (true)
                 {
                     var a_angle = math.atan2(math.dot(tangentX, va) - center.x, math.dot(tangentY, va) - center.y);
 
                     {
-                        var vb = (float3)verticesPtr[indicesPtr[offset + left]];
+                        var vb = vertices[indicesPtr[offset + left]];
                         var b_angle = math.atan2(math.dot(tangentX, vb) - center.x, math.dot(tangentY, vb) - center.y);
                         while (b_angle > a_angle)
                         {
                             left++;
-                            vb = (float3)verticesPtr[indicesPtr[offset + left]];
+                            vb = vertices[indicesPtr[offset + left]];
                             b_angle = math.atan2(math.dot(tangentX, vb) - center.x, math.dot(tangentY, vb) - center.y);
                         }
                     }
 
                     {
-                        var vb = (float3)verticesPtr[indicesPtr[offset + right]];
+                        var vb = vertices[indicesPtr[offset + right]];
                         var b_angle = math.atan2(math.dot(tangentX, vb) - center.x, math.dot(tangentY, vb) - center.y);
                         while (a_angle > b_angle)
                         {
                             right--;
-                            vb = (float3)verticesPtr[indicesPtr[offset + right]];
+                            vb = vertices[indicesPtr[offset + right]];
                             b_angle = math.atan2(math.dot(tangentX, vb) - center.x, math.dot(tangentY, vb) - center.y);
                         }
                     }
@@ -448,7 +450,7 @@ namespace Chisel.Core
                 var offset              = planeIndexOffset.offset;
                 var planeIndex          = planeIndexOffset.planeIndex;
                 // TODO: use plane information instead
-                SortIndices(sortedStack, indicesPtr, offset, length, brushWorldPlanes.Value.worldPlanes[planeIndex].xyz);
+                SortIndices(vertices, sortedStack, indicesPtr, offset, length, brushWorldPlanes.Value.worldPlanes[planeIndex].xyz);
             }
             UnsafeUtility.Free(sortedStack, Allocator.Temp);
         }
@@ -488,9 +490,9 @@ namespace Chisel.Core
         [ReadOnly] public int                                   brushIndex1;
         [ReadOnly] public BlobAssetReference<BrushPairIntersection> intersection;
         [ReadOnly] public int                                   intersectionSurfaceIndex;
-        [ReadOnly] public NativeList<float3>                    srcVertices;
-        [ReadOnly] public NativeList<ushort>                    uniqueIndices;
-        [ReadOnly] public NativeList<PlaneIndexOffsetLength>    planeIndexOffsets;
+        [ReadOnly] public VertexSoup                            srcVertices;
+        [ReadOnly] public NativeArray<ushort>                   uniqueIndices;
+        [ReadOnly] public NativeArray<PlaneIndexOffsetLength>   planeIndexOffsets;
 
         [WriteOnly] public NativeHashMap<BrushSurfacePair, BlobAssetReference<BrushIntersectionLoop>>.ParallelWriter outputSurfaces;
 

@@ -38,7 +38,7 @@ namespace Chisel.Core
 
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static int IndexOf(NativeList<Edge> edges, int edgesOffset, int edgesLength, Edge edge, out bool inverted)
+        public static int IndexOf(NativeArray<Edge> edges, int edgesOffset, int edgesLength, Edge edge, out bool inverted)
         {
             for (int e = edgesOffset; e < edgesOffset + edgesLength; e++)
             {
@@ -49,7 +49,7 @@ namespace Chisel.Core
             return -1;
         }
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static int IndexOf(NativeList<Edge> edges, Edge edge, out bool inverted)
+        public static int IndexOf(NativeArray<Edge> edges, Edge edge, out bool inverted)
         {
             for (int e = 0; e < edges.Length; e++)
             {
@@ -90,7 +90,7 @@ namespace Chisel.Core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static EdgeCategory CategorizeEdge(Edge edge, in NativeList<float4> planes, in NativeList<Edge> edges, in LoopSegment segment, in NativeArray<float3> vertices)
+        public static EdgeCategory CategorizeEdge(Edge edge, in NativeList<float4> planes, in NativeArray<Edge> edges, in LoopSegment segment, in VertexSoup vertices)
         {
             // TODO: use something more clever than looping through all edges
             if (IndexOf(edges, segment.edgeOffset, segment.edgeLength, edge, out bool inverted) != -1)
@@ -102,7 +102,7 @@ namespace Chisel.Core
             return EdgeCategory.Inside;
         }
 
-        internal static EdgeCategory CategorizeEdge(Edge edge, ref BlobArray<float4> planes, in NativeList<Edge> edges, in NativeArray<float3> vertices)
+        internal static EdgeCategory CategorizeEdge(Edge edge, ref BlobArray<float4> planes, in NativeArray<Edge> edges, in VertexSoup vertices)
         {
             // TODO: use something more clever than looping through all edges
             if (IndexOf(edges, edge, out bool inverted) != -1)
@@ -143,7 +143,7 @@ namespace Chisel.Core
     {
         [ReadOnly] public int                       segmentIndex;
 
-        [ReadOnly] public NativeArray<float3>       vertices;
+        [ReadOnly] public VertexSoup                vertices;
         [ReadOnly] public NativeList<Edge>          allEdges;
         [ReadOnly] public NativeList<float4>        allWorldPlanes;
         [ReadOnly] public NativeList<LoopSegment>   allSegments;       
@@ -188,7 +188,7 @@ namespace Chisel.Core
     {
         [ReadOnly] public int segmentCount;
 
-        [ReadOnly] public NativeArray<float3>       vertices;
+        [ReadOnly] public VertexSoup                vertices;
         [ReadOnly] public NativeList<Edge>          allEdges;
         [ReadOnly] public NativeList<float4>        allWorldPlanes;
         [ReadOnly] public NativeList<LoopSegment>   allSegments;
@@ -243,14 +243,14 @@ namespace Chisel.Core
     [BurstCompile(Debug = false)]
     unsafe struct IntersectEdgesJob : IJob
     {
-        [ReadOnly] public NativeArray<float3>       vertices;
-        [ReadOnly] public NativeList<Edge>          edges1;
-        [ReadOnly] public NativeList<Edge>          edges2;
+        [ReadOnly] public VertexSoup                 vertices;
+        [ReadOnly] public NativeArray<Edge>          edges1;
+        [ReadOnly] public NativeArray<Edge>          edges2;
         [ReadOnly] public BlobAssetReference<BrushWorldPlanes> worldPlanes1;
         [ReadOnly] public BlobAssetReference<BrushWorldPlanes> worldPlanes2;
 
         [NativeDisableUnsafePtrRestriction]
-        [WriteOnly] public OperationResult* result;
+        [WriteOnly] public OperationResult* result; // FIXME: SHOULD NOT DO THIS
         [WriteOnly] public NativeList<Edge> outEdges;
 
         public void Execute()

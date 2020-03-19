@@ -31,7 +31,6 @@ namespace Chisel.Core
         //*
         internal static void Dump(System.Text.StringBuilder builder, Loop categorized_loop, in VertexSoup soup, Quaternion rotation)
         {
-            var vertices = soup.AsReader().vertices;
             //builder.AppendLine($"loop ({categorized_loop.indices.Count}):");
             //builder.AppendLine($"loop {categorized_loop.loopIndex}:");
             /*
@@ -67,8 +66,8 @@ namespace Chisel.Core
                 var edge = categorized_loop.edges[i];
                 var index1 = edge.index1;
                 var index2 = edge.index2;
-                var vertex1 = ((float3)(rotation * vertices[index1])).xy;
-                var vertex2 = ((float3)(rotation * vertices[index2])).xy;
+                var vertex1 = ((float3)(rotation * soup[index1])).xy;
+                var vertex2 = ((float3)(rotation * soup[index2])).xy;
 
                 builder.Append($"({Convert.ToString((Decimal)vertex1.x, CultureInfo.InvariantCulture)}, {Convert.ToString((Decimal)vertex1.y, CultureInfo.InvariantCulture)}), ");
                 builder.AppendLine($"({Convert.ToString((Decimal)vertex2.x, CultureInfo.InvariantCulture)}, {Convert.ToString((Decimal)vertex2.y, CultureInfo.InvariantCulture)})             ");
@@ -111,9 +110,9 @@ namespace Chisel.Core
             var result = OperationResult.Fail;
             var intersectEdgesJob = new IntersectEdgesJob()
             {
-                vertices        = brushVertices.AsReader().vertices,
-                edges1          = intersectionLoop.edges,
-                edges2          = surfaceLoop.edges,
+                vertices        = brushVertices,
+                edges1          = intersectionLoop.edges.AsDeferredJobArray(),
+                edges2          = surfaceLoop.edges.AsDeferredJobArray(),
                 worldPlanes1    = ChiselLookup.Value.brushWorldPlanes[intersectionLoop.info.brushNodeIndex],
                 worldPlanes2    = ChiselLookup.Value.brushWorldPlanes[surfaceLoop.info.brushNodeIndex],
 
@@ -329,7 +328,7 @@ namespace Chisel.Core
                         {
                             var subtractEdgesJob = new SubtractEdgesJob()
                             {
-                                vertices            = brushVertices.AsReader().vertices,
+                                vertices            = brushVertices,
                                 segmentIndex        = holes.Count,
                                 destroyedEdges      = destroyedEdges,
                                 allWorldPlanes      = allWorldPlanes,
@@ -344,7 +343,7 @@ namespace Chisel.Core
                         {
                             var mergeEdgesJob = new MergeEdgesJob()
                             {
-                                vertices            = brushVertices.AsReader().vertices,
+                                vertices            = brushVertices,
                                 segmentCount        = holes.Count,
                                 destroyedEdges      = destroyedEdges,
                                 allWorldPlanes      = allWorldPlanes,
@@ -408,12 +407,11 @@ namespace Chisel.Core
             // Newell's algorithm to create a plane for concave polygons.
             // NOTE: doesn't work well for self-intersecting polygons
             var normal = Vector3.zero;
-            var vertices = soup.AsReader().vertices;
             for (int n = 0; n < loop.edges.Length; n++)
             {
                 var edge = loop.edges[n];
-                var prevVertex = vertices[edge.index1];
-                var currVertex = vertices[edge.index2];
+                var prevVertex = soup[edge.index1];
+                var currVertex = soup[edge.index2];
                 normal.x = normal.x + ((prevVertex.y - currVertex.y) * (prevVertex.z + currVertex.z));
                 normal.y = normal.y + ((prevVertex.z - currVertex.z) * (prevVertex.x + currVertex.x));
                 normal.z = normal.z + ((prevVertex.x - currVertex.x) * (prevVertex.y + currVertex.y));

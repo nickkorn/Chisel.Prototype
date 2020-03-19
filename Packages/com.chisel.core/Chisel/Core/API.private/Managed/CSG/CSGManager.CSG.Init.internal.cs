@@ -26,12 +26,11 @@ namespace Chisel.Core
         public const float  kPlaneDistanceEpsilon	= 0.0006f;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal static bool IsDegenerate(in VertexSoup soup, NativeList<Edge> edges)
+        internal static bool IsDegenerate(in VertexSoup vertices, NativeList<Edge> edges)
         {
             if (edges.Length < 3)
                 return true;
 
-            var vertices = soup.AsReader().vertices;
             for (int i = 0; i < edges.Length; i++)
             {
                 var vertexIndex1 = edges[i].index1;

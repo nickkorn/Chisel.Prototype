@@ -281,13 +281,10 @@ namespace Chisel.Core
 
             var aabb = new AABB();
 
-            var edges = new NativeList<Edge>(Allocator.Temp);
-            var surfaces = new NativeList<BasePolygon>(Allocator.Temp);
-
-            var vertexSoup = new VertexSoup();
-            vertexSoup.Initialize(vertices.Length, Allocator.Temp);
-
-            var polygonEdges = new NativeList<Edge>(Allocator.Temp);
+            var edges           = new NativeList<Edge>(Allocator.Temp);
+            var surfaces        = new NativeList<BasePolygon>(Allocator.Temp);
+            var vertexSoup      = new VertexSoup(vertices.Length, Allocator.Temp);
+            var polygonEdges    = new NativeList<Edge>(Allocator.Temp);
             for (int p = 0; p < polygons.Length; p++)
             {
                 var polygon      = polygons[p];
@@ -353,7 +350,7 @@ namespace Chisel.Core
             ref var root = ref builder.ConstructRoot<BasePolygonsBlob>();
             builder.Construct(ref root.surfaces, surfaces);
             builder.Construct(ref root.edges, edges);
-            builder.Construct(ref root.vertices, vertexSoup.AsReader().vertices);
+            builder.Construct(ref root.vertices, vertexSoup);
             root.bounds = new AABB() { min = min, max = max };
             var result = builder.CreateBlobAssetReference<BasePolygonsBlob>(Allocator.Persistent);
             builder.Dispose();

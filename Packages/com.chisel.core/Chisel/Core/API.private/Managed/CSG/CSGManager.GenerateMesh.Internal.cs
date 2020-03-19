@@ -691,7 +691,7 @@ namespace Chisel.Core
 
                         // TODO: all separate loops on same surface should be put in same OutputSurfaceMesh!                    
 
-                        surfaceIndices = context.TriangulateLoops(loop, brushVertices.AsReader().vertices, loop.edges.ToArray().ToList(), rotation);
+                        surfaceIndices = context.TriangulateLoops(loop, brushVertices, loop.edges.ToArray().ToList(), rotation);
 
                     
                         #if false
@@ -732,7 +732,9 @@ namespace Chisel.Core
                 }
 
                 // TODO: only use the vertices that we found in the indices (we're using too many vertices!)
-                float3[] surfaceVertices = brushVertices.AsReader().vertices.ToArray();
+                float3[] surfaceVertices = new float3[brushVertices.Length];
+                for (int v = 0; v < brushVertices.Length; v++)
+                    surfaceVertices[v] = brushVertices[v];
 
                 var vertexHash	    = (ulong)Hashing.ComputeHashKey(surfaceVertices);
                 var indicesHash	    = (ulong)Hashing.ComputeHashKey(surfaceIndices);

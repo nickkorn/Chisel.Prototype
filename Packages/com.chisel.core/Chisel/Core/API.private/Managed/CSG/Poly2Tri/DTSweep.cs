@@ -342,7 +342,7 @@ namespace Poly2Tri
         // SweepContext
         //
 
-        NativeList<float3>                  vertices;
+        VertexSoup                          vertices;
         float2[]                            points;
         ushort[]                            edges;
         List<DirectedEdge>                  allEdges                = new List<DirectedEdge>();
@@ -379,7 +379,7 @@ namespace Poly2Tri
         
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal unsafe static bool IsPointInPolygon(float3 right, float3 forward, List<Chisel.Core.Edge> indices1, List<Chisel.Core.Edge> indices2, NativeList<float3> vertices)
+        internal unsafe static bool IsPointInPolygon(float3 right, float3 forward, List<Chisel.Core.Edge> indices1, List<Chisel.Core.Edge> indices2, VertexSoup vertices)
         {
             int index = 0;
             while (index < indices2.Count &&
@@ -424,7 +424,7 @@ namespace Poly2Tri
 
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public int[] TriangulateLoops(Chisel.Core.Loop loop, NativeList<float3> vertices, List<Chisel.Core.Edge> inputEdges, quaternion rotation)
+        public int[] TriangulateLoops(Chisel.Core.Loop loop, VertexSoup vertices, List<Chisel.Core.Edge> inputEdges, quaternion rotation)
         {
             if (inputEdges.Count < 4)
             {
@@ -580,7 +580,7 @@ namespace Poly2Tri
         /// Triangulate simple polygon with holes
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public List<int> Triangulate(NativeList<float3> vertices, List<Chisel.Core.Edge> inputEdges, quaternion rotation)
+        public List<int> Triangulate(VertexSoup vertices, List<Chisel.Core.Edge> inputEdges, quaternion rotation)
         {
             this.vertices = vertices;
             this.rotation = rotation;

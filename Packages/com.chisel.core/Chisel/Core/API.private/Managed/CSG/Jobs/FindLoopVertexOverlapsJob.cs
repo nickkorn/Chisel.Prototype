@@ -22,7 +22,7 @@ namespace Chisel.Core
 
         // Add [NativeDisableContainerSafetyRestriction] when done, for performance
         [ReadOnly] public NativeArray<float4>   selfPlanes;
-        [ReadOnly] public NativeArray<float3>   vertices;
+        [ReadOnly] public VertexSoup            vertices;
         [ReadOnly] public NativeList<Edge>      otherEdges;
         public NativeList<Edge>                 edges;
 

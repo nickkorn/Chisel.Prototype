@@ -85,8 +85,7 @@ namespace Chisel.Core
                 var brushNodeID     = treeBrushes[b];
                 var brushNodeIndex  = brushNodeID - 1;
                 var result          = chiselLookupValues.basePolygons[brushNodeIndex];
-                var vertexSoup = new VertexSoup();
-                vertexSoup.Initialize(ref result.Value.vertices);
+                var vertexSoup = new VertexSoup(ref result.Value.vertices);
                 chiselLookupValues.vertexSoups.Add(brushNodeIndex, vertexSoup);
             }
             Profiler.EndSample();
@@ -194,7 +193,7 @@ namespace Chisel.Core
                                         brushVertices           = vertexSoup0,
                                         outputIndices           = foundIndices0.AsParallelWriter()
                                     };
-                                    insertInsideVerticesJob.Run(insideVerticesStream0.Length);
+                                    insertInsideVerticesJob.Run();
                                 }
                             }
                             insideVerticesStream0.Dispose();
@@ -221,7 +220,7 @@ namespace Chisel.Core
                                         brushVertices           = vertexSoup1,
                                         outputIndices           = foundIndices1.AsParallelWriter()
                                     };
-                                    insertInsideVerticesJob.Run(insideVerticesStream1.Length);
+                                    insertInsideVerticesJob.Run();
                                 }
                             }
                             insideVerticesStream1.Dispose();
@@ -255,7 +254,7 @@ namespace Chisel.Core
                                         outputIndices0          = foundIndices0.AsParallelWriter(),
                                         outputIndices1          = foundIndices1.AsParallelWriter()
                                     };
-                                    insertIntersectionVerticesJob.Run(intersectionStream0.Length);
+                                    insertIntersectionVerticesJob.Run();
                                 }
                             }
                             intersectionStream0.Dispose();
@@ -288,7 +287,7 @@ namespace Chisel.Core
                                         outputIndices0              = foundIndices1.AsParallelWriter(),
                                         outputIndices1              = foundIndices0.AsParallelWriter()
                                     };
-                                    insertIntersectionVerticesJob.Run(intersectionStream1.Length);
+                                    insertIntersectionVerticesJob.Run();
                                 }
                             }
                             intersectionStream1.Dispose();
@@ -304,7 +303,7 @@ namespace Chisel.Core
                                     allBrushWorldPlanes             = chiselLookupValues.brushWorldPlanes,
                                     intersection                    = intersectionAsset,
                                     brushNodeIndex                  = 0,
-                                    vertexSoup                      = vertexSoup0.AsReader().vertices,
+                                    vertices                        = vertexSoup0,
                                     foundIndices                    = foundIndices0,
                                     uniqueIndices                   = uniqueIndices0,
                                     planeIndexOffsets               = planeIndexOffsets0
@@ -318,9 +317,9 @@ namespace Chisel.Core
                                         brushIndex1                 = brushNodeIndex1,
                                         intersection                = intersectionAsset,
                                         intersectionSurfaceIndex    = 0,
-                                        srcVertices                 = vertexSoup0.AsReader().vertices,
-                                        uniqueIndices               = uniqueIndices0,
-                                        planeIndexOffsets           = planeIndexOffsets0,
+                                        srcVertices                 = vertexSoup0,
+                                        uniqueIndices               = uniqueIndices0.AsDeferredJobArray(),
+                                        planeIndexOffsets           = planeIndexOffsets0.AsDeferredJobArray(),
                                         outputSurfaces              = outputSurfaces.AsParallelWriter()
                                     };
                                     createLoopsJob0.Run(planeIndexOffsets0.Length);
@@ -340,7 +339,7 @@ namespace Chisel.Core
                                     allBrushWorldPlanes             = chiselLookupValues.brushWorldPlanes,
                                     intersection                    = intersectionAsset,
                                     brushNodeIndex                  = 1,
-                                    vertexSoup                      = vertexSoup1.AsReader().vertices,
+                                    vertices                        = vertexSoup1,
                                     foundIndices                    = foundIndices1,
                                     uniqueIndices                   = uniqueIndices1,
                                     planeIndexOffsets               = planeIndexOffsets1
@@ -354,9 +353,9 @@ namespace Chisel.Core
                                         brushIndex1                 = brushNodeIndex0,
                                         intersection                = intersectionAsset,
                                         intersectionSurfaceIndex    = 1,
-                                        srcVertices                 = vertexSoup1.AsReader().vertices,
-                                        uniqueIndices               = uniqueIndices1,
-                                        planeIndexOffsets           = planeIndexOffsets1,
+                                        srcVertices                 = vertexSoup1,
+                                        uniqueIndices               = uniqueIndices1.AsDeferredJobArray(),
+                                        planeIndexOffsets           = planeIndexOffsets1.AsDeferredJobArray(),
                                         outputSurfaces              = outputSurfaces.AsParallelWriter(),
                                     };
                                     createLoopsJob1.Run(planeIndexOffsets1.Length);
@@ -526,8 +525,8 @@ namespace Chisel.Core
                             var intersectionJob2 = new FindLoopVertexOverlapsJob
                             {
                                 selfPlanes  = intersectionData.GetPlanes(intersectionSurface.segment),
+                                vertices    = vertexSoup,
                                 otherEdges  = basePolygonEdges,
-                                vertices    = vertexSoup.AsReader().vertices,
                                 edges       = intersectionSurface.edges
                             };
                             intersectionJob2.Run();

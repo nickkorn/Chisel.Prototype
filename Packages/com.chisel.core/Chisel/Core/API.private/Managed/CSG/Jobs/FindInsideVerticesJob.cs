@@ -256,7 +256,7 @@ namespace Chisel.Core
     }
     
     [BurstCompile(Debug = false)]
-    unsafe struct InsertInsideVerticesJob : IJobParallelFor
+    unsafe struct InsertInsideVerticesJob : IJob
     {
         const float kPlaneDistanceEpsilon = CSGManagerPerformCSG.kPlaneDistanceEpsilon;
 
@@ -264,33 +264,35 @@ namespace Chisel.Core
         [ReadOnly] public BlobAssetReference<BrushPairIntersection> intersection;
         [ReadOnly] public int                   intersectionPlaneIndex;
 
-        public VertexSoup                       brushVertices;
+        [WriteOnly] public VertexSoup                                       brushVertices;
+        [WriteOnly] public NativeList<PlaneVertexIndexPair>.ParallelWriter  outputIndices;
 
-        [WriteOnly] public NativeList<PlaneVertexIndexPair>.ParallelWriter outputIndices;
 
-
-        public void Execute(int index) 
+        public void Execute() 
         {
             ref var intersectingPlaneIndices    = ref intersection.Value.brushes[intersectionPlaneIndex].localSpacePlaneIndices0;
             ref var intersectingPlanes          = ref intersection.Value.brushes[intersectionPlaneIndex].localSpacePlanes0;
 
-            //for (int index = 0; index < vertexReader.Length; index++)
-            {
-                var localVertex1    = vertexReader[index].localVertex1;
-                var worldVertex     = vertexReader[index].worldVertex;
-
-                var worldVertexIndex = -1;
-                // TODO: optimize this, we already know these vertices are ON the planes of this brush, just not which: this can be precalculated
-                for (int i = 0; i < intersectingPlaneIndices.Length; i++)
+            for (int index=0;index< vertexReader.Length;index++)
+            { 
+                //for (int index = 0; index < vertexReader.Length; index++)
                 {
-                    // only use a plane when the vertex is ON it
-                    var distance = math.dot(intersectingPlanes[i], localVertex1);
-                    if (distance >= -kPlaneDistanceEpsilon && distance <= kPlaneDistanceEpsilon) // Note: this is false on NaN/Infinity, so don't invert
+                    var localVertex1    = vertexReader[index].localVertex1;
+                    var worldVertex     = vertexReader[index].worldVertex;
+
+                    var worldVertexIndex = -1;
+                    // TODO: optimize this, we already know these vertices are ON the planes of this brush, just not which: this can be precalculated
+                    for (int i = 0; i < intersectingPlaneIndices.Length; i++)
                     {
-                        var planeIndex = intersectingPlaneIndices[i];
-                        if (worldVertexIndex == -1)
-                            worldVertexIndex = brushVertices.AddNoResize(worldVertex.xyz);
-                        outputIndices.AddNoResize(new PlaneVertexIndexPair() { planeIndex = (ushort)planeIndex, vertexIndex = (ushort)worldVertexIndex });
+                        // only use a plane when the vertex is ON it
+                        var distance = math.dot(intersectingPlanes[i], localVertex1);
+                        if (distance >= -kPlaneDistanceEpsilon && distance <= kPlaneDistanceEpsilon) // Note: this is false on NaN/Infinity, so don't invert
+                        {
+                            var planeIndex = intersectingPlaneIndices[i];
+                            if (worldVertexIndex == -1)
+                                worldVertexIndex = brushVertices.AddNoResize(worldVertex.xyz);
+                            outputIndices.AddNoResize(new PlaneVertexIndexPair() { planeIndex = (ushort)planeIndex, vertexIndex = (ushort)worldVertexIndex });
+                        }
                     }
                 }
             }

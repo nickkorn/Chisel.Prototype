@@ -43,5 +43,12 @@ namespace Chisel.Core
                 UnsafeUtility.MemCpy(blobBuilderArray.GetUnsafePtr(), data, blobBuilderArray.Length * sizeof(T));
             return blobBuilderArray;
         }
+        public static unsafe BlobBuilderArray<T> Construct<T>(this BlobBuilder builder, ref BlobArray<T> blobArray, VertexSoup data) where T : unmanaged
+        {
+            var blobBuilderArray = builder.Allocate(ref blobArray, data.Length);
+            if (data.Length > 0)
+                UnsafeUtility.MemCpy(blobBuilderArray.GetUnsafePtr(), data.GetUnsafeReadOnlyPtr(), blobBuilderArray.Length * sizeof(T));
+            return blobBuilderArray;
+        }
     }
 }
