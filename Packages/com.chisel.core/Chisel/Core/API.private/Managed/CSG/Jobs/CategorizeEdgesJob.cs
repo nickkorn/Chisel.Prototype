@@ -90,7 +90,7 @@ namespace Chisel.Core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static EdgeCategory CategorizeEdge(Edge edge, in NativeList<float4> planes, in NativeList<Edge> edges, in LoopSegment segment, in NativeList<float3> vertices)
+        public static EdgeCategory CategorizeEdge(Edge edge, in NativeList<float4> planes, in NativeList<Edge> edges, in LoopSegment segment, in NativeArray<float3> vertices)
         {
             // TODO: use something more clever than looping through all edges
             if (IndexOf(edges, segment.edgeOffset, segment.edgeLength, edge, out bool inverted) != -1)
@@ -102,7 +102,7 @@ namespace Chisel.Core
             return EdgeCategory.Inside;
         }
 
-        internal static EdgeCategory CategorizeEdge(Edge edge, ref BlobArray<float4> planes, in NativeList<Edge> edges, in NativeList<float3> vertices)
+        internal static EdgeCategory CategorizeEdge(Edge edge, ref BlobArray<float4> planes, in NativeList<Edge> edges, in NativeArray<float3> vertices)
         {
             // TODO: use something more clever than looping through all edges
             if (IndexOf(edges, edge, out bool inverted) != -1)
@@ -143,7 +143,7 @@ namespace Chisel.Core
     {
         [ReadOnly] public int                       segmentIndex;
 
-        [ReadOnly] public NativeList<float3>        vertices;
+        [ReadOnly] public NativeArray<float3>       vertices;
         [ReadOnly] public NativeList<Edge>          allEdges;
         [ReadOnly] public NativeList<float4>        allWorldPlanes;
         [ReadOnly] public NativeList<LoopSegment>   allSegments;       
@@ -188,7 +188,7 @@ namespace Chisel.Core
     {
         [ReadOnly] public int segmentCount;
 
-        [ReadOnly] public NativeList<float3>        vertices;
+        [ReadOnly] public NativeArray<float3>       vertices;
         [ReadOnly] public NativeList<Edge>          allEdges;
         [ReadOnly] public NativeList<float4>        allWorldPlanes;
         [ReadOnly] public NativeList<LoopSegment>   allSegments;
@@ -243,7 +243,7 @@ namespace Chisel.Core
     [BurstCompile(Debug = false)]
     unsafe struct IntersectEdgesJob : IJob
     {
-        [ReadOnly] public NativeList<float3>        vertices;
+        [ReadOnly] public NativeArray<float3>       vertices;
         [ReadOnly] public NativeList<Edge>          edges1;
         [ReadOnly] public NativeList<Edge>          edges2;
         [ReadOnly] public BlobAssetReference<BrushWorldPlanes> worldPlanes1;

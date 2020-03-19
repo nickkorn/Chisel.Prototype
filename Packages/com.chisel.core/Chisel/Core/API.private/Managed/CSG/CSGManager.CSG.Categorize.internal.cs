@@ -31,7 +31,7 @@ namespace Chisel.Core
         //*
         internal static void Dump(System.Text.StringBuilder builder, Loop categorized_loop, in VertexSoup soup, Quaternion rotation)
         {
-            var vertices = soup.vertices;
+            var vertices = soup.AsReader().vertices;
             //builder.AppendLine($"loop ({categorized_loop.indices.Count}):");
             //builder.AppendLine($"loop {categorized_loop.loopIndex}:");
             /*
@@ -111,7 +111,7 @@ namespace Chisel.Core
             var result = OperationResult.Fail;
             var intersectEdgesJob = new IntersectEdgesJob()
             {
-                vertices        = brushVertices.vertices,
+                vertices        = brushVertices.AsReader().vertices,
                 edges1          = intersectionLoop.edges,
                 edges2          = surfaceLoop.edges,
                 worldPlanes1    = ChiselLookup.Value.brushWorldPlanes[intersectionLoop.info.brushNodeIndex],
@@ -329,7 +329,7 @@ namespace Chisel.Core
                         {
                             var subtractEdgesJob = new SubtractEdgesJob()
                             {
-                                vertices            = brushVertices.vertices,
+                                vertices            = brushVertices.AsReader().vertices,
                                 segmentIndex        = holes.Count,
                                 destroyedEdges      = destroyedEdges,
                                 allWorldPlanes      = allWorldPlanes,
@@ -344,7 +344,7 @@ namespace Chisel.Core
                         {
                             var mergeEdgesJob = new MergeEdgesJob()
                             {
-                                vertices            = brushVertices.vertices,
+                                vertices            = brushVertices.AsReader().vertices,
                                 segmentCount        = holes.Count,
                                 destroyedEdges      = destroyedEdges,
                                 allWorldPlanes      = allWorldPlanes,
@@ -408,7 +408,7 @@ namespace Chisel.Core
             // Newell's algorithm to create a plane for concave polygons.
             // NOTE: doesn't work well for self-intersecting polygons
             var normal = Vector3.zero;
-            var vertices = soup.vertices;
+            var vertices = soup.AsReader().vertices;
             for (int n = 0; n < loop.edges.Length; n++)
             {
                 var edge = loop.edges[n];

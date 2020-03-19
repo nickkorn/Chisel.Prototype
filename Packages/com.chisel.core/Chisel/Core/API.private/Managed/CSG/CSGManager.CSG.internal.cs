@@ -109,8 +109,8 @@ namespace Chisel.Core
 
                         using (var outputSurfaces = new NativeHashMap<BrushSurfacePair, BlobAssetReference<BrushIntersectionLoop>>(65500, Allocator.TempJob))
                         {
-                            Profiler.BeginSample("FindAllIntersectionLoops"); try {         CSGManagerPerformCSG.FindAllIntersectionLoops(ref chiselLookupValues, treeBrushesArray, brushMeshLookup, outputSurfaces); } finally { Profiler.EndSample(); }
-                            Profiler.BeginSample("FindLoopOverlapIntersections"); try {     CSGManagerPerformCSG.FindLoopOverlapIntersections(ref chiselLookupValues, outputSurfaces, treeBrushesArray, brushMeshInstanceIDs); } finally { Profiler.EndSample(); }
+                            Profiler.BeginSample("FindAllIntersectionLoops"); try {     CSGManagerPerformCSG.FindAllIntersectionLoops(ref chiselLookupValues, treeBrushesArray, brushMeshLookup, outputSurfaces); } finally { Profiler.EndSample(); }
+                            Profiler.BeginSample("FindLoopOverlapIntersections"); try { CSGManagerPerformCSG.FindLoopOverlapIntersections(ref chiselLookupValues, outputSurfaces, treeBrushesArray, brushMeshInstanceIDs); } finally { Profiler.EndSample(); }
                         }
 
                         // TODO: use the above data to perform CSG

@@ -199,7 +199,7 @@ namespace Chisel.Core
     [BurstCompile(Debug = false)]
     unsafe struct InsertIntersectionVerticesJob : IJobParallelFor
     {
-        [ReadOnly] public NativeList<VertexAndPlanePair> vertexReader;
+        [ReadOnly] public NativeArray<VertexAndPlanePair> vertexReader;
         [ReadOnly] public BlobAssetReference<BrushPairIntersection> intersection;
         [ReadOnly] public int intersectionPlaneIndex0;
         
@@ -230,16 +230,18 @@ namespace Chisel.Core
     [BurstCompile(Debug = false)]
     unsafe struct SortLoopsJob : IJob
     {
-        [ReadOnly] public BlobAssetReference<BrushWorldPlanes> brushWorldPlanes;
+        [ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushWorldPlanes>> allBrushWorldPlanes;
+        [ReadOnly] public BlobAssetReference<BrushPairIntersection> intersection;
+        [ReadOnly] public int                       brushNodeIndex;
         [ReadOnly] public NativeList<float3>        vertexSoup;
 
         // Cannot be ReadOnly because we sort it
         //[ReadOnly] 
-        public NativeList<PlaneVertexIndexPair>                 foundIndices;
+        public NativeList<PlaneVertexIndexPair>     foundIndices;
 
         // Cannot be WriteOnly because we sort segments after we insert them
         //[WriteOnly]
-        public NativeList<ushort>                               uniqueIndices;
+        public NativeList<ushort>                   uniqueIndices;
         //[WriteOnly]
         public NativeList<PlaneIndexOffsetLength>   planeIndexOffsets;
 
@@ -361,6 +363,7 @@ namespace Chisel.Core
 
         public void Execute()
         {
+            BlobAssetReference<BrushWorldPlanes> brushWorldPlanes = allBrushWorldPlanes[intersection.Value.brushes[brushNodeIndex].brushNodeIndex];
             for (int i = 0; i < foundIndices.Length - 1; i++)
             {
                 for (int j = i + 1; j < foundIndices.Length; j++)

@@ -59,8 +59,9 @@ namespace Chisel.Core
         {            
             ref var vertices = ref brushIntersectionLoop.Value.loopVertices;
             var srcIndices = new ushort[vertices.Length];
+            vertexSoup.Reserve(srcIndices.Length);
             for (int j = 0; j < srcIndices.Length; j++)
-                srcIndices[j] = vertexSoup.Add(vertices[j]);
+                srcIndices[j] = vertexSoup.AddNoResize(vertices[j]);
 
             var surfaceInfo = brushIntersectionLoop.Value.surfaceInfo;
             {

@@ -353,7 +353,7 @@ namespace Chisel.Core
             ref var root = ref builder.ConstructRoot<BasePolygonsBlob>();
             builder.Construct(ref root.surfaces, surfaces);
             builder.Construct(ref root.edges, edges);
-            builder.Construct(ref root.vertices, vertexSoup.vertices);
+            builder.Construct(ref root.vertices, vertexSoup.AsReader().vertices);
             root.bounds = new AABB() { min = min, max = max };
             var result = builder.CreateBlobAssetReference<BasePolygonsBlob>(Allocator.Persistent);
             builder.Dispose();

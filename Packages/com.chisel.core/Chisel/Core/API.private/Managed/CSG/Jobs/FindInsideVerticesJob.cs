@@ -260,7 +260,7 @@ namespace Chisel.Core
     {
         const float kPlaneDistanceEpsilon = CSGManagerPerformCSG.kPlaneDistanceEpsilon;
 
-        [ReadOnly] public NativeList<LocalWorldPair>                vertexReader;
+        [ReadOnly] public NativeArray<LocalWorldPair>               vertexReader;
         [ReadOnly] public BlobAssetReference<BrushPairIntersection> intersection;
         [ReadOnly] public int                   intersectionPlaneIndex;
 

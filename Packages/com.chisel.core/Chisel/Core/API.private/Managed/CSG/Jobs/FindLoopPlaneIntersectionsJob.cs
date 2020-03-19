@@ -53,6 +53,7 @@ namespace Chisel.Core
 
                     vertexSoup.Reserve(otherPlaneCount); // ensure we have at least this many extra vertices in capacity
 
+                    var vertices = vertexSoup.AsReader().vertices;
 
                     // TODO: Optimize the hell out of this
                     for (int e = 0; e < inputEdgesLength; e++)
@@ -60,8 +61,8 @@ namespace Chisel.Core
                         var vertexIndex0 = inputEdges[e].index1;
                         var vertexIndex1 = inputEdges[e].index2;
 
-                        var vertex0 = vertexSoup.vertices[vertexIndex0];
-                        var vertex1 = vertexSoup.vertices[vertexIndex1];
+                        var vertex0 = vertices[vertexIndex0];
+                        var vertex1 = vertices[vertexIndex1];
 
                         var vertex0w = new float4(vertex0, 1);
                         var vertex1w = new float4(vertex1, 1);
@@ -147,12 +148,12 @@ namespace Chisel.Core
                         if (foundVertices > 0)
                         {
                             var tempVertexIndex0 = tempVertices[1];
-                            var tempVertex0 = vertexSoup.vertices[tempVertexIndex0];
+                            var tempVertex0 = vertices[tempVertexIndex0];
                             var tempVertexIndex1 = tempVertexIndex0;
                             if (foundVertices == 2)
                             {
                                 tempVertexIndex1 = tempVertices[2];
-                                var tempVertex1 = vertexSoup.vertices[tempVertexIndex1];
+                                var tempVertex1 = vertices[tempVertexIndex1];
                                 var dot0 = math.lengthsq(tempVertex0 - vertex1);
                                 var dot1 = math.lengthsq(tempVertex1 - vertex1);
                                 if (dot0 < dot1)

@@ -31,7 +31,7 @@ namespace Chisel.Core
             if (edges.Length < 3)
                 return true;
 
-            var vertices = soup.vertices;
+            var vertices = soup.AsReader().vertices;
             for (int i = 0; i < edges.Length; i++)
             {
                 var vertexIndex1 = edges[i].index1;
