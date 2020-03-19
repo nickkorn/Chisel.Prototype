@@ -60,11 +60,6 @@ namespace Chisel.Core
             }
             return false;
         }
-
-
-        #region GenerateBasePolygons
-
-        #endregion
     }
 #endif
 }

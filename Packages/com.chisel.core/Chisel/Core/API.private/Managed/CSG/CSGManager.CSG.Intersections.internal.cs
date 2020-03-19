@@ -78,7 +78,7 @@ namespace Chisel.Core
         // Create unique loops between brush intersections
         internal unsafe static void FindAllIntersectionLoops(NativeArray<int> treeBrushes, NativeHashMap<int, BlobAssetReference<BrushMeshBlob>> brushMeshLookup)
         {
-            // TODO: get rid of this, create blobasset as an output
+            // TODO: get rid of this somehow
             for (int b = 0; b < treeBrushes.Length; b++)
             {
                 var brushNodeID = treeBrushes[b];
@@ -123,7 +123,7 @@ namespace Chisel.Core
 
                     // chain each subsection together, then chain subsections together
                     //var handleDep = new JobHandle();
-                            
+
                     // TODO: allocate per intersection, perform all calculations/sorts, THEN create ALL surface-loops and assign indices
                     using (var planeIndexOffsets0       = new NativeList<PlaneIndexOffsetLength>(intersection.Value.brushes[0].surfaceInfos.Length, Allocator.TempJob))
                     using (var planeIndexOffsets1       = new NativeList<PlaneIndexOffsetLength>(intersection.Value.brushes[1].surfaceInfos.Length, Allocator.TempJob))
@@ -297,11 +297,9 @@ namespace Chisel.Core
                 foreach (var intersection in intersectingBrushes)
                     intersection.Dispose();
 
-                // TODO: store somewhere else instead
-
+                // TODO: get rid of this, create blobassets as output
                 using (var outputSurfaceKeys = outputSurfaces.GetKeyArray(Allocator.Temp))
                 {
-                    // TODO: get rid of this, create blobasset as an output
                     for (int b = 0; b < treeBrushes.Length; b++)
                     {
                         var brushNodeID = treeBrushes[b];

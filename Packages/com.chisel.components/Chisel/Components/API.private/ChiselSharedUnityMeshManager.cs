@@ -176,6 +176,7 @@ namespace Chisel.Components
 
         public bool RetrieveUnityMesh(ChiselModel model, GeneratedMeshDescription meshDescription, UnityEngine.Mesh sharedMesh)
         {
+            Debug.Log($"{model.name} {meshDescription.meshQuery.LayerQuery} {meshDescription.meshQuery.UsedVertexChannels}");
             // Retrieve the generatedMesh, and store it in the Unity Mesh
             model.generatedMeshContents = model.Node.GetGeneratedMesh(meshDescription, model.generatedMeshContents);
             if (model.generatedMeshContents == null)

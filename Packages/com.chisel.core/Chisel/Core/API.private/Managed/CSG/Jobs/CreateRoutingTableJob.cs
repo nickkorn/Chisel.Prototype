@@ -272,8 +272,8 @@ namespace Chisel.Core
 
             var firstNode   = rightStack[0].nodeIndex;
 
-            var sCombineUsedIndices = new NativeArray<byte>(leftStack.Length + (CategoryRoutingRow.Length * rightStack.Length), Allocator.Temp);
-            var sCombineIndexRemap  = new NativeArray<int>(leftStack.Length + (CategoryRoutingRow.Length * rightStack.Length), Allocator.Temp);
+            var combineUsedIndices  = new NativeArray<byte>(leftStack.Length + (CategoryRoutingRow.Length * rightStack.Length), Allocator.Temp);
+            var combineIndexRemap   = new NativeArray<int>(leftStack.Length + (CategoryRoutingRow.Length * rightStack.Length), Allocator.Temp);
             var routingSteps        = new NativeList<int>(rightStack.Length, Allocator.Temp);
             {
 
@@ -306,14 +306,14 @@ namespace Chisel.Core
                 for (int p = prevNodeIndex; p < startNodeIndex; p++)
                 {
                     for (int t = 0; t < CategoryRoutingRow.Length; t++)
-                        sCombineUsedIndices[(int)leftStack[p].routingRow[t]] = 1;
+                        combineUsedIndices[(int)leftStack[p].routingRow[t]] = 1;
                 }
                 if (startNodeIndex == 0)
                 {
-                    sCombineUsedIndices[0] = 1;
-                    sCombineUsedIndices[1] = 1;
-                    sCombineUsedIndices[2] = 1;
-                    sCombineUsedIndices[3] = 1;
+                    combineUsedIndices[0] = 1;
+                    combineUsedIndices[1] = 1;
+                    combineUsedIndices[2] = 1;
+                    combineUsedIndices[3] = 1;
                 }
 
 #if HAVE_SELF_CATEGORIES
@@ -332,9 +332,9 @@ namespace Chisel.Core
                     if (rightNode != rightStack[r].nodeIndex)
                     {
 #if USE_OPTIMIZATIONS
-                        if (prevNodeIndex >= 0 && haveRemap && sCombineIndexRemap.Length > 0)
+                        if (prevNodeIndex >= 0 && haveRemap && combineIndexRemap.Length > 0)
                         {
-                            RemapIndices(leftStack, sCombineIndexRemap, prevNodeIndex, startNodeIndex);
+                            RemapIndices(leftStack, combineIndexRemap, prevNodeIndex, startNodeIndex);
 #if SHOW_DEBUG_MESSAGES
                             if (processedNodeIndex + 1 == kDebugNode || kDebugNode == -1)
                                 Dump(sCombineChildren.ToArray(), 0);
@@ -349,13 +349,13 @@ namespace Chisel.Core
                         //sCombineIndexRemap = null;
                         //sCombineIndexRemap.Clear();
 
-                        sCombineUsedIndices.ClearValues();
+                        combineUsedIndices.ClearValues();
                         for (int p = prevNodeIndex; p < startNodeIndex; p++)
                         {
                             for (int t = 0; t < CategoryRoutingRow.Length; t++)
-                                sCombineUsedIndices[(int)leftStack[p].routingRow[t]] = 1;
+                                combineUsedIndices[(int)leftStack[p].routingRow[t]] = 1;
                         }
-                        sCombineIndexRemap.ClearValues();
+                        combineIndexRemap.ClearValues();
                     }
 
                     var leftKeepContents = leftStack[prevNodeIndex].operation == CSGOperationType.Copy;
@@ -386,8 +386,8 @@ namespace Chisel.Core
 
                                 int foundIndex = -1;
 #if USE_OPTIMIZATIONS
-                                if (vIndex < sCombineUsedIndices.Length &&
-                                    sCombineUsedIndices[vIndex] == 1)
+                                if (vIndex < combineUsedIndices.Length &&
+                                    combineUsedIndices[vIndex] == 1)
 #endif
                                 {
 #if USE_OPTIMIZATIONS
@@ -416,7 +416,7 @@ namespace Chisel.Core
                                 }
 
                                 haveRemap = true;
-                                sCombineIndexRemap[vIndex] = foundIndex + 1;
+                                combineIndexRemap[vIndex] = foundIndex + 1;
                                 vIndex++;
                                 ncount++;
                             }
@@ -449,8 +449,8 @@ namespace Chisel.Core
 
                                 int foundIndex = -1;
 #if USE_OPTIMIZATIONS
-                                if (vIndex < sCombineUsedIndices.Length &&
-                                    sCombineUsedIndices[vIndex] == 1)
+                                if (vIndex < combineUsedIndices.Length &&
+                                    combineUsedIndices[vIndex] == 1)
 #endif
                                 {
 #if USE_OPTIMIZATIONS
@@ -479,7 +479,7 @@ namespace Chisel.Core
                                 }
 
                                 haveRemap = true;
-                                sCombineIndexRemap[vIndex] = foundIndex + 1;
+                                combineIndexRemap[vIndex] = foundIndex + 1;
                                 vIndex++;
                                 ncount++;
                             }
@@ -497,15 +497,15 @@ namespace Chisel.Core
 
 #if USE_OPTIMIZATIONS
                 if (//nodeIndex > 1 && 
-                    prevNodeIndex >= 0 && haveRemap && sCombineIndexRemap.Length > 0)
+                    prevNodeIndex >= 0 && haveRemap && combineIndexRemap.Length > 0)
                 {
-                    RemapIndices(leftStack, sCombineIndexRemap, prevNodeIndex, startNodeIndex);
+                    RemapIndices(leftStack, combineIndexRemap, prevNodeIndex, startNodeIndex);
 #if SHOW_DEBUG_MESSAGES 
                     if (processedNodeIndex + 1 == kDebugNode || kDebugNode == -1)
                         Dump(sCombineChildren.ToArray(), 0);
 #endif
                     bool allEqual = true;
-                    sCombineIndexRemap.ClearValues();
+                    combineIndexRemap.ClearValues();
                     for (int i = startNodeIndex; i < leftStack.Length; i++)
                     {
                         if (!leftStack[i].routingRow.AreAllTheSame())
@@ -513,12 +513,12 @@ namespace Chisel.Core
                             allEqual = false;
                             break;
                         }
-                        sCombineIndexRemap[(int)leftStack[i].input] = ((int)leftStack[i].routingRow[0]) + 1;
+                        combineIndexRemap[(int)leftStack[i].input] = ((int)leftStack[i].routingRow[0]) + 1;
                     }
                     if (allEqual)
                     {
                         leftStack.RemoveRange(startNodeIndex, leftStack.Length - startNodeIndex);
-                        RemapIndices(leftStack, sCombineIndexRemap, prevNodeIndex, startNodeIndex);
+                        RemapIndices(leftStack, combineIndexRemap, prevNodeIndex, startNodeIndex);
 
 #if SHOW_DEBUG_MESSAGES
                         if (processedNodeIndex + 1 == kDebugNode || kDebugNode == -1)
@@ -542,8 +542,8 @@ namespace Chisel.Core
                     Dump(sCombineChildren.ToArray(), 0);
 #endif
             }
-            sCombineUsedIndices.Dispose();
-            sCombineIndexRemap.Dispose();
+            combineUsedIndices.Dispose();
+            combineIndexRemap.Dispose();
         }
 
 #if SHOW_DEBUG_MESSAGES

@@ -428,7 +428,7 @@ namespace Chisel.Core
                 CombineSubMeshes(treeInfo, meshQueries, vertexChannelMask);
             } finally { UnityEngine.Profiling.Profiler.EndSample(); }
 
-            UnityEngine.Profiling.Profiler.BeginSample("Clean");
+            UnityEngine.Profiling.Profiler.BeginSample("CleanTree");
             try
             {
                 CleanTree(treeNodeID);
