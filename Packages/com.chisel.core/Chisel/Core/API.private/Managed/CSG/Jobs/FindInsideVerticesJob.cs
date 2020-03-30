@@ -228,13 +228,13 @@ namespace Chisel.Core
     }
 
     [BurstCompile(Debug = false)]
-    unsafe struct FindInsideVerticesJob : IJobParallelFor
+    unsafe struct FindInsideVerticesJob : IJob// IJobParallelFor
     { 
         [ReadOnly] public BlobAssetReference<BrushPairIntersection> intersection;
         [ReadOnly] public int                   intersectionPlaneIndex1;
         [ReadOnly] public int                   usedVerticesIndex0;
 
-        [WriteOnly] public NativeList<LocalWorldPair>.ParallelWriter vertexWriter;
+        [WriteOnly] public NativeList<LocalWorldPair> vertexWriter;
 
         public void Execute(int index)
         {
@@ -253,6 +253,15 @@ namespace Chisel.Core
                 vertexWriter.AddNoResize(new LocalWorldPair() { localVertex1 = localVertex1, worldVertex = worldVertex });
             }
         }
+        
+        public void Execute()
+        {
+            ref var usedVertices0 = ref intersection.Value.brushes[usedVerticesIndex0].usedVertices;
+            for (int index = 0; index < usedVertices0.Length; index++)
+            {
+                Execute(index);
+            }
+        }
     }
     
     [BurstCompile(Debug = false)]
@@ -264,8 +273,8 @@ namespace Chisel.Core
         [ReadOnly] public BlobAssetReference<BrushPairIntersection> intersection;
         [ReadOnly] public int                   intersectionPlaneIndex;
 
-        [WriteOnly] public VertexSoup                                       brushVertices;
-        [WriteOnly] public NativeList<PlaneVertexIndexPair>.ParallelWriter  outputIndices;
+        [WriteOnly] public VertexSoup                        brushVertices;
+        [WriteOnly] public NativeList<PlaneVertexIndexPair>  outputIndices;
 
 
         public void Execute() 

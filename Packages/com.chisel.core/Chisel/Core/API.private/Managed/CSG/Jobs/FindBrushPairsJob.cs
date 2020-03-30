@@ -19,18 +19,20 @@ namespace Chisel.Core
     {
         public struct Empty { }
 
+        [ReadOnly] public int maxPairs;
         [ReadOnly] public NativeArray<int>      treeBrushes;
         [ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushesTouchedByBrush>> brushesTouchedByBrushes;
-        [WriteOnly] public NativeHashMap<BrushPair, FindBrushPairsJob.Empty>.ParallelWriter brushPairMap;
-        //[WriteOnly] public NativeList<BrushPair> uniqueBrushPairs;
+        [WriteOnly] public NativeList<BrushPair> uniqueBrushPairs;
 
         public void Execute()
         {
+            var brushPairMap = new NativeHashMap<BrushPair, FindBrushPairsJob.Empty>(maxPairs, Allocator.Temp);
             var empty = new Empty();
             for (int b0 = 0; b0 < treeBrushes.Length; b0++)
             {
-                var brushNodeID0     = treeBrushes[b0];
-                var brushNodeIndex0  = brushNodeID0 - 1;
+                var brushNodeID0            = treeBrushes[b0];
+                var brushNodeIndex0         = brushNodeID0 - 1;
+                //var brushesTouchedByBrush = touchedBrushesByTreeBrushes[b0];
                 if (!brushesTouchedByBrushes.TryGetValue(brushNodeIndex0, out BlobAssetReference<BrushesTouchedByBrush> brushesTouchedByBrush))
                     continue;
                     
@@ -56,10 +58,26 @@ namespace Chisel.Core
 
                     if (brushPairMap.TryAdd(brushPair, empty))
                     {
-                        //uniqueBrushPairs.AddNoResize(brushPair);
+                        uniqueBrushPairs.AddNoResize(brushPair);
                     }
                 }
             }
+            brushPairMap.Dispose();
+        }
+    }
+
+    [BurstCompile]
+    struct DisposeBrushPairsJob : IJobParallelFor
+    {
+        [ReadOnly] public NativeList<BlobAssetReference<BrushPairIntersection>> intersectingBrushes;
+
+        public void Execute(int index)
+        {
+            if (index >= intersectingBrushes.Length ||
+                intersectingBrushes.Length == 0)
+                return;
+
+            intersectingBrushes[index].Dispose();
         }
     }
 
@@ -210,6 +228,9 @@ namespace Chisel.Core
 
         public unsafe void Execute(int index)
         {
+            if (index >= uniqueBrushPairs.Length)
+                return;
+
             var brushPair       = uniqueBrushPairs[index];
             var brushNodeIndex0 = brushPair.brushNodeIndex0;
             var brushNodeIndex1 = brushPair.brushNodeIndex1;

@@ -29,7 +29,7 @@ namespace Chisel.Core
 
 
         //*
-        internal static void Dump(System.Text.StringBuilder builder, Loop categorized_loop, in VertexSoup soup, Quaternion rotation)
+        internal static unsafe void Dump(System.Text.StringBuilder builder, Loop categorized_loop, in VertexSoup soup, Quaternion rotation)
         {
             //builder.AppendLine($"loop ({categorized_loop.indices.Count}):");
             //builder.AppendLine($"loop {categorized_loop.loopIndex}:");
@@ -61,13 +61,14 @@ namespace Chisel.Core
             builder.AppendLine("             ");
             */
 
+            var vertices = soup.GetUnsafeReadOnlyPtr();
             for (int i = 0; i < categorized_loop.edges.Length; i++)
             {
                 var edge = categorized_loop.edges[i];
                 var index1 = edge.index1;
                 var index2 = edge.index2;
-                var vertex1 = ((float3)(rotation * soup[index1])).xy;
-                var vertex2 = ((float3)(rotation * soup[index2])).xy;
+                var vertex1 = ((float3)(rotation * vertices[index1])).xy;
+                var vertex2 = ((float3)(rotation * vertices[index2])).xy;
 
                 builder.Append($"({Convert.ToString((Decimal)vertex1.x, CultureInfo.InvariantCulture)}, {Convert.ToString((Decimal)vertex1.y, CultureInfo.InvariantCulture)}), ");
                 builder.AppendLine($"({Convert.ToString((Decimal)vertex2.x, CultureInfo.InvariantCulture)}, {Convert.ToString((Decimal)vertex2.y, CultureInfo.InvariantCulture)})             ");
@@ -402,16 +403,17 @@ namespace Chisel.Core
         }
 
         
-        static float3 CalculatePlaneEdges(in Loop loop, in VertexSoup soup)
+        static unsafe float3 CalculatePlaneEdges(in Loop loop, in VertexSoup soup)
         {
             // Newell's algorithm to create a plane for concave polygons.
             // NOTE: doesn't work well for self-intersecting polygons
             var normal = Vector3.zero;
+            var vertices = soup.GetUnsafeReadOnlyPtr();
             for (int n = 0; n < loop.edges.Length; n++)
             {
                 var edge = loop.edges[n];
-                var prevVertex = soup[edge.index1];
-                var currVertex = soup[edge.index2];
+                var prevVertex = vertices[edge.index1];
+                var currVertex = vertices[edge.index2];
                 normal.x = normal.x + ((prevVertex.y - currVertex.y) * (prevVertex.z + currVertex.z));
                 normal.y = normal.y + ((prevVertex.z - currVertex.z) * (prevVertex.x + currVertex.x));
                 normal.z = normal.z + ((prevVertex.x - currVertex.x) * (prevVertex.y + currVertex.y));

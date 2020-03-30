@@ -22,7 +22,7 @@ namespace Chisel.Core
 
         // Add [NativeDisableContainerSafetyRestriction] when done, for performance
         [ReadOnly] public NativeArray<float4>   selfPlanes;
-        [ReadOnly] public VertexSoup            vertices;
+        [ReadOnly] public VertexSoup            vertexSoup;
         [ReadOnly] public NativeList<Edge>      otherEdges;
         public NativeList<Edge>                 edges;
 
@@ -34,8 +34,9 @@ namespace Chisel.Core
 
             var otherVerticesLength = 0;
             var otherVertices       = (ushort*)UnsafeUtility.Malloc(otherEdges.Length * sizeof(ushort), 4, Allocator.TempJob);
-             
+
             // TODO: use edges instead + 2 planes intersecting each edge
+            var vertices = vertexSoup.GetUnsafeReadOnlyPtr();
             for (int v = 0; v < otherEdges.Length; v++)
             {
                 var vertexIndex = otherEdges[v].index1; // <- assumes no gaps

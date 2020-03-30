@@ -303,7 +303,7 @@ namespace Chisel.Core
                 
                 float4 worldPlane = float4.zero;
                 // THEORY: can end up with duplicate vertices when close enough vertices are snapped together
-                var copyPolygonToIndicesJob = new CopyPolygonToIndicesJob
+                var copyPolygonToIndicesJob = new CopyPolygonToIndicesJob // TODO: we're reading AND writing to the same NativeList!?!?!
                 {
                     mesh                                    = mesh,
                     polygonIndex                            = p,

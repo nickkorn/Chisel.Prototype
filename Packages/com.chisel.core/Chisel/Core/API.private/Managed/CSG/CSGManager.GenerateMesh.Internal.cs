@@ -577,7 +577,7 @@ namespace Chisel.Core
         
 
         static readonly Poly2Tri.DTSweep context = new Poly2Tri.DTSweep();
-        internal static void GenerateSurfaceRenderBuffers(int                   brushNodeID, 
+        internal static unsafe void GenerateSurfaceRenderBuffers(int                   brushNodeID, 
                                                           //SurfaceLoops        loopList, 
                                                           MeshQuery[]           meshQueries,
                                                           VertexChannelFlags    vertexChannelMask)
@@ -733,8 +733,9 @@ namespace Chisel.Core
 
                 // TODO: only use the vertices that we found in the indices (we're using too many vertices!)
                 float3[] surfaceVertices = new float3[brushVertices.Length];
+                var vertices = brushVertices.GetUnsafeReadOnlyPtr();
                 for (int v = 0; v < brushVertices.Length; v++)
-                    surfaceVertices[v] = brushVertices[v];
+                    surfaceVertices[v] = vertices[v];
 
                 var vertexHash	    = (ulong)Hashing.ComputeHashKey(surfaceVertices);
                 var indicesHash	    = (ulong)Hashing.ComputeHashKey(surfaceIndices);

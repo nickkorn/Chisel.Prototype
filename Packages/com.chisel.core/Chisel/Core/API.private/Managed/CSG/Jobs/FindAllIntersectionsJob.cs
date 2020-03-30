@@ -108,7 +108,6 @@ namespace Chisel.Core
         [ReadOnly] public NativeHashMap<int, BlobAssetReference<NodeTransformations>> transformations;
         [ReadOnly] public NativeHashMap<int, BlobAssetReference<BasePolygonsBlob>> basePolygons;// only need bounds
         
-        //[WriteOnly] public NativeStream.Writer output;
         [WriteOnly] public NativeMultiHashMap<int, BrushPair>.ParallelWriter output;
 
         static void TransformOtherIntoBrushSpace(ref float4x4 treeToBrushSpaceMatrix, ref float4x4 brushToTreeSpaceMatrix, ref BlobArray<float4> srcPlanes, float4* dstPlanes)

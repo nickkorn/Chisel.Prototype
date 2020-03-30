@@ -51,6 +51,9 @@ namespace Chisel.Core
                 new int3(+1,  0, -1), new int3(+1,  0,  0), new int3(+1,  0, +1),                
                 new int3(+1, +1, -1), new int3(+1, +1,  0), new int3(+1, +1, +1)
             };
+
+            float3* verticesPtr = (float3*)vertices->Ptr;
+
             for (int i = 0; i < 3 * 3 * 3; i++)
             {
                 var index = centerIndex + offsets[i];
@@ -60,12 +63,11 @@ namespace Chisel.Core
                     float closestDistance = CSGManagerPerformCSG.kSqrMergeEpsilon;
                     while (chainIndex != -1)
                     {
-                        var element         = UnsafeUtility.ReadArrayElement<VertexSoup.ChainedIndex>(chainedIndices->Ptr, chainIndex);
-                        var nextChainIndex  = ((int)element.nextChainIndex) -1;
-                        var sqrDistance     = math.lengthsq(element.vertex - vertex);
+                        var nextChainIndex  = ((int)UnsafeUtility.ReadArrayElement<ushort> (chainedIndices->Ptr, chainIndex)) - 1;
+                        var sqrDistance     = math.lengthsq(verticesPtr[chainIndex] - vertex);
                         if (sqrDistance < closestDistance)
                         {
-                            closestVertexIndex = element.vertexIndex;
+                            closestVertexIndex = (ushort)chainIndex;
                             closestDistance = sqrDistance;
                         }
                         chainIndex = nextChainIndex;
@@ -77,16 +79,14 @@ namespace Chisel.Core
 
             // Add Unique vertex
             {
-                var vertexIndex = (ushort)vertices->Length;
                 vertices->AddNoResize(vertex);
 
                 var hashCode        = GetHash(centerIndex);
                 var prevChainIndex  = hashTable[hashCode];
                 var newChainIndex   = chainedIndices->Length;
-                var newChainedIndex = new VertexSoup.ChainedIndex() { vertexIndex = vertexIndex, nextChainIndex = (ushort)prevChainIndex, vertex = vertex };
-                chainedIndices->AddNoResize(newChainedIndex);
+                chainedIndices->AddNoResize((ushort)prevChainIndex);
                 hashTable[(int)hashCode] = (ushort)(newChainIndex + 1);
-                return vertexIndex;
+                return (ushort)newChainIndex;
             }
         }
     }
@@ -97,6 +97,10 @@ namespace Chisel.Core
     [NativeContainer]
     public unsafe struct VertexSoup : IDisposable
     {
+        public const int        kMaxVertexCount = 65000;
+        internal const uint     kHashTableSize  = 509u;
+        internal const float    kCellSize       = CSGManagerPerformCSG.kDistanceEpsilon * 2;
+
 #if ENABLE_UNITY_COLLECTIONS_CHECKS
         internal AtomicSafetyHandle m_Safety;
 
@@ -107,83 +111,12 @@ namespace Chisel.Core
         [NativeDisableUnsafePtrRestriction] internal UnsafeList*    m_ChainedIndices;
         [NativeDisableUnsafePtrRestriction] internal void*          m_HashTable;
 
-        public const int        kMaxVertexCount = 65000;
-        internal const uint     kHashTableSize  = 509u;
-        internal const float    kCellSize       = CSGManagerPerformCSG.kDistanceEpsilon * 2;
-
-        internal struct ChainedIndex
-        {
-            public ushort   vertexIndex;
-            public ushort   nextChainIndex;
-            public float3   vertex;
-        }
-
         // Keep track of where the memory for this was allocated
         Allocator m_AllocatorLabel;
 
-        [Conditional("ENABLE_UNITY_COLLECTIONS_CHECKS")]
-        private static void CheckIndexInRange(int value, int length)
-        {
-            if (value < 0)
-                throw new IndexOutOfRangeException($"Value {value} must be positive.");
+        public bool IsCreated => m_Vertices != null && m_ChainedIndices != null && m_ChainedIndices != null;
 
-            if ((uint)value >= (uint)length)
-                throw new IndexOutOfRangeException($"Value {value} is out of range in NativeList of '{length}' Length.");
-        }
-
-        /// <summary>
-        /// Retrieve a member of the contaner by index.
-        /// </summary>
-        /// <param name="index">The zero-based index into the list.</param>
-        /// <value>The list item at the specified index.</value>
-        /// <exception cref="IndexOutOfRangeException">Thrown if index is negative or >= to <see cref="Length"/>.</exception>
-        public float3 this[int index]
-        {
-            get
-            {
-#if ENABLE_UNITY_COLLECTIONS_CHECKS
-                AtomicSafetyHandle.CheckReadAndThrow(m_Safety);
-                CheckIndexInRange(index, m_Vertices->Length);
-#endif
-                return UnsafeUtility.ReadArrayElement<float3>(m_Vertices->Ptr, index);
-            }
-            set
-            {
-#if ENABLE_UNITY_COLLECTIONS_CHECKS
-                AtomicSafetyHandle.CheckWriteAndThrow(m_Safety);
-                CheckIndexInRange(index, m_Vertices->Length);
-#endif
-                UnsafeUtility.WriteArrayElement(m_Vertices->Ptr, index, value);
-            }
-        }
-
-        public float3* GetUnsafeReadOnlyPtr()
-        {
-            return (float3*)(m_Vertices->Ptr);
-        }
-
-        public int VertexCount
-        {
-            get
-            {
-                return m_Vertices->Length;
-            }
-        }
-
-        /// <summary>
-        /// The current number of items in the list.
-        /// </summary>
-        /// <value>The item count.</value>
-        public int Length
-        {
-            get
-            {
-#if ENABLE_UNITY_COLLECTIONS_CHECKS
-                AtomicSafetyHandle.CheckReadAndThrow(m_Safety);
-#endif
-                return m_Vertices->Length;
-            }
-        }
+        #region Constructors
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public VertexSoup(int minCapacity, Allocator allocator = Allocator.Persistent)
@@ -203,14 +136,7 @@ namespace Chisel.Core
             UnsafeUtility.MemClear(m_HashTable, hashTableMemSize);
 
             m_Vertices          = UnsafeList.Create(UnsafeUtility.SizeOf<float3>(), UnsafeUtility.AlignOf<float3>(), vertexCapacity, allocator);
-            m_ChainedIndices    = UnsafeList.Create(UnsafeUtility.SizeOf<ChainedIndex>(), UnsafeUtility.AlignOf<ChainedIndex>(), chainedIndicesCapacity, allocator);
-        }
-
-        [Conditional("ENABLE_UNITY_COLLECTIONS_CHECKS")]
-        private static void CheckAllocated(VertexSoup otherSoup)
-        {
-            if (otherSoup.IsCreated)
-                throw new ArgumentException($"Value {otherSoup} is not allocated.");
+            m_ChainedIndices    = UnsafeList.Create(UnsafeUtility.SizeOf<ushort>(), UnsafeUtility.AlignOf<ushort>(), chainedIndicesCapacity, allocator);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -218,7 +144,7 @@ namespace Chisel.Core
             : this((otherSoup.m_Vertices != null) ? otherSoup.m_Vertices->Length : 1, (otherSoup.m_ChainedIndices != null) ? otherSoup.m_ChainedIndices->Length : 1, allocator)
         {
             CheckAllocated(otherSoup);
-            m_ChainedIndices->AddRangeNoResize<ChainedIndex>(*otherSoup.m_ChainedIndices);
+            m_ChainedIndices->AddRangeNoResize<ushort>(*otherSoup.m_ChainedIndices);
             m_Vertices->AddRangeNoResize<float3>(*otherSoup.m_Vertices);
         }
 
@@ -230,36 +156,19 @@ namespace Chisel.Core
             for (int i = 0; i < uniqueVertices.Length; i++)
             {
                 var vertex = uniqueVertices[i];
-                var vertexIndex = (ushort)m_Vertices->Length;
                 m_Vertices->AddNoResize(vertex);
 
-                var centerIndex = new int3((int)(vertex.x / kCellSize), (int)(vertex.y / kCellSize), (int)(vertex.z / kCellSize));
-                var hashCode = VertexSoupUtility.GetHash(centerIndex);
-                var prevChainIndex = ((ushort*)m_HashTable)[hashCode];
-                var newChainIndex = m_ChainedIndices->Length;
-                var newChainedIndex = new ChainedIndex() { vertexIndex = vertexIndex, nextChainIndex = (ushort)prevChainIndex, vertex = vertex };
-                m_ChainedIndices->AddNoResize(newChainedIndex);
+                var centerIndex     = new int3((int)(vertex.x / kCellSize), (int)(vertex.y / kCellSize), (int)(vertex.z / kCellSize));
+                var hashCode        = VertexSoupUtility.GetHash(centerIndex);
+                var prevChainIndex  = ((ushort*)m_HashTable)[hashCode];
+                var newChainIndex   = m_ChainedIndices->Length;
+                m_ChainedIndices->AddNoResize((ushort)prevChainIndex);
                 ((ushort*)m_HashTable)[(int)hashCode] = (ushort)(newChainIndex + 1);
             }
         }
+        #endregion
 
-        // ensure we have at least this many extra vertices in capacity
-        public void Reserve(int extraIndices)
-        {
-#if ENABLE_UNITY_COLLECTIONS_CHECKS
-            AtomicSafetyHandle.CheckWriteAndThrow(m_Safety);
-#endif
-            var requiredVertices = extraIndices + m_Vertices->Length;
-            if (m_Vertices->Capacity < requiredVertices)
-                m_Vertices->SetCapacity<float3>(requiredVertices);
-
-            var requiredIndices = extraIndices + m_ChainedIndices->Length;
-            if (m_ChainedIndices->Capacity < requiredIndices)
-                m_ChainedIndices->SetCapacity<ChainedIndex>(requiredIndices);
-        }
-
-        public bool IsCreated => m_Vertices != null && m_ChainedIndices != null && m_ChainedIndices != null;
-        
+        #region Dispose
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Dispose()
         {
@@ -271,6 +180,116 @@ namespace Chisel.Core
             UnsafeList.Destroy(m_ChainedIndices);
             m_ChainedIndices = null;
             UnsafeUtility.Free(m_HashTable, m_AllocatorLabel);
+        }
+        #endregion
+        
+/*
+        /// <summary>
+        /// Safely disposes of this container and deallocates its memory when the jobs that use it have completed.
+        /// </summary>
+        /// <remarks>You can call this function dispose of the container immediately after scheduling the job. Pass
+        /// the [JobHandle](https://docs.unity3d.com/ScriptReference/Unity.Jobs.JobHandle.html) returned by
+        /// the [Job.Schedule](https://docs.unity3d.com/ScriptReference/Unity.Jobs.IJobExtensions.Schedule.html)
+        /// method using the `jobHandle` parameter so the job scheduler can dispose the container after all jobs
+        /// using it have run.</remarks>
+        /// <param name="inputDeps">The job handle or handles for any scheduled jobs that use this container.</param>
+        /// <returns>A new job handle containing the prior handles as well as the handle for the job that deletes
+        /// the container.</returns>
+        public JobHandle Dispose(JobHandle inputDeps)
+        {
+#if ENABLE_UNITY_COLLECTIONS_CHECKS
+            // [DeallocateOnJobCompletion] is not supported, but we want the deallocation
+            // to happen in a thread. DisposeSentinel needs to be cleared on main thread.
+            // AtomicSafetyHandle can be destroyed after the job was scheduled (Job scheduling
+            // will check that no jobs are writing to the container).
+            DisposeSentinel.Clear(ref m_DisposeSentinel);
+
+            var jobHandle = new NativeHashMapDisposeJob { Data = new NativeHashMapDispose { m_Buffer = m_HashMapData.m_Buffer, m_AllocatorLabel = m_HashMapData.m_AllocatorLabel, m_Safety = m_Safety } }.Schedule(inputDeps);
+
+            AtomicSafetyHandle.Release(m_Safety);
+#else
+            var jobHandle = new NativeHashMapDisposeJob { Data = new NativeHashMapDispose { m_Buffer = m_HashMapData.m_Buffer, m_AllocatorLabel = m_HashMapData.m_AllocatorLabel }  }.Schedule(inputDeps);
+#endif
+            m_HashMapData.m_Buffer = null;
+
+            return jobHandle;
+        }
+*/
+
+        #region Checks
+        [Conditional("ENABLE_UNITY_COLLECTIONS_CHECKS")]
+        private static void CheckIndexInRange(int value, int length)
+        {
+            if (value < 0)
+                throw new IndexOutOfRangeException($"Value {value} must be positive.");
+
+            if ((uint)value >= (uint)length)
+                throw new IndexOutOfRangeException($"Value {value} is out of range in NativeList of '{length}' Length.");
+        }
+
+        [Conditional("ENABLE_UNITY_COLLECTIONS_CHECKS")]
+        private static void CheckAllocated(VertexSoup otherSoup)
+        {
+            if (otherSoup.IsCreated)
+                throw new ArgumentException($"Value {otherSoup} is not allocated.");
+        }
+        #endregion
+
+
+        // Ensure we have at least this many extra vertices in capacity
+        public void Reserve(int extraIndices)
+        {
+#if ENABLE_UNITY_COLLECTIONS_CHECKS
+            AtomicSafetyHandle.CheckWriteAndThrow(m_Safety);
+#endif
+            var requiredVertices = extraIndices + m_Vertices->Length;
+            if (m_Vertices->Capacity < requiredVertices)
+                m_Vertices->SetCapacity<float3>(requiredVertices);
+
+            var requiredIndices = extraIndices + m_ChainedIndices->Length;
+            if (m_ChainedIndices->Capacity < requiredIndices)
+                m_ChainedIndices->SetCapacity<ushort>(requiredIndices);
+        }
+
+        /// <summary>
+        /// Retrieve a member of the contaner by index.
+        /// </summary>
+        /// <param name="index">The zero-based index into the list.</param>
+        /// <value>The list item at the specified index.</value>
+        /// <exception cref="IndexOutOfRangeException">Thrown if index is negative or >= to <see cref="Length"/>.</exception>
+        public float3 this[int index]
+        {
+            get
+            {
+#if ENABLE_UNITY_COLLECTIONS_CHECKS
+                AtomicSafetyHandle.CheckReadAndThrow(m_Safety);
+                CheckIndexInRange(index, m_Vertices->Length);
+#endif
+                return UnsafeUtility.ReadArrayElement<float3>(m_Vertices->Ptr, index);
+            }
+        }
+
+        public float3* GetUnsafeReadOnlyPtr()
+        {
+#if ENABLE_UNITY_COLLECTIONS_CHECKS
+            AtomicSafetyHandle.CheckReadAndThrow(m_Safety);
+#endif
+            return (float3*)(m_Vertices->Ptr);
+        }
+
+        /// <summary>
+        /// The current number of items in the list.
+        /// </summary>
+        /// <value>The item count.</value>
+        public int Length
+        {
+            get
+            {
+#if ENABLE_UNITY_COLLECTIONS_CHECKS
+                AtomicSafetyHandle.CheckReadAndThrow(m_Safety);
+#endif
+                return m_Vertices->Length;
+            }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
