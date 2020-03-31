@@ -261,7 +261,7 @@ namespace Chisel.Core
         public int          endEdgeIndex;
     }
 
-    struct BasePolygonsBlob
+    internal struct BasePolygonsBlob
     {
         public BlobArray<BasePolygon>   surfaces;
         public BlobArray<Edge>          edges;

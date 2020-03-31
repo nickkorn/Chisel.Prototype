@@ -88,8 +88,6 @@ namespace Chisel.Core
         const float kPlaneDistanceEpsilon   = CSGManagerPerformCSG.kPlaneDistanceEpsilon;
         const float kNormalEpsilon          = CSGManagerPerformCSG.kNormalEpsilon;
 
-        public struct Empty { }
-
         [ReadOnly] public NativeArray<BrushPair>                                                uniqueBrushPairs;
         [ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushMeshBlob>>                 brushMeshBlobLookup;
         [ReadOnly] public NativeHashMap<int, BlobAssetReference<NodeTransformations>>           transformations;

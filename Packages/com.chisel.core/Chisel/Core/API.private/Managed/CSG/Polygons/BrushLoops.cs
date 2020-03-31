@@ -23,21 +23,21 @@ namespace Chisel.Core
 
         // TODO: Have list of surfaceloops, dictionary holds index into list
         // TODO: Actually, do not need lookups?
-        public Dictionary<int, SurfaceLoops>    intersectionSurfaceLoops    = new Dictionary<int, SurfaceLoops>();
+        //public Dictionary<int, SurfaceLoops>    intersectionSurfaceLoops    = new Dictionary<int, SurfaceLoops>();
         public Dictionary<int, Loop[]>          intersectionLoopLookup      = new Dictionary<int, Loop[]>();
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Clear()
         {
-            intersectionSurfaceLoops.Clear();
+            //intersectionSurfaceLoops.Clear();
             intersectionLoopLookup.Clear();
         }
         ~BrushLoops() { Dispose(); }
         public void Dispose()
         {
-            foreach (var surfaceLoop in intersectionSurfaceLoops.Values)
-                surfaceLoop.Dispose();
-            intersectionSurfaceLoops.Clear();
+            //foreach (var surfaceLoop in intersectionSurfaceLoops.Values)
+            //    surfaceLoop.Dispose();
+            //intersectionSurfaceLoops.Clear();
             foreach (var loopArray in intersectionLoopLookup.Values)
             {
                 if (loopArray != null &&
