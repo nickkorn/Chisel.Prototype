@@ -18,13 +18,13 @@ namespace Chisel.Core
 #if USE_MANAGED_CSG_IMPLEMENTATION
     internal unsafe struct FindLoopOverlapIntersectionsJob : IJobParallelFor
     {
-        [ReadOnly] public NativeHashMap<BrushSurfacePair, BlobAssetReference<BrushIntersectionLoop>> outputSurfaces;
-        [ReadOnly] public NativeArray<BrushSurfacePair>                                 outputSurfaceKeys;
+        [ReadOnly] public NativeHashMap<BrushSurfacePair, BlobAssetReference<BrushIntersectionLoop>> intersectionLoopBlobs;
+        [ReadOnly] public NativeArray<BrushSurfacePair>                                 intersectionLoopBlobsKeys;
         [ReadOnly] public NativeHashMap<int, BlobAssetReference<BasePolygonsBlob>>      basePolygonBlobs;
         [ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushWorldPlanes>>      brushWorldPlanes;
+        [ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushMeshBlob>>         brushMeshBlobs;
         [ReadOnly] public NativeArray<int>                                              treeBrushes;
         [ReadOnly] public NativeArray<int>                                              brushMeshInstanceIDs;
-        [ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushMeshBlob>>         brushMeshBlobs;
 
         public Dictionary<int, VertexSoup>                                  vertexSoups; /*!!*/
 
@@ -32,65 +32,71 @@ namespace Chisel.Core
         {
             return allWorldSpacePlanes.AsArray().GetSubArray(segment.x, segment.y);
         }
-
+        
         public void Execute(int index)
         {
-            if (outputSurfaceKeys.Length == 0)
+            if (intersectionLoopBlobsKeys.Length == 0)
                 return;
+
 
             var brush0NodeID        = treeBrushes[index];
             var brush0NodeIndex     = brush0NodeID - 1;
 
-            var outputLoops                 = CSGManager.GetBrushInfo(brush0NodeID).brushOutputLoops;
-            var intersectionLoopLookup      = outputLoops.intersectionLoopLookup;/*!!*/
-            var basePolygons                = outputLoops.basePolygons;/*!!*/
-            var surfaceCount                = basePolygons.Count;
+            var outputLoops         = CSGManager.GetBrushInfo(brush0NodeID).brushOutputLoops;/*!!*/
+            outputLoops.Dispose();/*!!*/
+
+            var basePolygonBlob     = basePolygonBlobs[brush0NodeIndex];
+            var surfaceCount = basePolygonBlob.Value.surfaces.Length;
             if (surfaceCount == 0)
                 return;
 
-            //var intersectionSurfaceLoops    = new Dictionary<int, SurfaceLoop>(); /*!!*/
+            var basePolygons = new List<Loop>(basePolygonBlob.Value.surfaces.Length);/*!!*/
+            for (int p = 0; p < basePolygonBlob.Value.surfaces.Length; p++)
+            {
+                ref var input = ref basePolygonBlob.Value.surfaces[p];
+                var surfacePolygon = new Loop()/*!!*/
+                {
+                    info = input.surfaceInfo,
+                    holes = new List<Loop>()/*!!*/
+                };
+                for (int e = input.startEdgeIndex; e < input.endEdgeIndex; e++)
+                    surfacePolygon.edges.Add(basePolygonBlob.Value.edges[e]);
+                basePolygons.Add(surfacePolygon);
+            }
+            outputLoops.basePolygons = basePolygons;/*!!*/
 
+            var intersectionLoopLookup      = outputLoops.intersectionLoopLookup;/*!!*/ /*OUTPUT*/
+            
             var brushNodeID0        = treeBrushes[index];
             var brushNodeIndex0     = brushNodeID0 - 1;
             var result              = basePolygonBlobs[brushNodeIndex0];
             var vertexSoup          = new VertexSoup(ref result.Value.vertices);
             vertexSoups.Add(brushNodeIndex0, vertexSoup);/*!!*/
 
-            var uniqueBrushIndices = new NativeHashMap<int, int2>(outputSurfaceKeys.Length, Allocator.TempJob);
-
-            var surfaceLoops = new SurfaceLoops(surfaceCount);
+            var uniqueBrushIndices  = new NativeHashMap<int, int2>(intersectionLoopBlobsKeys.Length, Allocator.TempJob);
+            var surfaceLoops        = new SurfaceLoops(surfaceCount);/*!!*/
 
             // TODO: get rid of this somehow
-            foreach (var item in outputSurfaceKeys)
+            foreach (var item in intersectionLoopBlobsKeys)
             {
                 if (item.brushNodeIndex0 != brushNodeIndex0)
                     continue;
                     
-                var outputSurface   = outputSurfaces[item];
+                var outputSurface   = intersectionLoopBlobs[item];
                 var newLoop         = new Loop(outputSurface, vertexSoup);/*!!*/
                 surfaceLoops.surfaces[item.basePlaneIndex].Add(newLoop);
                 uniqueBrushIndices[item.brushNodeIndex1] = new int2();
-                /*
-                Debug.Assert(newLoop.info.brushNodeIndex == item.brushNodeIndex1);
-                {
-                    var brushNodeIndex1 = item.brushNodeIndex1;
-                    var brushNodeID1 = brushNodeIndex1 + 1;
-                    if (!intersectionSurfaceLoops.TryGetValue(brushNodeID1, out SurfaceLoop surfaceLoops))
-                    {
-                        surfaceLoops = new SurfaceLoop(brushNodeID1, surfaceCount);
-                        intersectionSurfaceLoops[brushNodeID1] = surfaceLoops;
-                    } 
-                    surfaceLoops.surfaces[item.basePlaneIndex] = newLoop;
-                }*/
             }
 
-            if (uniqueBrushIndices.Count() > 0)
+            var uniqueBrushIndexCount = uniqueBrushIndices.Count();
+            if (uniqueBrushIndexCount > 0)
             {
-                var basePolygonLoops            = new IntersectionLoop[surfaceCount];/*!!*/
-                var allIntersectionLoops        = new List<IntersectionLoop>();/*!!*/
                 var intersectionSurfaces        = new List<int>[surfaceCount]; /*!!*/
                 for (int i = 0; i < intersectionSurfaces.Length; i++)
                     intersectionSurfaces[i]     = new List<int>(16);/*!!*/
+
+                var basePolygonLoops            = new IntersectionLoop[surfaceCount];/*!!*/
+                var allIntersectionLoops        = new List<IntersectionLoop>();/*!!*/
 
                 var allWorldSpacePlanes         = new NativeList<float4>(surfaceCount, Allocator.Persistent);
                 int2 worldSpacePlanes0Segment;
@@ -131,44 +137,36 @@ namespace Chisel.Core
                             basePolygonLoops[s] = intersectionLoop;                
                         }
 
-
-                        //foreach (var pair in intersectionSurfaceLoops.Values)
+                        for (int s = 0; s < surfaceLoops.surfaces.Length; s++)
                         {
-                            //var surfaces = surfaceLoops.surfaces;
-                            //if (surfaceLoops == null)
-                            //    continue;
+                            var intersectionSurface = intersectionSurfaces[s];
+                            var loops = surfaceLoops.surfaces[s];
+                            if (loops == null ||
+                                loops.Count == 0)
+                                continue;
 
-                            for (int s = 0; s < surfaceLoops.surfaces.Length; s++)
+                            for (int l = 0; l < loops.Count; l++)
                             {
-                                var intersectionSurface = intersectionSurfaces[s];
-                                var loops = surfaceLoops.surfaces[s];
-                                if (loops == null ||
-                                    loops.Count == 0)
-                                    continue;
+                                var loop            = loops[l];
+                                var brushNodeIndex  = loop.info.brushNodeIndex;
+                                var brushNodeID     = brushNodeIndex + 1;
 
-                                for (int l = 0; l < loops.Count; l++)
+                                // At this point it should not be possible to have more loop from the same intersecting brush since 
+                                // we only support convex brushes. 
+                                // Later on, however, when we start intersecting loops with each other, we can end up with multiple fragments.
+
+                                var segment          = uniqueBrushIndices[brushNodeIndex];
+                                var intersectionLoop = new IntersectionLoop()
                                 {
-                                    var loop            = loops[l];
-                                    var brushNodeIndex  = loop.info.brushNodeIndex;
-                                    var brushNodeID     = brushNodeIndex + 1;
+                                    segment         = segment,
+                                    edges           = loop.edges,
+                                    surfaceIndex    = s,
+                                    brushNodeID     = brushNodeID
+                                }; 
 
-                                    // At this point it should not be possible to have more loop from the same intersecting brush since 
-                                    // we only support convex brushes. 
-                                    // Later on, however, when we start intersecting loops with each other, we can end up with multiple fragments.
-
-                                    var segment          = uniqueBrushIndices[brushNodeIndex];
-                                    var intersectionLoop = new IntersectionLoop()
-                                    {
-                                        segment         = segment,
-                                        edges           = loop.edges,
-                                        surfaceIndex    = s,
-                                        brushNodeID     = brushNodeID
-                                    }; 
-
-                                    // We add the intersection loop of this particular brush with our own brush
-                                    intersectionSurface.Add(allIntersectionLoops.Count);
-                                    allIntersectionLoops.Add(intersectionLoop);
-                                }
+                                // We add the intersection loop of this particular brush with our own brush
+                                intersectionSurface.Add(allIntersectionLoops.Count);
+                                allIntersectionLoops.Add(intersectionLoop);
                             }
                         }
                     }
@@ -185,8 +183,10 @@ namespace Chisel.Core
                                 if (l0 == l1)
                                     continue;
 
+                                // TODO: use intersectionLoopBlobs/basePolygonBlobs as input + planes, output new blob
                                 var intersectionJob = new FindLoopPlaneIntersectionsJob()// TODO: we're reading AND writing to the same NativeList!?!?!
                                 {
+                                    // TODO: use worldplaneblobs instead, remove all need to create allWorldSpacePlanes/segments
                                     allWorldSpacePlanes = allWorldSpacePlanes,
                                     otherPlanesSegment  = allIntersectionLoops[intersectionSurfaceList[l1]].segment,
                                     selfPlanesSegment   = intersectionSurface0.segment,
@@ -210,8 +210,10 @@ namespace Chisel.Core
                         var edges = basePolygonLoops[b].edges;
                         foreach (var brushPlaneSegment in brushPlaneSegments)
                         {
+                            // TODO: use intersectionLoopBlobs/basePolygonBlobs as input + planes, output new blob
                             var intersectionJob = new FindLoopPlaneIntersectionsJob()// TODO: we're reading AND writing to the same NativeList!?!?!
                             {
+                                // TODO: use worldplaneblobs instead, remove all need to create allWorldSpacePlanes/segments
                                 allWorldSpacePlanes = allWorldSpacePlanes,
                                 otherPlanesSegment  = brushPlaneSegment,
                                 selfPlanesSegment   = worldSpacePlanes0Segment,
@@ -235,8 +237,10 @@ namespace Chisel.Core
                         for (int l0 = 0; l0 < intersectionSurfaceList.Count; l0++)
                         {
                             var intersectionSurface = allIntersectionLoops[intersectionSurfaceList[l0]];
+                            // TODO: use intersectionLoopBlobs/basePolygonBlobs as input + planes, output new blob
                             var intersectionJob2 = new FindLoopVertexOverlapsJob
                             {
+                                // TODO: use worldplaneblobs instead, remove all need to create allWorldSpacePlanes/segments
                                 selfPlanes      = GetPlanes(allWorldSpacePlanes, intersectionSurface.segment),
                                 vertexSoup      = vertexSoup,
                                 otherEdges      = basePolygonEdges,
@@ -267,42 +271,33 @@ namespace Chisel.Core
                     //intersectionData.StoreOutput
                     {
                         // Note: those above are only the INTERSECTING surfaces, below ALL surfaces
-                        var uniqueBrushIndicesKeys = uniqueBrushIndices.GetKeyArray(Allocator.Temp);
-                        //foreach (var pair in intersectionSurfaceLoops.Values)
+                        var uniqueBrushIndicesKeys = uniqueBrushIndices.GetKeyArray(Allocator.Temp);                        
+                        for (int k = 0; k < uniqueBrushIndicesKeys.Length; k++)
                         {
-                            for (int k = 0; k < uniqueBrushIndicesKeys.Length; k++)
+                            var brushNodeIndex  = uniqueBrushIndicesKeys[k];
+                            var brushNodeID     = brushNodeIndex + 1;
+
+                            Loop[] loops = null;/*!!*/
+                            for (int s = 0; s < surfaceLoops.surfaces.Length; s++)
                             {
-                                var brushNodeIndex  = uniqueBrushIndicesKeys[k];
-                                var brushNodeID     = brushNodeIndex + 1;
-                                //var surfaceLoops = pair.surfaces;
-                                //if (surfaceLoops == null)
-                                //{
-                                //   intersectionLoopLookup[pair.Key] = null;
-                                //  continue;
-                                //}
+                                var intersectionLoops = surfaceLoops.surfaces[s];
+                                if (intersectionLoops == null || intersectionLoops.Count == 0)
+                                    continue;
 
-                                Loop[] loops = null;
-                                for (int s = 0; s < surfaceLoops.surfaces.Length; s++)
+                                for (int i = 0; i < intersectionLoops.Count; i++)
                                 {
-                                    var intersectionLoops = surfaceLoops.surfaces[s];
-                                    if (intersectionLoops == null || intersectionLoops.Count == 0)
-                                        continue;
-
-                                    for (int i = 0; i < intersectionLoops.Count; i++)
+                                    if (intersectionLoops[i].info.brushNodeIndex == brushNodeIndex)
                                     {
-                                        if (intersectionLoops[i].info.brushNodeIndex == brushNodeIndex)
-                                        {
-                                            if (loops == null)
-                                                loops = new Loop[surfaceLoops.surfaces.Length];
+                                        if (loops == null)
+                                            loops = new Loop[surfaceLoops.surfaces.Length];
 
-                                            loops[s] = intersectionLoops[i];
-                                            break;
-                                        }
-                                    }                                    
-                                }
-                                intersectionLoopLookup[brushNodeID] = loops;
+                                        loops[s] = intersectionLoops[i];
+                                        break;
+                                    }
+                                }                                    
                             }
-                        }
+                            intersectionLoopLookup[brushNodeID] = loops;
+                        }                        
                         uniqueBrushIndicesKeys.Dispose();
                     }
                 }
