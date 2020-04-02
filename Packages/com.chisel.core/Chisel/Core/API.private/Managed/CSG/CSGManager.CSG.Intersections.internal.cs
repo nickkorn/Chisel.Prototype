@@ -298,15 +298,15 @@ namespace Chisel.Core
             var outputSurfaceKeys = outputSurfaces.GetKeyArray(Allocator.Temp);
             var findLoopOverlapIntersectionsJob = new FindLoopOverlapIntersectionsJob
             {
-                intersectionLoopBlobs          = outputSurfaces,
-                intersectionLoopBlobsKeys       = outputSurfaceKeys,
-                brushWorldPlanes        = chiselLookupValues.brushWorldPlanes,
-                basePolygonBlobs        = chiselLookupValues.basePolygons,
-                treeBrushes             = treeBrushesArray,
-                brushMeshInstanceIDs    = brushMeshInstanceIDs,
-                brushMeshBlobs          = chiselLookupValues.brushMeshBlobs,
+                intersectionLoopBlobs       = outputSurfaces,
+                intersectionLoopBlobsKeys   = outputSurfaceKeys,
+                brushWorldPlanes            = chiselLookupValues.brushWorldPlanes,
+                basePolygonBlobs            = chiselLookupValues.basePolygons,
+                treeBrushes                 = treeBrushesArray,
+                brushMeshInstanceIDs        = brushMeshInstanceIDs,
+                brushMeshBlobs              = chiselLookupValues.brushMeshBlobs,
 
-                vertexSoups             = chiselLookupValues.vertexSoups
+                vertexSoups                 = chiselLookupValues.vertexSoups
             };
             findLoopOverlapIntersectionsJob.Execute();
             outputSurfaceKeys.Dispose();

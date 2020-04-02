@@ -25,7 +25,7 @@ namespace Chisel.Core
         [NoAlias, ReadOnly] public int                  selfBrushNodeIndex;
         //[NoAlias, ReadOnly] public NativeArray<float4>  selfPlanes;
         [NoAlias, ReadOnly] public VertexSoup           vertexSoup;
-        [NoAlias, ReadOnly] public NativeList<Edge>     otherEdges;
+        [NoAlias, ReadOnly] public NativeListArray<Edge>.NativeList otherEdges;
         [NoAlias] public NativeList<Edge>               edges;
 
         public unsafe void ExecuteEdges()

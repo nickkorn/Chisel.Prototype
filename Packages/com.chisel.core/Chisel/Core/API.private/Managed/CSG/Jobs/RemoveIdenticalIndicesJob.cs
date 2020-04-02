@@ -43,6 +43,33 @@ namespace Chisel.Core
         }
     }
 
+    [BurstCompile(CompileSynchronously = true)]
+    public unsafe struct RemoveIdenticalIndicesEdgesJob2 : IJob
+    {
+        [NoAlias] public NativeListArray<Edge>.NativeList edges;
+
+        public static void RemoveDuplicates(ref NativeListArray<Edge>.NativeList edges)
+        {
+            if (edges.Length < 3)
+            {
+                edges.Clear();
+                return;
+            }
+
+            for (int e = edges.Length - 1; e >= 0; e--)
+            {
+                if (edges[e].index1 != edges[e].index2)
+                    continue;
+                edges.RemoveAtSwapBack(e);
+            }
+        }
+
+        public void Execute()
+        {
+            RemoveDuplicates(ref edges);
+        }
+    }
+
 
     // TODO: probably makes sense to break this up into multiple pieces/multiple jobs that can run parallel,
     //      but requires that change some storage formats first
