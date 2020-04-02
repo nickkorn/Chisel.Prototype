@@ -21,15 +21,16 @@ namespace Chisel.Core
         public const int kMaxVertexCount    = short.MaxValue;
         const float kVertexEqualEpsilonSqr  = (float)CSGManagerPerformCSG.kEpsilonSqr;
         const float kPlaneDistanceEpsilon   = CSGManagerPerformCSG.kDistanceEpsilon;
-             
-        [ReadOnly] public NativeList<float4>    allWorldSpacePlanes;
-        [ReadOnly] public int2                  otherPlanesSegment;
-        [ReadOnly] public int2                  selfPlanesSegment;
 
+        [NoAlias, ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushWorldPlanes>> brushWorldPlanes;
+        [NoAlias, ReadOnly] public int                  otherBrushNodeIndex;
+        [NoAlias, ReadOnly] public int                  selfBrushNodeIndex;
+        
         [NativeDisableContainerSafetyRestriction]
-        public VertexSoup                       vertexSoup; // <-- TODO: we're reading AND writing to the same NativeList!?!?!
-        public NativeList<Edge>                 edges;
-
+        [NoAlias]
+        public VertexSoup                               vertexSoup; // <-- TODO: we're reading AND writing to the same NativeList!?!?!
+        [NoAlias] public NativeList<Edge>               edges;
+        
         // TODO: find a way to share found intersections between loops, to avoid accuracy issues
         public unsafe void Execute()
         {
@@ -43,12 +44,11 @@ namespace Chisel.Core
 
             var tempVertices = stackalloc ushort[] { 0, 0, 0, 0 };
 
-            var allWorldSpacePlanePtr   = (float4*)allWorldSpacePlanes.GetUnsafeReadOnlyPtr();
-            var otherPlanesNativePtr    = allWorldSpacePlanePtr + otherPlanesSegment.x;
-            var selfPlanesNativePtr     = allWorldSpacePlanePtr + selfPlanesSegment.x;
+            ref var otherPlanesNative    = ref brushWorldPlanes[otherBrushNodeIndex].Value.worldPlanes;// allWorldSpacePlanePtr + otherPlanesSegment.x;
+            ref var selfPlanesNative     = ref brushWorldPlanes[selfBrushNodeIndex].Value.worldPlanes;//allWorldSpacePlanePtr + selfPlanesSegment.x;
 
-            var otherPlaneCount = otherPlanesSegment.y;
-            var selfPlaneCount  = selfPlanesSegment.y;
+            var otherPlaneCount = otherPlanesNative.Length;
+            var selfPlaneCount  = selfPlanesNative.Length;
 
             vertexSoup.Reserve(otherPlaneCount); // ensure we have at least this many extra vertices in capacity
 
@@ -68,7 +68,7 @@ namespace Chisel.Core
 
                 for (int p = 0; p < otherPlaneCount; p++)
                 {
-                    var otherPlane = otherPlanesNativePtr[p];
+                    var otherPlane = otherPlanesNative[p];
 
                     var distance0 = math.dot(otherPlane, vertex0w);
                     var distance1 = math.dot(otherPlane, vertex1w);
@@ -113,14 +113,14 @@ namespace Chisel.Core
                     var newVertexw = new float4(newVertex, 1);
                     for (int p2 = 0; p2 < otherPlaneCount; p2++)
                     {
-                        otherPlane = otherPlanesNativePtr[p2];
+                        otherPlane = otherPlanesNative[p2];
                         var distance = math.dot(otherPlane, newVertexw);
                         if (distance > kPlaneDistanceEpsilon)
                             goto SkipEdge;
                     }
                     for (int p1 = 0; p1 < selfPlaneCount; p1++)
                     {
-                        otherPlane = selfPlanesNativePtr[p1];
+                        otherPlane = selfPlanesNative[p1];
                         var distance = math.dot(otherPlane, newVertexw);
                         if (distance > kPlaneDistanceEpsilon)
                             goto SkipEdge;
@@ -176,21 +176,22 @@ namespace Chisel.Core
         }
     }
 
-    [BurstCompile(Debug = false)]
-    public struct FindBasePolygonPlaneIntersectionsJob : IJob
+    [BurstCompile(CompileSynchronously = true)]
+    internal struct FindBasePolygonPlaneIntersectionsJob : IJob
     {
         public const int kMaxVertexCount    = short.MaxValue;
         const float kVertexEqualEpsilonSqr  = (float)CSGManagerPerformCSG.kEpsilonSqr;
         const float kPlaneDistanceEpsilon   = CSGManagerPerformCSG.kDistanceEpsilon;
-             
-        [ReadOnly] public NativeList<float4>    allWorldSpacePlanes;
-        [ReadOnly] public int2                  otherPlanesSegment;
-        [ReadOnly] public int2                  selfPlanesSegment;
 
+        [NoAlias, ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushWorldPlanes>> brushWorldPlanes;
+        [NoAlias, ReadOnly] public int                  otherBrushNodeIndex;
+        [NoAlias, ReadOnly] public int                  selfBrushNodeIndex;
+        
         [NativeDisableContainerSafetyRestriction]
-        public VertexSoup                       vertexSoup; // <-- TODO: we're reading AND writing to the same NativeList!?!?!
-        public NativeList<Edge>                 edges;
-
+        [NoAlias]
+        public VertexSoup                               vertexSoup; // <-- TODO: we're reading AND writing to the same NativeList!?!?!
+        [NoAlias] public NativeList<Edge>               edges;
+        
         // TODO: find a way to share found intersections between loops, to avoid accuracy issues
         public unsafe void Execute()
         {
@@ -204,12 +205,11 @@ namespace Chisel.Core
 
             var tempVertices = stackalloc ushort[] { 0, 0, 0, 0 };
 
-            var allWorldSpacePlanePtr   = (float4*)allWorldSpacePlanes.GetUnsafeReadOnlyPtr();
-            var otherPlanesNativePtr    = allWorldSpacePlanePtr + otherPlanesSegment.x;
-            var selfPlanesNativePtr     = allWorldSpacePlanePtr + selfPlanesSegment.x;
+            ref var otherPlanesNative    = ref brushWorldPlanes[otherBrushNodeIndex].Value.worldPlanes;// allWorldSpacePlanePtr + otherPlanesSegment.x;
+            ref var selfPlanesNative     = ref brushWorldPlanes[selfBrushNodeIndex].Value.worldPlanes;//allWorldSpacePlanePtr + selfPlanesSegment.x;
 
-            var otherPlaneCount = otherPlanesSegment.y;
-            var selfPlaneCount  = selfPlanesSegment.y;
+            var otherPlaneCount = otherPlanesNative.Length;
+            var selfPlaneCount  = selfPlanesNative.Length;
 
             vertexSoup.Reserve(otherPlaneCount); // ensure we have at least this many extra vertices in capacity
 
@@ -229,7 +229,7 @@ namespace Chisel.Core
 
                 for (int p = 0; p < otherPlaneCount; p++)
                 {
-                    var otherPlane = otherPlanesNativePtr[p];
+                    var otherPlane = otherPlanesNative[p];
 
                     var distance0 = math.dot(otherPlane, vertex0w);
                     var distance1 = math.dot(otherPlane, vertex1w);
@@ -274,14 +274,14 @@ namespace Chisel.Core
                     var newVertexw = new float4(newVertex, 1);
                     for (int p2 = 0; p2 < otherPlaneCount; p2++)
                     {
-                        otherPlane = otherPlanesNativePtr[p2];
+                        otherPlane = otherPlanesNative[p2];
                         var distance = math.dot(otherPlane, newVertexw);
                         if (distance > kPlaneDistanceEpsilon)
                             goto SkipEdge;
                     }
                     for (int p1 = 0; p1 < selfPlaneCount; p1++)
                     {
-                        otherPlane = selfPlanesNativePtr[p1];
+                        otherPlane = selfPlanesNative[p1];
                         var distance = math.dot(otherPlane, newVertexw);
                         if (distance > kPlaneDistanceEpsilon)
                             goto SkipEdge;
