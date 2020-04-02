@@ -21,7 +21,7 @@ namespace Chisel.Core
     {
         public int                  surfaceIndex;
         public int                  brushNodeIndex;
-        
+        public BlobAssetReference<BrushIntersectionLoop> loop;
         public NativeList<Edge>     edges;
     }
 
@@ -30,7 +30,7 @@ namespace Chisel.Core
         public int                  surfaceIndex;
         public int                  brushNodeIndex;
         public NativeList<Edge>     edges;
-        
+        internal BlobAssetReference<BasePolygonsBlob> basePolygonBlob;
     }
 
     internal unsafe struct FindLoopOverlapIntersectionsJob : IJobParallelFor
@@ -46,7 +46,7 @@ namespace Chisel.Core
         public Dictionary<int, VertexSoup>                                  vertexSoups; /*!!*/
 
         struct Empty { };
-        
+
         public unsafe void Execute(int index)
         {
             if (intersectionLoopBlobsKeys.Length == 0)
@@ -119,7 +119,10 @@ namespace Chisel.Core
                 var basePolygonLoops            = new IntersectionBasePolygon[surfaceCount];                /*!!*/
                 var allIntersectionLoops        = new List<IntersectionLoop>();                             /*!!*/
                 //***GET RID OF THIS***//
-                    
+
+                //var edgeLookup = new NativeMultiHashMap<int, NativeList<int>>(surfaceCount, Allocator.Temp);
+                //edgeLookup.Dispose();
+
                 {
                     {
                         for (int s = 0; s < basePolygonBlob.Value.surfaces.Length; s++)
@@ -136,7 +139,7 @@ namespace Chisel.Core
 
                             var intersectionLoop = new IntersectionBasePolygon()
                             {
-                                
+                                basePolygonBlob = basePolygonBlobs[brushNodeIndex0],
                                 edges           = loop.edges,
                                 surfaceIndex    = s,
                                 brushNodeIndex  = brushNodeIndex0
@@ -179,6 +182,7 @@ namespace Chisel.Core
 
                                 var intersectionLoop = new IntersectionLoop()
                                 {
+                                    loop            = intersectionLoopBlobs[new BrushSurfacePair { basePlaneIndex =s, brushNodeIndex0 = brushNodeIndex0, brushNodeIndex1 = brushNodeIndex1 }],
                                     edges           = loop.edges,
                                     surfaceIndex    = s,
                                     brushNodeIndex  = brushNodeIndex1
