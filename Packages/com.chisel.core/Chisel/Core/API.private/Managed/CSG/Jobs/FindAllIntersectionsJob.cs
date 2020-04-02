@@ -101,14 +101,14 @@ namespace Chisel.Core
     {
         const double kEpsilon = CSGManagerPerformCSG.kEpsilon;
 
-        [ReadOnly] public NativeArray<int>  brushNodeIDs;
+        [NoAlias,ReadOnly] public NativeArray<int>  brushNodeIDs;
         // TODO: store blobs in brushMeshInstanceIDs to avoid indirection?
-        [ReadOnly] public NativeArray<int>  brushMeshIDs;
-        [ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushMeshBlob>> brushMeshBlobs;
-        [ReadOnly] public NativeHashMap<int, BlobAssetReference<NodeTransformations>> transformations;
-        [ReadOnly] public NativeHashMap<int, BlobAssetReference<BasePolygonsBlob>> basePolygons;// only need bounds
-        
-        [WriteOnly] public NativeMultiHashMap<int, BrushPair>.ParallelWriter output;
+        [NoAlias,ReadOnly] public NativeArray<int>  brushMeshIDs;
+        [NoAlias,ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushMeshBlob>> brushMeshBlobs;
+        [NoAlias,ReadOnly] public NativeHashMap<int, BlobAssetReference<NodeTransformations>> transformations;
+        [NoAlias,ReadOnly] public NativeHashMap<int, BlobAssetReference<BasePolygonsBlob>> basePolygons;// only need bounds
+
+        [NoAlias,WriteOnly] public NativeMultiHashMap<int, BrushPair>.ParallelWriter output;
 
         static void TransformOtherIntoBrushSpace(ref float4x4 treeToBrushSpaceMatrix, ref float4x4 brushToTreeSpaceMatrix, ref BlobArray<float4> srcPlanes, float4* dstPlanes)
         {
@@ -284,11 +284,11 @@ namespace Chisel.Core
     [BurstCompile(CompileSynchronously = true)]
     unsafe struct StoreBrushIntersectionsJob : IJobParallelFor
     {
-        [ReadOnly] public int                               treeNodeIndex;
-        [ReadOnly] public NativeArray<int>                  treeBrushes;
-        [ReadOnly] public BlobAssetReference<CompactTree>   compactTree;
-        [ReadOnly] public NativeMultiHashMap<int, BrushPair> brushBrushIntersections;
-        [WriteOnly] public NativeHashMap<int, BlobAssetReference<BrushesTouchedByBrush>>.ParallelWriter brushesTouchedByBrushes;
+        [NoAlias,ReadOnly] public int                               treeNodeIndex;
+        [NoAlias,ReadOnly] public NativeArray<int>                  treeBrushes;
+        [NoAlias,ReadOnly] public BlobAssetReference<CompactTree>   compactTree;
+        [NoAlias,ReadOnly] public NativeMultiHashMap<int, BrushPair> brushBrushIntersections;
+        [NoAlias,WriteOnly] public NativeHashMap<int, BlobAssetReference<BrushesTouchedByBrush>>.ParallelWriter brushesTouchedByBrushes;
 
 
         static void SetUsedNodesBits(BlobAssetReference<CompactTree> compactTree, NativeList<BrushIntersection> brushIntersections, int brushNodeIndex, int rootNodeIndex, BrushIntersectionLookup bitset)

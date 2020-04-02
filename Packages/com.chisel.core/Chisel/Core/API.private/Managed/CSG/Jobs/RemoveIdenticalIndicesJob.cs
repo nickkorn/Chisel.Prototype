@@ -19,7 +19,7 @@ namespace Chisel.Core
     [BurstCompile(CompileSynchronously = true)]
     public unsafe struct RemoveIdenticalIndicesEdgesJob : IJob
     {
-        public NativeList<Edge> edges;
+        [NoAlias] public NativeList<Edge> edges;
 
         public static void RemoveDuplicates(ref NativeList<Edge> edges)
         {
@@ -49,14 +49,14 @@ namespace Chisel.Core
     [BurstCompile(CompileSynchronously = true)]
     public unsafe struct CopyPolygonToIndicesJob : IJob
     {
-        [ReadOnly] public BlobAssetReference<BrushMeshBlob> mesh;
-        [ReadOnly] public int       polygonIndex;
-        [ReadOnly] public float4x4  nodeToTreeSpaceMatrix;
-        [ReadOnly] public float4x4  nodeToTreeSpaceInvertedTransposedMatrix;
+        [NoAlias, ReadOnly] public BlobAssetReference<BrushMeshBlob> mesh;
+        [NoAlias, ReadOnly] public int       polygonIndex;
+        [NoAlias, ReadOnly] public float4x4  nodeToTreeSpaceMatrix;
+        [NoAlias, ReadOnly] public float4x4  nodeToTreeSpaceInvertedTransposedMatrix;
 
         [NativeDisableContainerSafetyRestriction]
-        public VertexSoup           vertexSoup; // <-- TODO: we're reading AND writing to the same NativeList!?!?!
-        public NativeList<Edge>     edges;
+        [NoAlias] public VertexSoup           vertexSoup; // <-- TODO: we're reading AND writing to the same NativeList!?!?!
+        [NoAlias] public NativeList<Edge>     edges;
 
         // TODO: do this in separate loop so we don't need to rely on pointers to make this work
         [NativeDisableUnsafePtrRestriction] public AABB* aabb;

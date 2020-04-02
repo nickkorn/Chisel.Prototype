@@ -94,12 +94,12 @@ namespace Chisel.Core
         const float kDistanceEpsilon        = CSGManagerPerformCSG.kDistanceEpsilon;
         const float kNormalEpsilon          = CSGManagerPerformCSG.kNormalEpsilon;
 
-        [ReadOnly] public BlobAssetReference<BrushPairIntersection> intersection;
-        [ReadOnly] public int                   intersectionPlaneIndex0;
-        [ReadOnly] public int                   intersectionPlaneIndex1;
-        [ReadOnly] public int                   usedPlanePairIndex1;
+        [NoAlias, ReadOnly] public BlobAssetReference<BrushPairIntersection> intersection;
+        [NoAlias, ReadOnly] public int                   intersectionPlaneIndex0;
+        [NoAlias, ReadOnly] public int                   intersectionPlaneIndex1;
+        [NoAlias, ReadOnly] public int                   usedPlanePairIndex1;
 
-        [WriteOnly] public NativeList<VertexAndPlanePair>           foundVertices;
+        [NoAlias, WriteOnly] public NativeList<VertexAndPlanePair>           foundVertices;
 
         public void Execute(int index)
         {
@@ -209,15 +209,15 @@ namespace Chisel.Core
     [BurstCompile(CompileSynchronously = true)]
     unsafe struct InsertIntersectionVerticesJob : IJob
     {
-        [ReadOnly] public NativeArray<VertexAndPlanePair> vertexReader;
-        [ReadOnly] public BlobAssetReference<BrushPairIntersection> intersection;
-        [ReadOnly] public int intersectionPlaneIndex0;
+        [NoAlias, ReadOnly] public NativeArray<VertexAndPlanePair> vertexReader;
+        [NoAlias, ReadOnly] public BlobAssetReference<BrushPairIntersection> intersection;
+        [NoAlias, ReadOnly] public int intersectionPlaneIndex0;
 
-        [WriteOnly] public VertexSoup brushVertices0;
-        [WriteOnly] public VertexSoup brushVertices1;
+        [NoAlias, WriteOnly] public VertexSoup brushVertices0;
+        [NoAlias, WriteOnly] public VertexSoup brushVertices1;
 
-        [WriteOnly] public NativeList<PlaneVertexIndexPair> outputIndices0;
-        [WriteOnly] public NativeList<PlaneVertexIndexPair> outputIndices1;
+        [NoAlias, WriteOnly] public NativeList<PlaneVertexIndexPair> outputIndices0;
+        [NoAlias, WriteOnly] public NativeList<PlaneVertexIndexPair> outputIndices1;
 
         public void Execute() 
         {
@@ -240,12 +240,12 @@ namespace Chisel.Core
         }
     }
 
-    [BurstCompile(Debug = false)]
+    [BurstCompile(CompileSynchronously = true)]
     unsafe struct CombineLoopIndicesJob : IJob
     {
-        [ReadOnly] public NativeArray<PlaneVertexIndexPair>     foundIndices;
-        [WriteOnly] public NativeList<ushort>                   uniqueIndices;
-        [WriteOnly] public NativeList<PlaneIndexOffsetLength>   planeIndexOffsets;
+        [NoAlias, ReadOnly] public NativeArray<PlaneVertexIndexPair>     foundIndices;
+        [NoAlias, WriteOnly] public NativeList<ushort>                   uniqueIndices;
+        [NoAlias, WriteOnly] public NativeList<PlaneIndexOffsetLength>   planeIndexOffsets;
 
         public void Execute()
         {
@@ -333,10 +333,10 @@ namespace Chisel.Core
     [BurstCompile(CompileSynchronously = true)]
     unsafe struct SortLoopsJob : IJob
     {
-        [ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushWorldPlanes>> allBrushWorldPlanes;
-        [ReadOnly] public BlobAssetReference<BrushPairIntersection> intersection;
-        [ReadOnly] public int                       brushNodeIndex;
-        [ReadOnly] public VertexSoup                soup;
+        [NoAlias, ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushWorldPlanes>> allBrushWorldPlanes;
+        [NoAlias, ReadOnly] public BlobAssetReference<BrushPairIntersection> intersection;
+        [NoAlias, ReadOnly] public int                       brushNodeIndex;
+        [NoAlias, ReadOnly] public VertexSoup                soup;
 
         // Cannot be WriteOnly because we sort segments after we insert them
         public NativeList<ushort>                   uniqueIndices;
@@ -516,16 +516,16 @@ namespace Chisel.Core
     [BurstCompile(CompileSynchronously = true)]
     unsafe struct CreateLoopsJob //: IJob
     {
-        [ReadOnly] public int                                   brushIndex0;
-        [ReadOnly] public int                                   brushIndex1;
-        [ReadOnly] public BlobAssetReference<BrushPairIntersection> intersection;
-        [ReadOnly] public int                                   intersectionSurfaceIndex;
-        [ReadOnly] public VertexSoup                            vertexSoup;
-        [ReadOnly] public NativeList<ushort>                    uniqueIndices;
-        [ReadOnly] public NativeList<PlaneIndexOffsetLength>    planeIndexOffsets;
+        [NoAlias, ReadOnly] public int                                   brushIndex0;
+        [NoAlias, ReadOnly] public int                                   brushIndex1;
+        [NoAlias, ReadOnly] public BlobAssetReference<BrushPairIntersection> intersection;
+        [NoAlias, ReadOnly] public int                                   intersectionSurfaceIndex;
+        [NoAlias, ReadOnly] public VertexSoup                            vertexSoup;
+        [NoAlias, ReadOnly] public NativeList<ushort>                    uniqueIndices;
+        [NoAlias, ReadOnly] public NativeList<PlaneIndexOffsetLength>    planeIndexOffsets;
 
 #if false
-        [WriteOnly] public NativeHashMap<BrushSurfacePair, BlobAssetReference<BrushIntersectionLoop>>.ParallelWriter outputSurfaces;
+        [NoAlias, WriteOnly] public NativeHashMap<BrushSurfacePair, BlobAssetReference<BrushIntersectionLoop>>.ParallelWriter outputSurfaces;
 
         public void Execute()
         {

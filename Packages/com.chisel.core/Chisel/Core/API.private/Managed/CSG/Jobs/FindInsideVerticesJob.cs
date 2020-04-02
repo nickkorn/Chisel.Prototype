@@ -14,13 +14,6 @@ using Unity.Entities;
 
 namespace Chisel.Core
 {
-    struct IntersectionLoop
-    {
-        public int2                 segment;
-        public int                  surfaceIndex;
-        public int                  brushNodeID;
-        public NativeList<Edge>     edges;
-    }
 
     struct LocalWorldPair
     {
@@ -31,11 +24,11 @@ namespace Chisel.Core
     [BurstCompile(CompileSynchronously = true)]
     unsafe struct FindInsideVerticesJob : IJob// IJobParallelFor
     {
-        [ReadOnly] public BlobAssetReference<BrushPairIntersection> intersection;
-        [ReadOnly] public int                   intersectionPlaneIndex1;
-        [ReadOnly] public int                   usedVerticesIndex0;
+        [NoAlias, ReadOnly] public BlobAssetReference<BrushPairIntersection> intersection;
+        [NoAlias, ReadOnly] public int                   intersectionPlaneIndex1;
+        [NoAlias, ReadOnly] public int                   usedVerticesIndex0;
 
-        [WriteOnly] public NativeList<LocalWorldPair> vertexWriter;
+        [NoAlias, WriteOnly] public NativeList<LocalWorldPair> vertexWriter;
 
         public void Execute(int index)
         {
@@ -70,12 +63,12 @@ namespace Chisel.Core
     {
         const float kPlaneDistanceEpsilon = CSGManagerPerformCSG.kPlaneDistanceEpsilon;
 
-        [ReadOnly] public NativeArray<LocalWorldPair>               vertexReader;
-        [ReadOnly] public BlobAssetReference<BrushPairIntersection> intersection;
-        [ReadOnly] public int                   intersectionPlaneIndex;
+        [NoAlias, ReadOnly] public NativeArray<LocalWorldPair>               vertexReader;
+        [NoAlias, ReadOnly] public BlobAssetReference<BrushPairIntersection> intersection;
+        [NoAlias, ReadOnly] public int                   intersectionPlaneIndex;
 
-        [WriteOnly] public VertexSoup                        brushVertices;
-        [WriteOnly] public NativeList<PlaneVertexIndexPair>  outputIndices;
+        [NoAlias, WriteOnly] public VertexSoup                        brushVertices;
+        [NoAlias, WriteOnly] public NativeList<PlaneVertexIndexPair>  outputIndices;
 
 
         public void Execute() 

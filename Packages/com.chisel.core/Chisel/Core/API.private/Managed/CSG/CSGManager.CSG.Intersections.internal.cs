@@ -45,10 +45,10 @@ namespace Chisel.Core
         [BurstCompile(CompileSynchronously = true)]
         public unsafe struct FindAllIntersectionLoopsJob : IJobParallelFor
         {
-            [ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushWorldPlanes>>  brushWorldPlanes;
-            [ReadOnly] public NativeArray<BlobAssetReference<BrushPairIntersection>>    intersectingBrushes;
+            [NoAlias,ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushWorldPlanes>>  brushWorldPlanes;
+            [NoAlias,ReadOnly] public NativeArray<BlobAssetReference<BrushPairIntersection>>    intersectingBrushes;
 
-            [WriteOnly] public NativeHashMap<BrushSurfacePair, BlobAssetReference<BrushIntersectionLoop>>.ParallelWriter outputSurfaces;
+            [NoAlias,WriteOnly] public NativeHashMap<BrushSurfacePair, BlobAssetReference<BrushIntersectionLoop>>.ParallelWriter outputSurfaces;
 
             // TODO: move all the code that used to be in separate jobs here, instead of calling "Execute" on all of these
 

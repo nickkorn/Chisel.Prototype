@@ -20,11 +20,11 @@ namespace Chisel.Core
     [BurstCompile(CompileSynchronously = true)]
     internal unsafe struct CreateRoutingTableJob : IJobParallelFor
     {
-        [ReadOnly] public NativeArray<int>                          treeBrushes;
-        [ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushesTouchedByBrush>> brushesTouchedByBrushes;
-        [ReadOnly] public BlobAssetReference<CompactTree>           compactTree;
-        [ReadOnly] public NativeArray<CategoryRoutingRow>           operationTables;
-        [WriteOnly] public NativeHashMap<int, BlobAssetReference<RoutingTable>>.ParallelWriter routingTableLookup;
+        [NoAlias,ReadOnly] public NativeArray<int>                          treeBrushes;
+        [NoAlias,ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushesTouchedByBrush>> brushesTouchedByBrushes;
+        [NoAlias,ReadOnly] public BlobAssetReference<CompactTree>           compactTree;
+        [NoAlias,ReadOnly] public NativeArray<CategoryRoutingRow>           operationTables;
+        [NoAlias,WriteOnly] public NativeHashMap<int, BlobAssetReference<RoutingTable>>.ParallelWriter routingTableLookup;
 
         public void Execute(int index)
         {

@@ -19,10 +19,10 @@ namespace Chisel.Core
     {
         public struct Empty { }
 
-        [ReadOnly] public int maxPairs;
-        [ReadOnly] public NativeArray<int>      treeBrushes;
-        [ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushesTouchedByBrush>> brushesTouchedByBrushes;
-        [WriteOnly] public NativeList<BrushPair> uniqueBrushPairs;
+        [NoAlias, ReadOnly] public int maxPairs;
+        [NoAlias, ReadOnly] public NativeArray<int>      treeBrushes;
+        [NoAlias, ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushesTouchedByBrush>> brushesTouchedByBrushes;
+        [NoAlias, WriteOnly] public NativeList<BrushPair> uniqueBrushPairs;
 
         public void Execute()
         {
@@ -69,7 +69,7 @@ namespace Chisel.Core
     [BurstCompile(CompileSynchronously = true)]
     struct DisposeBrushPairsJob : IJobParallelFor
     {
-        [ReadOnly] public NativeList<BlobAssetReference<BrushPairIntersection>> intersectingBrushes;
+        [NoAlias, ReadOnly] public NativeList<BlobAssetReference<BrushPairIntersection>> intersectingBrushes;
 
         public void Execute(int index)
         {
@@ -88,10 +88,10 @@ namespace Chisel.Core
         const float kPlaneDistanceEpsilon   = CSGManagerPerformCSG.kPlaneDistanceEpsilon;
         const float kNormalEpsilon          = CSGManagerPerformCSG.kNormalEpsilon;
 
-        [ReadOnly] public NativeArray<BrushPair>                                                uniqueBrushPairs;
-        [ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushMeshBlob>>                 brushMeshBlobLookup;
-        [ReadOnly] public NativeHashMap<int, BlobAssetReference<NodeTransformations>>           transformations;
-        [WriteOnly] public NativeList<BlobAssetReference<BrushPairIntersection>>.ParallelWriter intersectingBrushes;
+        [NoAlias, ReadOnly] public NativeArray<BrushPair>                                                uniqueBrushPairs;
+        [NoAlias, ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushMeshBlob>>                 brushMeshBlobLookup;
+        [NoAlias, ReadOnly] public NativeHashMap<int, BlobAssetReference<NodeTransformations>>           transformations;
+        [NoAlias, WriteOnly] public NativeList<BlobAssetReference<BrushPairIntersection>>.ParallelWriter intersectingBrushes;
 
         // TODO: turn into job
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

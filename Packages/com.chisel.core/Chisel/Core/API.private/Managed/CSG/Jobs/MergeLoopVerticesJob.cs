@@ -19,9 +19,9 @@ namespace Chisel.Core
     public struct MergeLoopVerticesJob : IJob
     {
         // Add [NativeDisableContainerSafetyRestriction] when done, for performance
-        [ReadOnly] public NativeArray<float4> verticesSrc;
+        [NoAlias, ReadOnly] public NativeArray<float4> verticesSrc;
         //readwrite
-        public NativeArray<float4> verticesDst;
+        [NoAlias] public NativeArray<float4> verticesDst;
 
         // TODO: optimize
         public unsafe void Execute()

@@ -21,17 +21,20 @@ namespace Chisel.Core
         public const int kMaxVertexCount = short.MaxValue;
         const float kPlaneDistanceEpsilon = CSGManagerPerformCSG.kDistanceEpsilon;
 
-        // Add [NativeDisableContainerSafetyRestriction] when done, for performance
-        [ReadOnly] public NativeArray<float4>   selfPlanes;
-        [ReadOnly] public VertexSoup            vertexSoup;
-        [ReadOnly] public NativeList<Edge>      otherEdges;
-        public NativeList<Edge>                 edges;
+        [NoAlias, ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushWorldPlanes>> brushWorldPlanes;
+        [NoAlias, ReadOnly] public int                  selfBrushNodeIndex;
+        //[NoAlias, ReadOnly] public NativeArray<float4>  selfPlanes;
+        [NoAlias, ReadOnly] public VertexSoup           vertexSoup;
+        [NoAlias, ReadOnly] public NativeList<Edge>     otherEdges;
+        [NoAlias] public NativeList<Edge>               edges;
 
         public unsafe void ExecuteEdges()
         {
             if (edges.Length < 3 ||
                 otherEdges.Length < 3)
                 return;
+
+            ref var selfPlanes = ref brushWorldPlanes[selfBrushNodeIndex].Value.worldPlanes;
 
             var otherVerticesLength = 0;
             var otherVertices       = (ushort*)UnsafeUtility.Malloc(otherEdges.Length * sizeof(ushort), 4, Allocator.TempJob);

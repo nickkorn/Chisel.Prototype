@@ -13,7 +13,7 @@ using UnityEngine;
 
 namespace Chisel.Core
 {
-    public static class NativeArrayExtensions
+    public static class ChiselNativeArrayExtensions
     {
         public unsafe static void ClearValues<T>(this NativeArray<T> array) where T : unmanaged
         {

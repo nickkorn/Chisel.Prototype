@@ -141,12 +141,12 @@ namespace Chisel.Core
     [BurstCompile(CompileSynchronously = true)]
     unsafe struct SubtractEdgesJob : IJobParallelFor
     {
-        [ReadOnly] public int                       segmentIndex;
+        [NoAlias,ReadOnly] public int                       segmentIndex;
 
-        [ReadOnly] public VertexSoup                vertices;
-        [ReadOnly] public NativeList<Edge>          allEdges;
-        [ReadOnly] public NativeList<float4>        allWorldPlanes;
-        [ReadOnly] public NativeList<LoopSegment>   allSegments;       
+        [NoAlias,ReadOnly] public VertexSoup                vertices;
+        [NoAlias,ReadOnly] public NativeList<Edge>          allEdges;
+        [NoAlias,ReadOnly] public NativeList<float4>        allWorldPlanes;
+        [NoAlias,ReadOnly] public NativeList<LoopSegment>   allSegments;       
 
         [NativeDisableParallelForRestriction]
         [WriteOnly] public NativeArray<byte>        destroyedEdges;
@@ -186,12 +186,12 @@ namespace Chisel.Core
     unsafe struct MergeEdgesJob : IJob
 #endif
     {
-        [ReadOnly] public int segmentCount;
+        [NoAlias,ReadOnly] public int segmentCount;
 
-        [ReadOnly] public VertexSoup                vertices;
-        [ReadOnly] public NativeList<Edge>          allEdges;
-        [ReadOnly] public NativeList<float4>        allWorldPlanes;
-        [ReadOnly] public NativeList<LoopSegment>   allSegments;
+        [NoAlias,ReadOnly] public VertexSoup                vertices;
+        [NoAlias,ReadOnly] public NativeList<Edge>          allEdges;
+        [NoAlias,ReadOnly] public NativeList<float4>        allWorldPlanes;
+        [NoAlias,ReadOnly] public NativeList<LoopSegment>   allSegments;
 
         [NativeDisableParallelForRestriction]
         [WriteOnly] public NativeArray<byte>        destroyedEdges;
@@ -243,15 +243,15 @@ namespace Chisel.Core
     [BurstCompile(CompileSynchronously = true)]
     unsafe struct IntersectEdgesJob : IJob
     {
-        [ReadOnly] public VertexSoup                 vertices;
-        [ReadOnly] public NativeArray<Edge>          edges1;
-        [ReadOnly] public NativeArray<Edge>          edges2;
-        [ReadOnly] public BlobAssetReference<BrushWorldPlanes> worldPlanes1;
-        [ReadOnly] public BlobAssetReference<BrushWorldPlanes> worldPlanes2;
+        [NoAlias,ReadOnly] public VertexSoup                 vertices;
+        [NoAlias,ReadOnly] public NativeArray<Edge>          edges1;
+        [NoAlias,ReadOnly] public NativeArray<Edge>          edges2;
+        [NoAlias,ReadOnly] public BlobAssetReference<BrushWorldPlanes> worldPlanes1;
+        [NoAlias,ReadOnly] public BlobAssetReference<BrushWorldPlanes> worldPlanes2;
 
         [NativeDisableUnsafePtrRestriction]
         [WriteOnly] public OperationResult* result; // FIXME: SHOULD NOT DO THIS
-        [WriteOnly] public NativeList<Edge> outEdges;
+        [NoAlias,WriteOnly] public NativeList<Edge> outEdges;
 
         public void Execute()
         {
