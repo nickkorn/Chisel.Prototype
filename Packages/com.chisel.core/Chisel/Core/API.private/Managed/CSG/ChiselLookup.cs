@@ -363,7 +363,7 @@ namespace Chisel.Core
         }
     }
     
-    public enum IntersectionType
+    public enum IntersectionType : byte
     {
         NoIntersection,
         Intersection,

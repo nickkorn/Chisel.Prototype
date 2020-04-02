@@ -1,4 +1,4 @@
-﻿#define USE_OPTIMIZATIONS
+#define USE_OPTIMIZATIONS
 //#define SHOW_DEBUG_MESSAGES 
 using System;
 using System.Collections.Generic;
@@ -17,7 +17,7 @@ using Unity.Entities;
 namespace Chisel.Core
 {
 #if USE_MANAGED_CSG_IMPLEMENTATION
-    [BurstCompile]
+    [BurstCompile(CompileSynchronously = true)]
     internal unsafe struct CreateRoutingTableJob : IJobParallelFor
     {
         [ReadOnly] public NativeArray<int>                          treeBrushes;

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.ComponentModel;
@@ -96,7 +96,7 @@ namespace Chisel.Core
         #endregion
     }
 
-    [BurstCompile(Debug = false)]
+    [BurstCompile(CompileSynchronously = true)]
     unsafe struct FindAllIntersectionsJob : IJobParallelFor
     {
         const double kEpsilon = CSGManagerPerformCSG.kEpsilon;
@@ -281,7 +281,7 @@ namespace Chisel.Core
         }
     }
 
-    [BurstCompile(Debug = false)]
+    [BurstCompile(CompileSynchronously = true)]
     unsafe struct StoreBrushIntersectionsJob : IJobParallelFor
     {
         [ReadOnly] public int                               treeNodeIndex;

@@ -8,7 +8,7 @@ using System.Runtime.CompilerServices;
 
 namespace Chisel.Core
 {
-    public enum IntersectionResult
+    public enum IntersectionResult : byte
     {
         Intersecting,
         Inside,

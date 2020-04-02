@@ -9,14 +9,12 @@ namespace Chisel.Core
 {
     public static class GeometryMath
     {
-        [BurstCompile(Debug = false, CompileSynchronously = true, FloatMode = FloatMode.Fast, FloatPrecision = FloatPrecision.Low)]
         public static int GetTriangleArraySize(int size)
         {
             int n = size - 1;
             return ((n * n) + n) / 2;
         }
 
-        [BurstCompile(Debug = false, CompileSynchronously = true, FloatMode = FloatMode.Fast, FloatPrecision = FloatPrecision.Low)]
         public static int2 GetTriangleArrayIndex(int index, int size)
         {
             int n = size - 1;

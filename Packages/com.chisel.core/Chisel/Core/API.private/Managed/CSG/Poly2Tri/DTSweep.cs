@@ -310,7 +310,7 @@ namespace Poly2Tri
         
         }
 
-        enum Orientation
+        enum Orientation : byte
         {
             CW,
             CCW,

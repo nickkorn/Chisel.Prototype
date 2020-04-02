@@ -87,7 +87,7 @@ namespace Chisel.Core
         public int planeIndex1;
     }
     
-    [BurstCompile(Debug = false)]
+    [BurstCompile(CompileSynchronously = true)]
     unsafe struct FindIntersectionsJob : IJob// IJobParallelFor
     {
         const float kPlaneDistanceEpsilon   = CSGManagerPerformCSG.kPlaneDistanceEpsilon;
@@ -206,7 +206,7 @@ namespace Chisel.Core
         }
     }
 
-    [BurstCompile(Debug = false)]
+    [BurstCompile(CompileSynchronously = true)]
     unsafe struct InsertIntersectionVerticesJob : IJob
     {
         [ReadOnly] public NativeArray<VertexAndPlanePair> vertexReader;
@@ -330,7 +330,7 @@ namespace Chisel.Core
         }
     }
     
-    [BurstCompile(Debug = false)]
+    [BurstCompile(CompileSynchronously = true)]
     unsafe struct SortLoopsJob : IJob
     {
         [ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushWorldPlanes>> allBrushWorldPlanes;
@@ -513,7 +513,7 @@ namespace Chisel.Core
     }
 
     // TODO: merge with SortLoopsJob
-    [BurstCompile]
+    [BurstCompile(CompileSynchronously = true)]
     unsafe struct CreateLoopsJob //: IJob
     {
         [ReadOnly] public int                                   brushIndex0;

@@ -7,6 +7,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
 using Unity.Burst;
+using Unity.Burst.CompilerServices;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Entities;
@@ -97,7 +98,7 @@ namespace Chisel.Core
     [NativeContainer]
     public unsafe struct VertexSoup : IDisposable
     {
-        public const int        kMaxVertexCount = 65000;
+        public const ushort     kMaxVertexCount = 65000;
         internal const uint     kHashTableSize  = 509u;
         internal const float    kCellSize       = CSGManagerPerformCSG.kDistanceEpsilon * 2;
 
@@ -242,12 +243,14 @@ namespace Chisel.Core
 #if ENABLE_UNITY_COLLECTIONS_CHECKS
             AtomicSafetyHandle.CheckWriteAndThrow(m_Safety);
 #endif
-            var requiredVertices = extraIndices + m_Vertices->Length;
-            if (m_Vertices->Capacity < requiredVertices)
+            var requiredVertCapacity    = m_Vertices->Length + extraIndices;
+            var requiredVertices        = m_Vertices->Length + (extraIndices * 2);
+            if (m_Vertices->Capacity < requiredVertCapacity)
                 m_Vertices->SetCapacity<float3>(requiredVertices);
 
-            var requiredIndices = extraIndices + m_ChainedIndices->Length;
-            if (m_ChainedIndices->Capacity < requiredIndices)
+            var requiredIndexCapacity   = m_ChainedIndices->Length + extraIndices;
+            var requiredIndices         = m_ChainedIndices->Length + (extraIndices * 2);
+            if (m_ChainedIndices->Capacity < requiredIndexCapacity)
                 m_ChainedIndices->SetCapacity<ushort>(requiredIndices);
         }
 
@@ -283,6 +286,7 @@ namespace Chisel.Core
         /// <value>The item count.</value>
         public int Length
         {
+            [return: AssumeRange(0, kMaxVertexCount)]
             get
             {
 #if ENABLE_UNITY_COLLECTIONS_CHECKS
@@ -293,7 +297,7 @@ namespace Chisel.Core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public unsafe ushort AddNoResize(float3 vertex)
+        public unsafe ushort AddNoResize(float3 vertex) 
         {
 #if ENABLE_UNITY_COLLECTIONS_CHECKS
             AtomicSafetyHandle.CheckWriteAndThrow(m_Safety);

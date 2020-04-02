@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.ComponentModel;
@@ -14,7 +14,7 @@ using Unity.Entities;
 
 namespace Chisel.Core
 {
-    [BurstCompile]
+    [BurstCompile(CompileSynchronously = true)]
     struct FindBrushPairsJob : IJob
     {
         public struct Empty { }
@@ -66,7 +66,7 @@ namespace Chisel.Core
         }
     }
 
-    [BurstCompile]
+    [BurstCompile(CompileSynchronously = true)]
     struct DisposeBrushPairsJob : IJobParallelFor
     {
         [ReadOnly] public NativeList<BlobAssetReference<BrushPairIntersection>> intersectingBrushes;
@@ -81,7 +81,7 @@ namespace Chisel.Core
         }
     }
 
-    [BurstCompile]
+    [BurstCompile(CompileSynchronously = true)]
     struct PrepareBrushPairIntersectionsJob : IJobParallelFor
     {
         const float kDistanceEpsilon        = CSGManagerPerformCSG.kDistanceEpsilon;

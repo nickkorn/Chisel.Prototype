@@ -85,7 +85,7 @@ namespace Chisel.Editors
 
         // TODO: put somewhere else, so we can enable/disable default uv snapping behavour in the editor
         [Flags]
-        enum UVSnapSettings
+        enum UVSnapSettings : sbyte
         {
             None                = 0,
             GeometryGrid        = 1,

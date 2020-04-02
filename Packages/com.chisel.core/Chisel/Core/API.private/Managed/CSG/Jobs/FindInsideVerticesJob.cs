@@ -28,9 +28,9 @@ namespace Chisel.Core
         public float4 worldVertex;
     }
 
-    [BurstCompile(Debug = false)]
+    [BurstCompile(CompileSynchronously = true)]
     unsafe struct FindInsideVerticesJob : IJob// IJobParallelFor
-    { 
+    {
         [ReadOnly] public BlobAssetReference<BrushPairIntersection> intersection;
         [ReadOnly] public int                   intersectionPlaneIndex1;
         [ReadOnly] public int                   usedVerticesIndex0;
@@ -65,7 +65,7 @@ namespace Chisel.Core
         }
     }
     
-    [BurstCompile(Debug = false)]
+    [BurstCompile(CompileSynchronously = true)]
     unsafe struct InsertInsideVerticesJob : IJob
     {
         const float kPlaneDistanceEpsilon = CSGManagerPerformCSG.kPlaneDistanceEpsilon;

@@ -13,7 +13,7 @@ namespace Chisel.Core
     /// <seealso cref="Chisel.Core.CSGTreeBrush"/>
     /// <seealso cref="Chisel.Core.CSGTreeBrush.Flags"/>
     [Serializable, Flags]
-    public enum CSGTreeBrushFlags
+    public enum CSGTreeBrushFlags : byte
     {
         /// <summary>This brush has no special states</summary>
         Default		= 0,

@@ -19,40 +19,8 @@ namespace Chisel.Core
     static partial class CSGManagerPerformCSG
     {
         #region Helper methods
-
-        #region TransformByTransposedInversedMatrix
-
-        // TODO: Optimize
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        [BurstCompile]
-        static unsafe void TransformByTransposedInversedMatrix(float4* outputPlanes, float4* surfaces, int length, float4x4 nodeToTreeSpaceInversed)
-        {
-            for (int p = 0; p < length; p++)
-            {
-                var planeVector = math.mul(nodeToTreeSpaceInversed, surfaces[p]);
-                outputPlanes[p] = planeVector / math.length(planeVector.xyz);
-            }
-        }
-
-        #endregion
         
         #region IsOutsidePlanes
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static unsafe bool IsOutsidePlanes(NativeArray<float4> planes, float4 localVertex)
-        {
-            const float kEpsilon = CSGManagerPerformCSG.kDistanceEpsilon;
-            var planePtr = (float4*)planes.GetUnsafeReadOnlyPtr();
-            for (int n = 0; n < planes.Length; n++)
-            {
-                var distance = math.dot(planePtr[n], localVertex);
-
-                // will be 'false' when distance is NaN or Infinity
-                if (!(distance <= kEpsilon))
-                    return true;
-            }
-            return false;
-        }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static unsafe bool IsOutsidePlanes(ref BlobArray<float4> planes, float4 localVertex)
@@ -74,7 +42,7 @@ namespace Chisel.Core
         #endregion
 
 
-        [BurstCompile]
+        [BurstCompile(CompileSynchronously = true)]
         public unsafe struct FindAllIntersectionLoopsJob : IJobParallelFor
         {
             [ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushWorldPlanes>>  brushWorldPlanes;

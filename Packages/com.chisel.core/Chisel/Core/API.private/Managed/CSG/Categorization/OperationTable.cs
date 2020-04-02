@@ -24,6 +24,7 @@ namespace Chisel.Core
         const CategoryGroupIndex ReverseAligned     = (CategoryGroupIndex)CategoryIndex.ReverseAligned;
         const CategoryGroupIndex Outside            = (CategoryGroupIndex)CategoryIndex.Outside;
 
+        // TODO: Burst might support reading this directly now?
         public static readonly CategoryRoutingRow[][] Tables = new[]
         {
             // Additive set operation on polygons: output = (left-node || right-node)
@@ -96,6 +97,7 @@ namespace Chisel.Core
         const CategoryGroupIndex ReverseAligned = (CategoryGroupIndex)CategoryIndex.ReverseAligned;
         const CategoryGroupIndex Outside        = (CategoryGroupIndex)CategoryIndex.Outside;
 
+        // TODO: Burst might support reading this directly now?
         public static readonly CategoryRoutingRow[][] RemoveOverlappingOperationTables = new[]
         {
             // Additive set operation on polygons: output = (left-node || right-node)
@@ -150,7 +152,8 @@ namespace Chisel.Core
 	            new CategoryRoutingRow( Inside,           Inside,           Inside,           Outside           )  // outside
             }
         };
-
+        
+        // TODO: Burst might support reading this directly now?
         public static readonly CategoryRoutingRow[][] RegularOperationTables = new[]
         {
             // Additive set operation on polygons: output = (left-node || right-node)
@@ -217,6 +220,7 @@ namespace Chisel.Core
                 Rows.Dispose();
 
             // TODO: blobAsset instead?
+            // TODO: Burst might support reading static readonly arrays directly now?
             Rows = new NativeArray<CategoryRoutingRow>((RemoveOverlappingOperationTables.Length * NumberOfRowsPerOperation) +
                                                        (RegularOperationTables.Length * NumberOfRowsPerOperation), Allocator.Persistent);
 

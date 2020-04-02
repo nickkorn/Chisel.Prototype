@@ -6,6 +6,7 @@ using System.Runtime.InteropServices;
 using Unity.Burst;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
+using Unity.Entities;
 using Unity.Jobs;
 using Unity.Mathematics;
 using UnityEngine;
@@ -14,7 +15,7 @@ using ReadOnlyAttribute = Unity.Collections.ReadOnlyAttribute;
 namespace Chisel.Core
 {
 #if USE_MANAGED_CSG_IMPLEMENTATION
-    [BurstCompile(Debug = false)]
+    [BurstCompile(CompileSynchronously = true)]
     public struct FindLoopVertexOverlapsJob : IJob
     {
         public const int kMaxVertexCount = short.MaxValue;

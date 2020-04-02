@@ -1,4 +1,4 @@
-﻿#define IS_PARALLEL
+#define IS_PARALLEL
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -22,7 +22,7 @@ namespace Chisel.Core
         public int planesOffset;
         public int planesLength;
     }
-    public enum OperationResult
+    public enum OperationResult : byte
     {
         Fail,
         Cut,
@@ -138,7 +138,7 @@ namespace Chisel.Core
     }
 
     // Note: Assumes polygons are convex
-    [BurstCompile(Debug = false)]
+    [BurstCompile(CompileSynchronously = true)]
     unsafe struct SubtractEdgesJob : IJobParallelFor
     {
         [ReadOnly] public int                       segmentIndex;
@@ -179,7 +179,7 @@ namespace Chisel.Core
     }
 
     // Note: Assumes polygons are convex
-    [BurstCompile(Debug = false)]
+    [BurstCompile(CompileSynchronously = true)]
 #if IS_PARALLEL
     unsafe struct MergeEdgesJob : IJobParallelFor
 #else
@@ -240,7 +240,7 @@ namespace Chisel.Core
 
 
     // Note: Assumes polygons are convex
-    [BurstCompile(Debug = false)]
+    [BurstCompile(CompileSynchronously = true)]
     unsafe struct IntersectEdgesJob : IJob
     {
         [ReadOnly] public VertexSoup                 vertices;

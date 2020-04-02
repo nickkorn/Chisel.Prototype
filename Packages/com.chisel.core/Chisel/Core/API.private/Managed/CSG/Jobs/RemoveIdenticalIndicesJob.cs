@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
@@ -16,7 +16,7 @@ namespace Chisel.Core
 {
 #if USE_MANAGED_CSG_IMPLEMENTATION
     
-    [BurstCompile(Debug = false)]
+    [BurstCompile(CompileSynchronously = true)]
     public unsafe struct RemoveIdenticalIndicesEdgesJob : IJob
     {
         public NativeList<Edge> edges;
@@ -46,7 +46,7 @@ namespace Chisel.Core
 
     // TODO: probably makes sense to break this up into multiple pieces/multiple jobs that can run parallel,
     //      but requires that change some storage formats first
-    [BurstCompile(Debug = false)]
+    [BurstCompile(CompileSynchronously = true)]
     public unsafe struct CopyPolygonToIndicesJob : IJob
     {
         [ReadOnly] public BlobAssetReference<BrushMeshBlob> mesh;

@@ -12,7 +12,7 @@ namespace Chisel.Core
     /// <seealso cref="Chisel.Core.BrushMesh.Polygon"/>
     /// <seealso cref="Chisel.Core.BrushMesh"/>	
     [Serializable, Flags]
-    public enum SurfaceFlags : Int32
+    public enum SurfaceFlags : byte
     {
         /// <summary>The surface has no flags set</summary>
         None = 0,
