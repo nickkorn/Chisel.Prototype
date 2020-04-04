@@ -23,11 +23,12 @@ namespace Chisel.Core
         const float kPlaneDistanceEpsilon = CSGManagerPerformCSG.kDistanceEpsilon;
 
         [NoAlias, ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushWorldPlanes>> brushWorldPlanes;
-        [NoAlias, ReadOnly] public int                  selfBrushNodeIndex;
-        //[NoAlias, ReadOnly] public NativeArray<float4>  selfPlanes;
-        [NoAlias, ReadOnly] public VertexSoup           vertexSoup;
+        [NoAlias, ReadOnly] public int                              selfBrushNodeIndex;
+        [NoAlias, ReadOnly] public VertexSoup                       vertexSoup;
         [NoAlias, ReadOnly] public NativeListArray<Edge>.NativeList otherEdges;
-        [NoAlias] public NativeListArray<Edge>.NativeList edges;
+
+
+        [NoAlias] public NativeListArray<Edge>.NativeList           edges;
 
         public unsafe void ExecuteEdges()
         {

@@ -15,11 +15,10 @@ using ReadOnlyAttribute = Unity.Collections.ReadOnlyAttribute;
 namespace Chisel.Core
 {
 #if USE_MANAGED_CSG_IMPLEMENTATION
-    
     [BurstCompile(CompileSynchronously = true)]
     public unsafe struct RemoveIdenticalIndicesEdgesJob : IJob
     {
-        [NoAlias] public NativeList<Edge> edges;
+        [NoAlias] public NativeListArray<Edge>.NativeList edges;
 
         public static void RemoveDuplicates(ref NativeList<Edge> edges)
         {
@@ -36,17 +35,6 @@ namespace Chisel.Core
                 edges.RemoveAtSwapBack(e);
             }
         }
-
-        public void Execute()
-        {
-            RemoveDuplicates(ref edges);
-        }
-    }
-
-    [BurstCompile(CompileSynchronously = true)]
-    public unsafe struct RemoveIdenticalIndicesEdgesJob2 : IJob
-    {
-        [NoAlias] public NativeListArray<Edge>.NativeList edges;
 
         public static void RemoveDuplicates(ref NativeListArray<Edge>.NativeList edges)
         {

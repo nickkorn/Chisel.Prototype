@@ -27,10 +27,9 @@ namespace Chisel.Core
         [NoAlias, ReadOnly] public int                  otherBrushNodeIndex;
         [NoAlias, ReadOnly] public int                  selfBrushNodeIndex;
         
-        [NativeDisableContainerSafetyRestriction]
-        [NoAlias]
-        public VertexSoup                               vertexSoup; // <-- TODO: we're reading AND writing to the same NativeList!?!?!
-        [NoAlias] public NativeListArray<Edge>.NativeList edges;
+        //[NativeDisableContainerSafetyRestriction]
+        [NoAlias] public VertexSoup                         vertexSoup; // <-- TODO: we're reading AND writing to the same NativeList!?!?!
+        [NoAlias] public NativeListArray<Edge>.NativeList   edges;
         
         // TODO: find a way to share found intersections between loops, to avoid accuracy issues
         public unsafe void Execute()
@@ -188,10 +187,9 @@ namespace Chisel.Core
         [NoAlias, ReadOnly] public int                  otherBrushNodeIndex;
         [NoAlias, ReadOnly] public int                  selfBrushNodeIndex;
         
-        [NativeDisableContainerSafetyRestriction]
-        [NoAlias]
-        public VertexSoup                               vertexSoup; // <-- TODO: we're reading AND writing to the same NativeList!?!?!
-        [NoAlias] public NativeListArray<Edge>.NativeList edges;
+        //[NativeDisableContainerSafetyRestriction]
+        [NoAlias] public VertexSoup                         vertexSoup; // <-- TODO: we're reading AND writing to the same NativeList!?!?!
+        [NoAlias] public NativeListArray<Edge>.NativeList   edges;
         
         // TODO: find a way to share found intersections between loops, to avoid accuracy issues
         public unsafe void Execute()

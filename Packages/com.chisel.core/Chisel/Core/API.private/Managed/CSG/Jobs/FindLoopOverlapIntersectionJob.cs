@@ -244,7 +244,7 @@ namespace Chisel.Core
                 {
                     // TODO: might not be necessary
                     var edges = intersectionEdges[i];
-                    var removeIdenticalIndicesEdgesJob = new RemoveIdenticalIndicesEdgesJob2 { edges = edges };
+                    var removeIdenticalIndicesEdgesJob = new RemoveIdenticalIndicesEdgesJob { edges = edges };
                     removeIdenticalIndicesEdgesJob.Execute();
                 }
 
@@ -252,7 +252,7 @@ namespace Chisel.Core
                 {
                     // TODO: might not be necessary
                     var edges = basePolygonEdges[i];
-                    var removeIdenticalIndicesEdgesJob = new RemoveIdenticalIndicesEdgesJob2 { edges = edges };
+                    var removeIdenticalIndicesEdgesJob = new RemoveIdenticalIndicesEdgesJob { edges = edges };
                     removeIdenticalIndicesEdgesJob.Execute();
                 }
 

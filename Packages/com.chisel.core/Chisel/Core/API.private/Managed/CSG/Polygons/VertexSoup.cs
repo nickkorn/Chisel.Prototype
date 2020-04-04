@@ -309,6 +309,9 @@ namespace Chisel.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public unsafe void AddUniqueVertices(ref BlobArray<float3> uniqueVertices)
         {
+#if ENABLE_UNITY_COLLECTIONS_CHECKS
+            AtomicSafetyHandle.CheckWriteAndThrow(m_Safety);
+#endif
             // Add Unique vertex
             for (int i = 0; i < uniqueVertices.Length; i++)
             {
