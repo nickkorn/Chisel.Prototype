@@ -327,9 +327,11 @@ namespace Chisel.Core
                 {
                     var cutting_node_id = nodes[i];
                     // Get the intersection loops between the two brushes on every surface of the brush we're performing CSG on
-                    if (!brushOutputLoops.intersectionLoopLookup.TryGetValue(cutting_node_id, out Loop[] cuttingNodeIntersectionLoops))
-                        cuttingNodeIntersectionLoops = null;
-                    sIntersectionLoops.Add(cuttingNodeIntersectionLoops);
+                    if (brushOutputLoops.intersectionLoopLookup.TryGetValue(cutting_node_id, out Loop[] cuttingNodeIntersectionLoops) &&
+                        cuttingNodeIntersectionLoops.Length > 0)
+                        sIntersectionLoops.Add(cuttingNodeIntersectionLoops);
+                    else
+                        sIntersectionLoops.Add(null);
                 }
                 brushOutputLoops.intersectionLoops = sIntersectionLoops.ToArray();
             }

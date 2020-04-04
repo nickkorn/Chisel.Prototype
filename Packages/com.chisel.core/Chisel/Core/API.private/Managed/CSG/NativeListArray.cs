@@ -445,7 +445,7 @@ namespace Chisel.Core
 
             public NativeArray<T> ToArray(Allocator allocator)
             {
-                NativeArray<T> result = new NativeArray<T>(Length, allocator, NativeArrayOptions.UninitializedMemory);
+                var result = new NativeArray<T>(Length, allocator, NativeArrayOptions.UninitializedMemory);
                 result.CopyFrom(this);
                 return result;
             }
@@ -506,6 +506,15 @@ namespace Chisel.Core.LowLevel.Unsafe
         public static void* GetInternalListDataPtrUnchecked<T>(ref NativeListArray<T>.NativeList list) where T : struct
         {
             return list.m_ListData;
+        }
+
+
+        public static void AddRange<T>(this NativeList<T> dst, in NativeListArray<T>.NativeList list) where T : struct
+        {
+            var offset = dst.Length;
+            dst.ResizeUninitialized(offset + list.Length);
+            for (int i = 0; i < list.Length; i++)
+                dst[offset + i] = list[i];
         }
     }
 }

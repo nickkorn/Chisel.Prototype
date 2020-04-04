@@ -9,6 +9,7 @@ using Unity.Collections.LowLevel.Unsafe;
 using Unity.Entities;
 using Unity.Jobs;
 using Unity.Mathematics;
+using Chisel.Core.LowLevel.Unsafe;
 using UnityEngine;
 using ReadOnlyAttribute = Unity.Collections.ReadOnlyAttribute;
 
@@ -26,7 +27,7 @@ namespace Chisel.Core
         //[NoAlias, ReadOnly] public NativeArray<float4>  selfPlanes;
         [NoAlias, ReadOnly] public VertexSoup           vertexSoup;
         [NoAlias, ReadOnly] public NativeListArray<Edge>.NativeList otherEdges;
-        [NoAlias] public NativeList<Edge>               edges;
+        [NoAlias] public NativeListArray<Edge>.NativeList edges;
 
         public unsafe void ExecuteEdges()
         {

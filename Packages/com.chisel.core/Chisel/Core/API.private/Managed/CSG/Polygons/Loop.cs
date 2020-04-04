@@ -78,6 +78,18 @@ namespace Chisel.Core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public unsafe Loop(NativeListArray<Edge>.NativeList srcEdges, SurfaceInfo surfaceInfo)
+        {
+            {
+                edges = new NativeList<Edge>(Allocator.Persistent);
+                edges.Capacity = srcEdges.Length;
+                for (int j = 0; j < srcEdges.Length; j++)
+                    edges.Add(srcEdges[j]);
+                this.info = surfaceInfo;
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public Loop(Loop original)
         {
             edges = new NativeList<Edge>(Allocator.Persistent);
