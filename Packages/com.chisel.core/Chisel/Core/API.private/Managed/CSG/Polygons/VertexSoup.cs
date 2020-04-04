@@ -304,6 +304,25 @@ namespace Chisel.Core
 #endif
             return VertexSoupUtility.AddNoResize((ushort*)m_HashTable, m_ChainedIndices, m_Vertices, vertex);
         }
+
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public unsafe void AddUniqueVertices(ref BlobArray<float3> uniqueVertices)
+        {
+            // Add Unique vertex
+            for (int i = 0; i < uniqueVertices.Length; i++)
+            {
+                var vertex = uniqueVertices[i];
+                m_Vertices->AddNoResize(vertex);
+
+                var centerIndex = new int3((int)(vertex.x / kCellSize), (int)(vertex.y / kCellSize), (int)(vertex.z / kCellSize));
+                var hashCode = VertexSoupUtility.GetHash(centerIndex);
+                var prevChainIndex = ((ushort*)m_HashTable)[hashCode];
+                var newChainIndex = m_ChainedIndices->Length;
+                m_ChainedIndices->AddNoResize((ushort)prevChainIndex);
+                ((ushort*)m_HashTable)[(int)hashCode] = (ushort)(newChainIndex + 1);
+            }
+        }
     }
 #endif
 }
