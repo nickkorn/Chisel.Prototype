@@ -286,69 +286,6 @@ namespace Chisel.Core
                 intersectionAsset.Dispose();
             }
         }
-
-
-        #region FindLoopOverlapIntersections
-
-        // TODO: convert all managed code to unmanaged code, convert data at end to something all subsequent phases can use (until those are rewritten)
-        internal unsafe static void FindLoopOverlapIntersections(ref ChiselLookup.Data chiselLookupValues, NativeHashMap<BrushSurfacePair, BlobAssetReference<BrushIntersectionLoop>> intersectionLoopBlobs, NativeArray<int> treeBrushesArray, NativeArray<int> brushMeshInstanceIDs)
-        {
-            ref var brushWorldPlaneBlobs        = ref chiselLookupValues.brushWorldPlanes;
-            ref var basePolygonBlobs            = ref chiselLookupValues.basePolygons;
-            ref var routingTableLookup          = ref chiselLookupValues.routingTableLookup;
-            ref var vertexSoups                 = ref chiselLookupValues.vertexSoups;
-
-            var intersectionLoopBlobsKeys   = intersectionLoopBlobs.GetKeyArray(Allocator.TempJob);
-            if (intersectionLoopBlobsKeys.Length > 0)
-            { 
-                for (int index = 0; index < treeBrushesArray.Length; index++)
-                {
-                    var brushNodeID         = treeBrushesArray[index];
-                    var brushNodeIndex      = brushNodeID - 1;
-
-                    var basePolygonBlob         = basePolygonBlobs[brushNodeIndex];
-                    var surfaceCount            = basePolygonBlob.Value.surfaces.Length;
-
-                    var intersectionSurfaceInfos    = new NativeList<SurfaceInfo>(intersectionLoopBlobsKeys.Length, Allocator.TempJob);
-                    var intersectionEdges           = new NativeListArray<Edge>(intersectionLoopBlobsKeys.Length, 16, Allocator.TempJob);
-                    var basePolygonSurfaceInfos     = new NativeList<SurfaceInfo>(intersectionLoopBlobsKeys.Length, Allocator.TempJob);
-                    var basePolygonEdges            = new NativeListArray<Edge>(surfaceCount, 16, Allocator.TempJob);
-                    var vertexSoup                  = new VertexSoup(basePolygonBlob.Value.vertices.Length + 16, Allocator.TempJob);
-
-                    vertexSoups[brushNodeIndex] = vertexSoup;
-                    var findLoopOverlapIntersectionsJob = new FindLoopOverlapIntersectionsJob
-                    {
-                        brushNodeIndex              = brushNodeIndex,
-                        
-                        intersectionLoopBlobs       = intersectionLoopBlobs,
-                        intersectionLoopBlobsKeys   = intersectionLoopBlobsKeys,
-                        
-                        brushWorldPlanes            = brushWorldPlaneBlobs,
-                        basePolygonBlob             = basePolygonBlob,
-                        
-                        vertexSoup                  = vertexSoup,
-                        basePolygonEdges            = basePolygonEdges,
-                        basePolygonSurfaceInfos     = basePolygonSurfaceInfos,
-                        intersectionEdges           = intersectionEdges,
-                        intersectionSurfaceInfos    = intersectionSurfaceInfos
-                    };
-                    findLoopOverlapIntersectionsJob.Run();
-
-
-                    //***GET RID OF THIS***//
-                    var outputLoops = CSGManager.GetBrushInfo(brushNodeID).brushOutputLoops;/*!!*/
-                    outputLoops.Dispose();/*!!*/
-
-                    outputLoops.basePolygonSurfaceInfos     = basePolygonSurfaceInfos;
-                    outputLoops.basePolygonEdges            = basePolygonEdges;
-                    outputLoops.intersectionSurfaceInfos    = intersectionSurfaceInfos;
-                    outputLoops.intersectionEdges           = intersectionEdges;
-                    //***GET RID OF THIS***//
-                }
-            }
-            intersectionLoopBlobsKeys.Dispose();
-        }
-#endregion
     }
 #endif
 }

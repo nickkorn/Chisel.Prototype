@@ -20,10 +20,11 @@ namespace Chisel.Core
     [BurstCompile(CompileSynchronously = true)]
     internal unsafe struct FindLoopOverlapIntersectionsJob : IJob
     { 
-        [NoAlias, ReadOnly] public int                                                          brushNodeIndex;
-        [NoAlias, ReadOnly] public NativeArray<BrushSurfacePair>                                intersectionLoopBlobsKeys;
+        [NoAlias, ReadOnly] public int                                                          index;
+        [NoAlias, ReadOnly] public NativeArray<int>                                             treeBrushesArray;
+        //[NoAlias, ReadOnly] public NativeArray<BrushSurfacePair>                                intersectionLoopBlobsKeys;
         [NoAlias, ReadOnly] public NativeHashMap<BrushSurfacePair, BlobAssetReference<BrushIntersectionLoop>> intersectionLoopBlobs;
-        [NoAlias, ReadOnly] public BlobAssetReference<BasePolygonsBlob>                         basePolygonBlob;
+        [NoAlias, ReadOnly] public NativeHashMap<int, BlobAssetReference<BasePolygonsBlob>>     basePolygonBlobs;
         [NoAlias, ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushWorldPlanes>>     brushWorldPlanes;
         
 
@@ -74,11 +75,24 @@ namespace Chisel.Core
 
         public unsafe void Execute()
         {
+            var brushNodeID         = treeBrushesArray[index];
+            var brushNodeIndex      = brushNodeID - 1;
+
+            var basePolygonBlob     = basePolygonBlobs[brushNodeIndex];
+
             var surfaceCount        = basePolygonBlob.Value.surfaces.Length;
             if (surfaceCount == 0)
                 return;
 
 
+            basePolygonEdges.Allocate(surfaceCount);
+            basePolygonSurfaceInfos.ResizeUninitialized(surfaceCount);
+
+
+
+            // ***********************
+            // TODO: get rid of this somehow
+            var intersectionLoopBlobsKeys = intersectionLoopBlobs.GetKeyArray(Allocator.Temp);
             var brushIntersectionLoops      = new NativeList<BlobAssetReference<BrushIntersectionLoop>>(intersectionLoopBlobsKeys.Length, Allocator.Temp);
             var uniqueBrushIndicesHashMap   = new NativeHashMap<int, Empty>(intersectionLoopBlobsKeys.Length, Allocator.Temp);
             for (int k = 0; k < intersectionLoopBlobsKeys.Length; k++)
@@ -93,6 +107,10 @@ namespace Chisel.Core
                 uniqueBrushIndicesHashMap.TryAdd(item.brushNodeIndex1, new Empty());
                 brushIntersectionLoops.AddNoResize(outputSurface); /*OUTPUT*/
             }
+            intersectionLoopBlobsKeys.Dispose();
+            // ***********************
+
+
 
             var uniqueBrushIndices = uniqueBrushIndicesHashMap.GetKeyArray(Allocator.Temp);
             uniqueBrushIndicesHashMap.Dispose();
@@ -118,13 +136,13 @@ namespace Chisel.Core
                     basePolygonSurfaceInfos[s] = basePolygonBlob.Value.surfaces[s].surfaceInfo;
                 }
 
-                for (int k = 0; k < brushIntersectionLoops.Length; k++)
-                    intersectionSurfaceInfos.AddNoResize(brushIntersectionLoops[k].Value.surfaceInfo); /*OUTPUT*/
-
                 uniqueBrushIndices.Dispose();
                 brushIntersectionLoops.Dispose();
                 return;
             }
+
+            intersectionEdges.Allocate(brushIntersectionLoops.Length);
+            intersectionSurfaceInfos.Capacity = brushIntersectionLoops.Length;
 
             brushIntersectionLoops.Sort(new SortByBasePlaneIndex());
             for (int k = 0; k < brushIntersectionLoops.Length; k++)

@@ -29,31 +29,41 @@ namespace Chisel.Core
 
         public Allocator Allocator;
 
-        public static UnsafeListArray* Create(int length, Allocator allocator)
+        public static UnsafeListArray* Create(Allocator allocator)
         {
             UnsafeListArray* arrayData = (UnsafeListArray*)UnsafeUtility.Malloc(UnsafeUtility.SizeOf<UnsafeListArray>(), UnsafeUtility.AlignOf<UnsafeListArray>(), allocator);
             UnsafeUtility.MemClear(arrayData, UnsafeUtility.SizeOf<UnsafeListArray>());
 
             arrayData->Allocator = allocator;
-
-            if (length != 0)
-            {
-                var bytesToMalloc = sizeof(UnsafeList*) * length;
-                arrayData->Ptr = (UnsafeList**)UnsafeUtility.Malloc(bytesToMalloc, UnsafeUtility.AlignOf<long>(), arrayData->Allocator);
-                UnsafeUtility.MemClear(arrayData->Ptr, bytesToMalloc);
-                arrayData->Length = length;
-            }
+            arrayData->Length = 0;
 
             return arrayData;
         }
 
-        public UnsafeList* Initialize(int index, int sizeOf, int alignOf, NativeArrayOptions options = NativeArrayOptions.UninitializedMemory)
+        public void Allocate(int length)
+        {
+            CheckAlreadyAllocated(Length);
+            var bytesToMalloc = sizeof(UnsafeList*) * length;
+            Ptr = (UnsafeList**)UnsafeUtility.Malloc(bytesToMalloc, UnsafeUtility.AlignOf<long>(), Allocator);
+            UnsafeUtility.MemClear(Ptr, bytesToMalloc);
+            Length = length;
+        }
+
+        public UnsafeList* InitializeIndex(int index, int sizeOf, int alignOf, NativeArrayOptions options = NativeArrayOptions.UninitializedMemory)
         {
             CheckIndexInRange(index, Length);
             var ptr = UnsafeList.Create(sizeOf, alignOf, InitialListCapacity, Allocator, options);
             Ptr[index] = ptr;
             return ptr;
         }
+
+        [Conditional("ENABLE_UNITY_COLLECTIONS_CHECKS")]
+        private static void CheckAlreadyAllocated(int length)
+        {
+            if (length > 0)
+                throw new IndexOutOfRangeException($"NativeListArray already allocated.");
+        }
+
 
         [Conditional("ENABLE_UNITY_COLLECTIONS_CHECKS")]
         private static void CheckIndexInRange(int value, int length)
@@ -185,17 +195,17 @@ namespace Chisel.Core
         public int Length { [return: AssumeRange(0, int.MaxValue)] get { return m_Array->Length; } }
         public bool IsCreated => m_Array != null;
 
-        public NativeListArray(int length, Allocator allocator)
-            : this(length, 1, allocator, 2)
+        public NativeListArray(Allocator allocator)
+            : this(1, allocator, 2)
         {
         }
 
-        public NativeListArray(int length, int initialListCapacity, Allocator allocator)
-            : this(length, initialListCapacity, allocator, 2)
+        public NativeListArray(int initialListCapacity, Allocator allocator)
+            : this(initialListCapacity, allocator, 2)
         {
         }
 
-        NativeListArray(int length, int initialListCapacity, Allocator allocator, int disposeSentinelStackDepth)
+        NativeListArray(int initialListCapacity, Allocator allocator, int disposeSentinelStackDepth)
         {
             var totalSize = UnsafeUtility.SizeOf<T>() * (long)initialListCapacity;
 #if ENABLE_UNITY_COLLECTIONS_CHECKS
@@ -204,8 +214,7 @@ namespace Chisel.Core
                 throw new ArgumentException("Allocator must be Temp, TempJob or Persistent", nameof(allocator));
             if (initialListCapacity < 0)
                 throw new ArgumentOutOfRangeException(nameof(initialListCapacity), "InitialListCapacity must be >= 0");
-            if (length < 0)
-                throw new ArgumentOutOfRangeException(nameof(length), "Length must be >= 0");
+
 
             CollectionHelper.CheckIsUnmanaged<T>();
 
@@ -214,12 +223,19 @@ namespace Chisel.Core
 
             DisposeSentinel.Create(out m_Safety, out m_DisposeSentinel, disposeSentinelStackDepth, allocator);
 #endif
-            m_Array = UnsafeListArray.Create(length, allocator);
+            m_Array = UnsafeListArray.Create(allocator);
             m_Array->InitialListCapacity = initialListCapacity;
 
 #if ENABLE_UNITY_COLLECTIONS_CHECKS
             AtomicSafetyHandle.SetBumpSecondaryVersionOnScheduleWrite(m_Safety, true);
 #endif
+        }
+
+        public void Allocate(int length)
+        {
+            if (length < 0)
+                throw new ArgumentOutOfRangeException(nameof(length), "Length must be >= 0");
+            m_Array->Allocate(length);
         }
 
         [return: AssumeRange(0, int.MaxValue)]
@@ -293,7 +309,7 @@ namespace Chisel.Core
 
                 var ptr = m_Array->Ptr[positiveIndex];
                 if (ptr == null)
-                    ptr = m_Array->Initialize(index, UnsafeUtility.SizeOf<T>(), UnsafeUtility.AlignOf<T>());
+                    ptr = m_Array->InitializeIndex(index, UnsafeUtility.SizeOf<T>(), UnsafeUtility.AlignOf<T>());
                 return new NativeList(m_Array->Ptr[positiveIndex], ref m_Safety);
 #else
                 return new NativeList(m_Array->Ptr[positiveIndex]);
