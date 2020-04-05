@@ -17,6 +17,7 @@ namespace Chisel.Core
 {
 #if USE_MANAGED_CSG_IMPLEMENTATION
 
+    [BurstCompile(CompileSynchronously = true)]
     internal unsafe struct FindLoopOverlapIntersectionsJob : IJob
     { 
         [NoAlias, ReadOnly] public int                                                          brushNodeIndex;
@@ -26,26 +27,26 @@ namespace Chisel.Core
         [NoAlias, ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushWorldPlanes>>     brushWorldPlanes;
         
 
-        [NoAlias] public VertexSoup             vertexSoup;
-        [NoAlias] public NativeListArray<Edge>  intersectionEdges;
-        [NoAlias] public NativeListArray<Edge>  basePolygonEdges;
-        [NoAlias] public NativeList<SurfaceInfo> brushSurfaceInfos;
+        [NoAlias] public VertexSoup                 vertexSoup;
+        [NoAlias] public NativeListArray<Edge>      intersectionEdges;
+        [NoAlias] public NativeListArray<Edge>      basePolygonEdges;
+        [NoAlias] public NativeList<SurfaceInfo>    brushSurfaceInfos;
 
         static unsafe void CopyFrom(NativeListArray<Edge>.NativeList dst, BlobAssetReference<BrushIntersectionLoop> brushIntersectionLoop, VertexSoup vertexSoup)
         {
             ref var vertices = ref brushIntersectionLoop.Value.loopVertices;
-            var srcIndices = new ushort[vertices.Length];
-            vertexSoup.Reserve(srcIndices.Length);
-            for (int j = 0; j < srcIndices.Length; j++)
+            var srcIndices = stackalloc ushort[vertices.Length];
+            vertexSoup.Reserve(vertices.Length);
+            for (int j = 0; j < vertices.Length; j++)
                 srcIndices[j] = vertexSoup.AddNoResize(vertices[j]);
 
             {
-                dst.Capacity = srcIndices.Length;
-                for (int j = 1; j < srcIndices.Length; j++)
+                dst.Capacity = vertices.Length;
+                for (int j = 1; j < vertices.Length; j++)
                 {
                     dst.Add(new Edge() { index1 = srcIndices[j - 1], index2 = srcIndices[j] });
                 }
-                dst.Add(new Edge() { index1 = srcIndices[srcIndices.Length - 1], index2 = srcIndices[0] });
+                dst.Add(new Edge() { index1 = srcIndices[vertices.Length - 1], index2 = srcIndices[0] });
             }
         }
 
