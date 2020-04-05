@@ -16,36 +16,28 @@ namespace Chisel.Core
 #if USE_MANAGED_CSG_IMPLEMENTATION
     public sealed class BrushLoops : IDisposable
     {
-        public List<Loop>   basePolygons = new List<Loop>();
-
-        public Loop[][] intersectionLoops;
+        public NativeList<SurfaceInfo>  intersectionSurfaceInfos;
+        public NativeListArray<Edge>    intersectionEdges;
+        public NativeList<SurfaceInfo>  basePolygonSurfaceInfos;
+        public NativeListArray<Edge>    basePolygonEdges;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Clear()
         {
+            if (basePolygonEdges.IsCreated)
+                basePolygonEdges.Dispose();
+            if (basePolygonSurfaceInfos.IsCreated)
+                basePolygonSurfaceInfos.Dispose();
+            if (intersectionEdges.IsCreated)
+                intersectionEdges.Dispose();
+            if (intersectionSurfaceInfos.IsCreated)
+                intersectionSurfaceInfos.Dispose();
         }
 
         ~BrushLoops() { Dispose(); }
         public void Dispose()
         {
-            if (intersectionLoops != null)
-            {
-                foreach (var loopArray in intersectionLoops)
-                {
-                    if (loopArray != null)
-                    {
-                        foreach (var loop in loopArray)
-                        {
-                            if (loop != null)
-                                loop.Dispose();
-                        }
-                    }
-                }
-                intersectionLoops = null;
-            }
-            foreach (var loop in basePolygons)
-                loop.Dispose();
-            basePolygons.Clear();
+            Clear();
         }
     }
 

@@ -290,10 +290,6 @@ namespace Chisel.Core
 
         #region FindLoopOverlapIntersections
 
-        static List<Loop[]> sIntersectionLoops = new List<Loop[]>();
-
-        static Dictionary<int, Loop[]> sIntersectionLoopLookup = new Dictionary<int, Loop[]>();
-
         // TODO: convert all managed code to unmanaged code, convert data at end to something all subsequent phases can use (until those are rewritten)
         internal unsafe static void FindLoopOverlapIntersections(ref ChiselLookup.Data chiselLookupValues, NativeHashMap<BrushSurfacePair, BlobAssetReference<BrushIntersectionLoop>> intersectionLoopBlobs, NativeArray<int> treeBrushesArray, NativeArray<int> brushMeshInstanceIDs)
         {
@@ -310,16 +306,14 @@ namespace Chisel.Core
                     var brushNodeID         = treeBrushesArray[index];
                     var brushNodeIndex      = brushNodeID - 1;
 
-                    if (!routingTableLookup.TryGetValue(brushNodeIndex, out BlobAssetReference<RoutingTable> routingTable))
-                        continue;
-
                     var basePolygonBlob         = basePolygonBlobs[brushNodeIndex];
                     var surfaceCount            = basePolygonBlob.Value.surfaces.Length;
 
-                    var brushSurfaceInfos       = new NativeList<SurfaceInfo>(intersectionLoopBlobsKeys.Length, Allocator.TempJob);                    
-                    var intersectionEdges       = new NativeListArray<Edge>(intersectionLoopBlobsKeys.Length, 16, Allocator.TempJob);
-                    var basePolygonEdges        = new NativeListArray<Edge>(surfaceCount, 16, Allocator.TempJob);
-                    var vertexSoup              = new VertexSoup(basePolygonBlob.Value.vertices.Length + 16, Allocator.TempJob);
+                    var intersectionSurfaceInfos    = new NativeList<SurfaceInfo>(intersectionLoopBlobsKeys.Length, Allocator.TempJob);
+                    var intersectionEdges           = new NativeListArray<Edge>(intersectionLoopBlobsKeys.Length, 16, Allocator.TempJob);
+                    var basePolygonSurfaceInfos     = new NativeList<SurfaceInfo>(intersectionLoopBlobsKeys.Length, Allocator.TempJob);
+                    var basePolygonEdges            = new NativeListArray<Edge>(surfaceCount, 16, Allocator.TempJob);
+                    var vertexSoup                  = new VertexSoup(basePolygonBlob.Value.vertices.Length + 16, Allocator.TempJob);
 
                     vertexSoups[brushNodeIndex] = vertexSoup;
                     var findLoopOverlapIntersectionsJob = new FindLoopOverlapIntersectionsJob
@@ -333,9 +327,10 @@ namespace Chisel.Core
                         basePolygonBlob             = basePolygonBlob,
                         
                         vertexSoup                  = vertexSoup,
-                        intersectionEdges           = intersectionEdges,
                         basePolygonEdges            = basePolygonEdges,
-                        brushSurfaceInfos           = brushSurfaceInfos
+                        basePolygonSurfaceInfos     = basePolygonSurfaceInfos,
+                        intersectionEdges           = intersectionEdges,
+                        intersectionSurfaceInfos    = intersectionSurfaceInfos
                     };
                     findLoopOverlapIntersectionsJob.Run();
 
@@ -344,77 +339,11 @@ namespace Chisel.Core
                     var outputLoops = CSGManager.GetBrushInfo(brushNodeID).brushOutputLoops;/*!!*/
                     outputLoops.Dispose();/*!!*/
 
-                    {
-                        var basePolygons = new List<Loop>(basePolygonBlob.Value.surfaces.Length);    /*OUTPUT*/
-                        for (int s = 0; s < basePolygonBlob.Value.surfaces.Length; s++)
-                        {
-                            ref var input = ref basePolygonBlob.Value.surfaces[s];
-
-                            var loop = new Loop()/*!!*/
-                            {
-                                info = input.surfaceInfo,
-                                holes = new List<Loop>()/*!!*/
-                            };
-
-                            var edges = basePolygonEdges[s];
-                            for (int e = 0; e < edges.Length; e++)
-                                loop.edges.Add(edges[e]);
-                            basePolygons.Add(loop);
-                        }
-                        outputLoops.basePolygons = basePolygons;/*!!*/ /*OUTPUT*/
-                    }
-
-                    var routingTableNodes = routingTable.Value.nodes.ToArray();
-
-                    // Note: those above are only the INTERSECTING surfaces, below ALL surfaces
-                    sIntersectionLoopLookup.Clear();
-                    for (int i = 0; i < brushSurfaceInfos.Length; i++)
-                    {
-                        var surfaceInfo = brushSurfaceInfos[i];
-                        var brushNodeIndex1 = surfaceInfo.brushNodeIndex;
-                        var brushNodeID1 = brushNodeIndex1 + 1;
-
-                        if (!routingTableNodes.Contains(brushNodeID1))
-                            continue;
-
-                        if (!sIntersectionLoopLookup.TryGetValue(brushNodeID1, out Loop[] loops))
-                        {
-                            loops = new Loop[surfaceCount];
-                            sIntersectionLoopLookup[brushNodeID1] = loops;
-                        }
-
-                        loops[surfaceInfo.basePlaneIndex] = new Loop(intersectionEdges[i], surfaceInfo);
-                    }
-
-
-                    //**********
-                    //**********
-                    //**********
-                    //**********
-                    sIntersectionLoops.Clear(); // <-   this can be static. We know routingTableNodes.Length + surfaceCount, 
-                                                //      need remap from index into sIntersectionLoops for nodeID
-                                                //      also: this could be a continuous array with list of offsets
-                                                //      -> this can be a NativeListArray of edges
-                    //**********
-                    //**********
-                    //**********
-                    //**********
-                    for (int i = 0; i < routingTableNodes.Length; i++)
-                    {
-                        var cutting_node_id = routingTableNodes[i];
-                        // Get the intersection loops between the two brushes on every surface of the brush we're performing CSG on
-                        if (sIntersectionLoopLookup.TryGetValue(cutting_node_id, out Loop[] cuttingNodeIntersectionLoops) &&
-                            cuttingNodeIntersectionLoops.Length > 0)
-                            sIntersectionLoops.Add(cuttingNodeIntersectionLoops);
-                        else
-                            sIntersectionLoops.Add(null);
-                    }
-                    outputLoops.intersectionLoops = sIntersectionLoops.ToArray();
+                    outputLoops.basePolygonSurfaceInfos     = basePolygonSurfaceInfos;
+                    outputLoops.basePolygonEdges            = basePolygonEdges;
+                    outputLoops.intersectionSurfaceInfos    = intersectionSurfaceInfos;
+                    outputLoops.intersectionEdges           = intersectionEdges;
                     //***GET RID OF THIS***//
-
-                    intersectionEdges.Dispose();
-                    basePolygonEdges.Dispose();
-                    brushSurfaceInfos.Dispose();
                 }
             }
             intersectionLoopBlobsKeys.Dispose();
