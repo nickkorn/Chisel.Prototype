@@ -451,7 +451,9 @@ namespace Chisel.Core
         internal static bool		GetBrushBounds	(Int32 brushNodeID, ref Bounds bounds)
         {
             if (!AssertNodeIDValid(brushNodeID) || !AssertNodeType(brushNodeID, CSGNodeType.Brush)) return false;
-            if (!ChiselLookup.Value.basePolygons.TryGetValue(brushNodeID - 1, out BlobAssetReference<BasePolygonsBlob> result))
+            var treeNodeID = nodeHierarchies[brushNodeID - 1].treeNodeID;
+            var chiselLookupValues = ChiselTreeLookup.Value[treeNodeID - 1];
+            if (!chiselLookupValues.basePolygons.TryGetValue(brushNodeID - 1, out BlobAssetReference<BasePolygonsBlob> result))
                 return false;
 
             bounds = new Bounds();
@@ -590,6 +592,9 @@ namespace Chisel.Core
         {
             if (!AssertNodeIDValid(nodeID) || !AssertNodeTypeHasTransformation(nodeID))
                 return false;
+            
+            var treeNodeID          = nodeHierarchies[nodeID - 1].treeNodeID;
+            var chiselLookupValues  = ChiselTreeLookup.Value[treeNodeID - 1];
 
             var nodeLocalTransform = nodeLocalTransforms[nodeID - 1];
             NodeLocalTransform.SetLocalTransformation(ref nodeLocalTransform, localTransformation);
@@ -597,7 +602,7 @@ namespace Chisel.Core
 
             DirtySelfAndChildren(nodeID);
             SetDirty(nodeID);
-            UpdateBrushTransformation(ref ChiselLookup.Value.transformations, nodeID);
+            UpdateBrushTransformation(ref chiselLookupValues.transformations, nodeID);
             return true;
         }
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

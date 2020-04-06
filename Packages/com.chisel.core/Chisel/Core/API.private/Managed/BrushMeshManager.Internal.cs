@@ -63,7 +63,7 @@ namespace Chisel.Core
             if (!IsBrushMeshIDValid(brushMeshInstanceID))
                 return BlobAssetReference<BrushMeshBlob>.Null;
 
-            if (!ChiselLookup.Value.brushMeshBlobs.TryGetValue(brushMeshInstanceID - 1, out BlobAssetReference<BrushMeshBlob> item))
+            if (!ChiselMeshLookup.Value.brushMeshBlobs.TryGetValue(brushMeshInstanceID - 1, out BlobAssetReference<BrushMeshBlob> item))
                 return BlobAssetReference<BrushMeshBlob>.Null;
             return item;
         }
@@ -91,15 +91,15 @@ namespace Chisel.Core
             }
 
             var brushMeshIndex = brushMeshID - 1;
-            if (ChiselLookup.Value.brushMeshBlobs.TryGetValue(brushMeshIndex, out BlobAssetReference<BrushMeshBlob> item))
+            if (ChiselMeshLookup.Value.brushMeshBlobs.TryGetValue(brushMeshIndex, out BlobAssetReference<BrushMeshBlob> item))
             {
-                ChiselLookup.Value.brushMeshBlobs.Remove(brushMeshIndex);
+                ChiselMeshLookup.Value.brushMeshBlobs.Remove(brushMeshIndex);
                 if (item.IsCreated)
                     item.Dispose();
             }
 
             Profiler.BeginSample("BrushMeshBlob.Build");
-            ChiselLookup.Value.brushMeshBlobs[brushMeshIndex] = BrushMeshBlob.Build(brushMesh);
+            ChiselMeshLookup.Value.brushMeshBlobs[brushMeshIndex] = BrushMeshBlob.Build(brushMesh);
             Profiler.EndSample();
             return brushMeshID;
         }
@@ -129,13 +129,13 @@ namespace Chisel.Core
             }
 
             var brushMeshIndex = brushMeshInstanceID - 1;
-            if (ChiselLookup.Value.brushMeshBlobs.TryGetValue(brushMeshIndex, out BlobAssetReference<BrushMeshBlob> item))
+            if (ChiselMeshLookup.Value.brushMeshBlobs.TryGetValue(brushMeshIndex, out BlobAssetReference<BrushMeshBlob> item))
             {
-                ChiselLookup.Value.brushMeshBlobs.Remove(brushMeshIndex);
+                ChiselMeshLookup.Value.brushMeshBlobs.Remove(brushMeshIndex);
                 if (item.IsCreated)
                     item.Dispose();
             }
-            ChiselLookup.Value.brushMeshBlobs[brushMeshIndex] = BrushMeshBlob.Build(brushMesh);
+            ChiselMeshLookup.Value.brushMeshBlobs[brushMeshIndex] = BrushMeshBlob.Build(brushMesh);
             Profiler.BeginSample("BrushMeshBlob.Build");
             CSGManager.NotifyBrushMeshModified(brushMeshInstanceID);
             Profiler.EndSample();
@@ -158,9 +158,9 @@ namespace Chisel.Core
             unusedIDs.RemoveAt(0); // sorry again
             brushMeshes[brushMeshIndex].Reset();
             userIDs[brushMeshIndex] = userID;
-            if (ChiselLookup.Value.brushMeshBlobs.TryGetValue(brushMeshIndex, out BlobAssetReference<BrushMeshBlob> item))
+            if (ChiselMeshLookup.Value.brushMeshBlobs.TryGetValue(brushMeshIndex, out BlobAssetReference<BrushMeshBlob> item))
             {
-                ChiselLookup.Value.brushMeshBlobs.Remove(brushMeshIndex);
+                ChiselMeshLookup.Value.brushMeshBlobs.Remove(brushMeshIndex);
                 if (item.IsCreated)
                     item.Dispose();
             }
@@ -175,9 +175,9 @@ namespace Chisel.Core
             CSGManager.NotifyBrushMeshRemoved(brushMeshInstanceID);
 
             var brushMeshIndex = brushMeshInstanceID - 1;
-            if (ChiselLookup.Value.brushMeshBlobs.TryGetValue(brushMeshIndex, out BlobAssetReference<BrushMeshBlob> item))
+            if (ChiselMeshLookup.Value.brushMeshBlobs.TryGetValue(brushMeshIndex, out BlobAssetReference<BrushMeshBlob> item))
             {
-                ChiselLookup.Value.brushMeshBlobs.Remove(brushMeshIndex);
+                ChiselMeshLookup.Value.brushMeshBlobs.Remove(brushMeshIndex);
                 if (item.IsCreated)
                     item.Dispose();
             }

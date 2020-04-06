@@ -58,12 +58,9 @@ namespace Chisel.Core
 
         internal static BlobAssetReference<CompactTree> Create(List<CSGManager.NodeHierarchy> nodeHierarchies, int treeNodeIndex)
         {
-            if (ChiselLookup.Value.compactTrees.TryGetValue(treeNodeIndex, out BlobAssetReference<CompactTree> oldCompactTree))
-            {
-                ChiselLookup.Value.compactTrees.Remove(treeNodeIndex); // Remove first in case there's an error
-                if (oldCompactTree.IsCreated)
-                    oldCompactTree.Dispose();
-            }
+            var chiselLookupValues = ChiselTreeLookup.Value[treeNodeIndex];
+            if (chiselLookupValues.compactTree.IsCreated)
+                chiselLookupValues.compactTree.Dispose();
 
             var treeInfo                    = nodeHierarchies[treeNodeIndex].treeInfo;
             var treeBrushes                 = treeInfo.treeBrushes;
@@ -184,12 +181,11 @@ namespace Chisel.Core
             builder.Construct(ref root.bottomUpNodes, bottomUpNodes);
             root.indexOffset = minBrushIndex;
             builder.Construct(ref root.brushIndexToBottomUpIndex, brushIndexToBottomUpIndex);
-            ChiselLookup.Value.compactTrees[treeNodeIndex] = builder.CreateBlobAssetReference<CompactTree>(Allocator.Persistent);
+            chiselLookupValues.compactTree = builder.CreateBlobAssetReference<CompactTree>(Allocator.Persistent);
             builder.Dispose();
 
-            return ChiselLookup.Value.compactTrees[treeNodeIndex];
+            return chiselLookupValues.compactTree;
         }
-        
     }
 
     struct BrushIntersectionIndex
@@ -402,9 +398,9 @@ namespace Chisel.Core
     }
 
 
-    internal sealed unsafe class ChiselLookup : ScriptableObject
+    internal sealed unsafe class ChiselTreeLookup : ScriptableObject
     {
-        public unsafe struct Data
+        public unsafe class Data
         {
             public NativeHashMap<int, BlobAssetReference<BasePolygonsBlob>>         basePolygons;
             public NativeHashMap<int, BlobAssetReference<RoutingTable>>             routingTableLookup;
@@ -413,8 +409,7 @@ namespace Chisel.Core
             public NativeHashMap<int, BlobAssetReference<NodeTransformations>>      transformations;
             public Dictionary<int, VertexSoup>                                      vertexSoups;
 
-            public NativeHashMap<int, BlobAssetReference<BrushMeshBlob>>            brushMeshBlobs;
-            public NativeHashMap<int, BlobAssetReference<CompactTree>>              compactTrees;
+            public BlobAssetReference<CompactTree>                                  compactTree;
 
             internal void RemoveByBrushID(NativeArray<int> treeBrushes)
             {
@@ -469,12 +464,6 @@ namespace Chisel.Core
                 brushesTouchedByBrushes = new NativeHashMap<int, BlobAssetReference<BrushesTouchedByBrush>>(1000, Allocator.Persistent);
                 transformations         = new NativeHashMap<int, BlobAssetReference<NodeTransformations>>(1000, Allocator.Persistent);
                 vertexSoups             = new Dictionary<int, VertexSoup>();
-
-                // brushMeshIndex
-                brushMeshBlobs          = new NativeHashMap<int, BlobAssetReference<BrushMeshBlob>>(1000, Allocator.Persistent);
-
-                // treeIndex
-                compactTrees            = new NativeHashMap<int, BlobAssetReference<CompactTree>>(100, Allocator.Persistent);
             }
 
             internal void Dispose()
@@ -551,6 +540,80 @@ namespace Chisel.Core
                     vertexSoups.Clear();
                     vertexSoups = null;
                 }
+                if (compactTree.IsCreated)
+                {
+                    compactTree.Dispose();
+                }
+            }
+        }
+
+        static ChiselTreeLookup _singleton;
+
+        static void UpdateValue()
+        {
+            if (_singleton == null)
+            {
+                _singleton = ScriptableObject.CreateInstance<ChiselTreeLookup>();
+                _singleton.hideFlags = HideFlags.HideAndDontSave;
+            }
+        }
+
+        public static ChiselTreeLookup Value
+        {
+            get
+            {
+                if (_singleton == null)
+                    UpdateValue();
+                return _singleton;
+            }
+        }
+
+        public Data this[int index]
+        {
+            get
+            {
+                if (!chiselTreeLookup.TryGetValue(index, out int dataIndex))
+                {
+                    dataIndex = chiselTreeData.Count;
+                    chiselTreeLookup[index] = dataIndex;
+                    chiselTreeData.Add(new Data());
+                    chiselTreeData[dataIndex].Initialize();
+                }
+                return chiselTreeData[dataIndex];
+            }
+        }
+
+        readonly Dictionary<int, int>   chiselTreeLookup    = new Dictionary<int, int>();
+        readonly List<Data>             chiselTreeData      = new List<Data>();
+
+        internal void OnEnable()
+        {
+        }
+
+        internal void OnDisable()
+        {
+            foreach (var data in chiselTreeData)
+                data.Dispose();
+            chiselTreeData.Clear();
+            chiselTreeLookup.Clear();
+            _singleton = null;
+        }
+    }
+
+    internal sealed unsafe class ChiselMeshLookup : ScriptableObject
+    {
+        public unsafe class Data
+        {
+            public NativeHashMap<int, BlobAssetReference<BrushMeshBlob>>            brushMeshBlobs;
+            
+            internal void Initialize()
+            {
+                // brushMeshIndex
+                brushMeshBlobs          = new NativeHashMap<int, BlobAssetReference<BrushMeshBlob>>(1000, Allocator.Persistent);
+            }
+
+            internal void Dispose()
+            {
                 if (brushMeshBlobs.IsCreated)
                 {
                     using (var items = brushMeshBlobs.GetValueArray(Allocator.Temp))
@@ -564,49 +627,41 @@ namespace Chisel.Core
                         }
                     }
                 }
-                if (compactTrees.IsCreated)
-                {
-                    using (var items = compactTrees.GetValueArray(Allocator.Temp))
-                    {
-                        compactTrees.Clear();
-                        compactTrees.Dispose();
-                        foreach (var item in items)
-                        {
-                            if (item.IsCreated)
-                                item.Dispose();
-                        }
-                    }
-                }
             }
         }
 
-        static void* _instance;
-        static ChiselLookup _singleton;
+        static ChiselMeshLookup _singleton;
 
-        [BurstDiscard]
         static void UpdateValue()
         {
             if (_singleton == null)
             {
-                _singleton = ScriptableObject.CreateInstance<ChiselLookup>();
+                _singleton = ScriptableObject.CreateInstance<ChiselMeshLookup>();
                 _singleton.hideFlags = HideFlags.HideAndDontSave;
             }
-            _instance = UnsafeUtility.AddressOf<Data>(ref _singleton.chiselLookup);
         }
 
-        public static ref Data Value
+        public static Data Value
         {
             get
             {
-                if (_instance == null)
+                if (_singleton == null)
                     UpdateValue();
-                return ref UnsafeUtilityEx.AsRef<Data>(_instance);
+                return _singleton.data;
             }
         }
 
-        Data chiselLookup = new Data();
+        readonly Data data = new Data();
 
-        internal void OnEnable() { chiselLookup.Initialize(); }
-        internal void OnDisable() { chiselLookup.Dispose(); _singleton = null; }
+        internal void OnEnable()
+        {
+            data.Initialize();
+        }
+
+        internal void OnDisable()
+        {
+            data.Dispose();
+            _singleton = null;
+        }
     }
 }

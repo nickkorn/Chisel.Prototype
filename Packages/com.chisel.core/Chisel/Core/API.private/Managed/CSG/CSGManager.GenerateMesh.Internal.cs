@@ -6,6 +6,7 @@ using System.Runtime.CompilerServices;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Entities;
+using Unity.Jobs;
 using Unity.Mathematics;
 using UnityEngine;
 
@@ -420,7 +421,8 @@ namespace Chisel.Core
                 UnityEngine.Profiling.Profiler.BeginSample("UpdateTreeMesh");
                 try
                 {
-                    UpdateTreeMesh(treeNodeID);
+                    UpdateTreeMesh(treeNodeID, out JobHandle handle);
+                    handle.Complete();
                 } finally { UnityEngine.Profiling.Profiler.EndSample(); }
             }
 
@@ -597,10 +599,13 @@ namespace Chisel.Core
                 output.renderBuffers.surfaceRenderBuffers.Clear();
                 return;
             }
+            
+            var treeNodeID          = nodeHierarchies[brushNodeID - 1].treeNodeID;
+            var chiselLookupValues  = ChiselTreeLookup.Value[treeNodeID - 1];
 
             var meshPolygons	= mesh.polygons;
             var meshPlanes	    = mesh.planes;
-            var brushVertices   = ChiselLookup.Value.vertexSoups[brushNodeID - 1];
+            var brushVertices   = chiselLookupValues.vertexSoups[brushNodeID - 1];
 
             CSGManager.GetTreeToNodeSpaceMatrix(brushNodeID, out Matrix4x4 worldToLocal);
 
