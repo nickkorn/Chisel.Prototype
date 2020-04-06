@@ -549,9 +549,11 @@ namespace Chisel.Core
 
             for (int p = 0; p < surfaceCount; p++)
             {
+                var info = basePolygonSurfaceInfos[p];
+                info.interiorCategory = CategoryGroupIndex.First;
+
                 // Don't want to change the original loops so we copy them
-                var newLoop = new Loop() { info = basePolygonSurfaceInfos[p] };
-                newLoop.info.interiorCategory = CategoryGroupIndex.First;
+                var newLoop = new Loop();// { info = info };
 
                 var edges = basePolygonEdges[p];
                 for (int e = 0; e < edges.Length; e++)
@@ -560,6 +562,7 @@ namespace Chisel.Core
                 var surfaceLoops = allBrushSurfaces[p];
 
                 surfaceLoops.loopIndices.Add(0);/*!!*/
+                surfaceLoops.allInfos.Add(info);/*!!*/
                 surfaceLoops.allLoops.Add(newLoop);/*!!*/
             }
 
@@ -578,7 +581,8 @@ namespace Chisel.Core
                         if (!surfaceLoop.Valid)
                             continue;
 
-                        var currentInteriorCategory = surfaceLoop.info.interiorCategory; /*!!*/
+                        var surfaceLoopInfo         = loopsOnBrushSurface.allInfos[surfaceLoopIndex];
+                        var currentInteriorCategory = surfaceLoopInfo.interiorCategory; /*!!*/
 
                         if (!routingLookup.TryGetRoute(routingTable, currentInteriorCategory, out CategoryRoutingRow routingRow))
                         {
@@ -594,11 +598,13 @@ namespace Chisel.Core
                         if (overlap)
                         {
                             // If we overlap don't bother with creating a new polygon + hole and reuse existing one
-                            surfaceLoop.info.interiorCategory = routingRow[intersectionInfo.interiorCategory];/*!!*/
+                            surfaceLoopInfo.interiorCategory = routingRow[intersectionInfo.interiorCategory];/*!!*/
+                            loopsOnBrushSurface.allInfos[surfaceLoopIndex] = surfaceLoopInfo;
                             continue;
                         } else
                         {
-                            surfaceLoop.info.interiorCategory = routingRow[CategoryIndex.Outside];/*!!*/
+                            surfaceLoopInfo.interiorCategory = routingRow[CategoryIndex.Outside];/*!!*/
+                            loopsOnBrushSurface.allInfos[surfaceLoopIndex] = surfaceLoopInfo;
                         }
 
                         // Add all holes that share the same plane to the polygon
@@ -615,9 +621,11 @@ namespace Chisel.Core
                             Intersect(brushVertices, 
                                       loopsOnBrushSurface, /*!!*/
                                       surfaceLoop, /*!!*/
+                                      ref surfaceLoopInfo,
                                       intersectionLoop, 
                                       intersectionInfo, 
                                       intersectionCategory);
+                            loopsOnBrushSurface.allInfos[surfaceLoopIndex] = surfaceLoopInfo;
                             Profiler.EndSample();
                         }                        
                     }
@@ -635,20 +643,20 @@ namespace Chisel.Core
             return true;
         }
 
-        internal static unsafe void Intersect(in VertexSoup brushVertices, SurfaceLoops surfaceLoops, Loop currentLoop, NativeListArray<Edge>.NativeList intersectionLoop, SurfaceInfo intersectionInfo, CategoryGroupIndex newHoleCategory)
+        internal static unsafe void Intersect(in VertexSoup brushVertices, SurfaceLoops surfaceLoops, Loop currentLoop, ref SurfaceInfo currentInfo, NativeListArray<Edge>.NativeList intersectionLoop, SurfaceInfo intersectionInfo, CategoryGroupIndex newHoleCategory)
         {
             // It might look like we could just set the interiorCategory of brush_intersection here, and let all other cut loops copy from it below,
             // but the same brush_intersection might be used by another categorized_loop and then we'd try to reroute it again, which wouldn't work
             //brush_intersection.interiorCategory = newHoleCategory;
 
             var result = OperationResult.Fail;
-            var intersectEdgesJob = new IntersectEdgesJob2
+            var intersectEdgesJob = new IntersectEdgesJob
             {
                 vertices        = brushVertices,
                 edges1          = intersectionLoop,
                 edges2          = currentLoop.edges.AsDeferredJobArray(),
                 worldPlanes1    = ChiselLookup.Value.brushWorldPlanes[intersectionInfo.brushNodeIndex],
-                worldPlanes2    = ChiselLookup.Value.brushWorldPlanes[currentLoop.info.brushNodeIndex],
+                worldPlanes2    = ChiselLookup.Value.brushWorldPlanes[currentInfo.brushNodeIndex],
 
                 result          = &result,
                 outEdges        = new NativeList<Edge>(math.max(intersectionLoop.Length, currentLoop.edges.Length), Allocator.Persistent)
@@ -667,22 +675,22 @@ namespace Chisel.Core
                 // This new piece overrides the current loop
                 currentLoop.edges.Clear();
                 currentLoop.edges.AddRange(intersectEdgesJob.outEdges);
-                currentLoop.info.interiorCategory = newHoleCategory;
+                currentInfo.interiorCategory = newHoleCategory;
                 intersectEdgesJob.outEdges.Dispose();
             } else
             if (result == OperationResult.Overlapping)
             {
                 intersectEdgesJob.outEdges.Dispose();
-                currentLoop.info.interiorCategory = newHoleCategory;
+                currentInfo.interiorCategory = newHoleCategory;
             } else
-            { 
+            {
                 // FIXME: when brush_intersection and categorized_loop are grazing each other, 
                 //          technically we cut it but we shouldn't be creating it as a separate polygon + hole (bug7)
 
                 // the output of cutting operations are both holes for the original polygon (categorized_loop)
                 // and new polygons on the surface of the brush that need to be categorized
-                var intersectedLoop = new Loop(intersectEdgesJob.outEdges, intersectionInfo);
-                intersectedLoop.info.interiorCategory = newHoleCategory;
+                intersectionInfo.interiorCategory = newHoleCategory;
+                var intersectedLoop = new Loop(intersectEdgesJob.outEdges);//, intersectionInfo);
 
                 // the output of cutting operations are both holes for the original polygon (categorized_loop)
                 // and new polygons on the surface of the brush that need to be categorized
@@ -691,7 +699,7 @@ namespace Chisel.Core
 
                 if (currentLoop.holeIndices.Count > 0)
                 {
-                    ref var brushIntersections = ref ChiselLookup.Value.brushesTouchedByBrushes[currentLoop.info.brushNodeIndex].Value.brushIntersections;
+                    ref var brushIntersections = ref ChiselLookup.Value.brushesTouchedByBrushes[currentInfo.brushNodeIndex].Value.brushIntersections;
                     for (int h = 0; h < currentLoop.holeIndices.Count; h++)
                     {
                         // Need to make a copy so we can edit it without causing side effects
@@ -700,7 +708,8 @@ namespace Chisel.Core
                         if (!hole.Valid)
                             continue;
 
-                        var holeBrushNodeID = hole.info.brushNodeIndex + 1;
+                        var holeInfo        = surfaceLoops.allInfos[holeIndex];
+                        var holeBrushNodeID = holeInfo.brushNodeIndex + 1;
 
                         // TODO: Optimize and make this a BlobAsset that's created in a pass,
                         //       this BlobAsset must make it easy to quickly determine if two
@@ -719,8 +728,9 @@ namespace Chisel.Core
                         // But only if they touch
                         if (touches)
                         {
-                            var copyPolygon = new Loop(hole);
+                            var copyPolygon     = new Loop(hole);
                             intersectedLoop.holeIndices.Add(surfaceLoops.allLoops.Count);
+                            surfaceLoops.allInfos.Add(holeInfo);
                             surfaceLoops.allLoops.Add(copyPolygon);
                         }
                     }
@@ -732,10 +742,12 @@ namespace Chisel.Core
 
                 // this loop is a hole 
                 currentLoop.holeIndices.Add(surfaceLoops.allLoops.Count);
-                surfaceLoops.allLoops.Add(new Loop(intersectedLoop, newHoleCategory));
+                surfaceLoops.allInfos.Add(intersectionInfo);
+                surfaceLoops.allLoops.Add(new Loop(intersectedLoop));//, newHoleCategory));
 
                 // but also a polygon on its own
-                surfaceLoops.loopIndices.Add(surfaceLoops.allLoops.Count);    
+                surfaceLoops.loopIndices.Add(surfaceLoops.allLoops.Count);
+                surfaceLoops.allInfos.Add(intersectionInfo);
                 surfaceLoops.allLoops.Add(intersectedLoop);                          
             }
         }
@@ -801,6 +813,8 @@ namespace Chisel.Core
                 var holeIndices = baseloop.holeIndices;
                 if (holeIndices.Count == 0)
                     continue;
+
+                var baseLoopInfo = surfaceLoops.allInfos[baseloopIndex];
                 
                 for (int h = holeIndices.Count - 1; h >= 0; h--)
                 {
@@ -835,6 +849,7 @@ namespace Chisel.Core
                     {
                         var holeIndex   = holeIndices[h];
                         var hole        = surfaceLoops.allLoops[holeIndex];
+                        var holeInfo    = surfaceLoops.allInfos[holeIndex];
 
                         // TODO: figure out why sometimes polygons are flipped around, and try to fix this at the source
                         var holeEdges = hole.edges;
@@ -852,7 +867,7 @@ namespace Chisel.Core
                             }
                         }
 
-                        ref var worldPlanes = ref ChiselLookup.Value.brushWorldPlanes[hole.info.brushNodeIndex].Value.worldPlanes;
+                        ref var worldPlanes = ref ChiselLookup.Value.brushWorldPlanes[holeInfo.brushNodeIndex].Value.worldPlanes;
                         
                         var edgesLength = hole.edges.Length;
                         var planesLength = worldPlanes.Length;
@@ -875,7 +890,7 @@ namespace Chisel.Core
                     }
                     if (baseloop.edges.Length > 0)
                     {
-                        ref var worldPlanes = ref ChiselLookup.Value.brushWorldPlanes[baseloop.info.brushNodeIndex].Value.worldPlanes;
+                        ref var worldPlanes = ref ChiselLookup.Value.brushWorldPlanes[baseLoopInfo.brushNodeIndex].Value.worldPlanes;
 
                         var planesLength    = worldPlanes.Length;
                         var edgesLength     = baseloop.edges.Length;

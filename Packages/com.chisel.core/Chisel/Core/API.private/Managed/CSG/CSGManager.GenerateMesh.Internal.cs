@@ -607,7 +607,8 @@ namespace Chisel.Core
             for (int s = 0; s < surfaceLoops.Length; s++)
                 maxLoops += surfaceLoops[s].loopIndices.Count;
 
-            var loops = new List<Loop>(maxLoops);
+            var loops       = new List<Loop>(maxLoops);
+            var loopInfos   = new List<SurfaceInfo>(maxLoops);
             for (int s = 0; s < surfaceLoops.Length; s++)
             {
                 var surfaceLoopList = surfaceLoops[s];
@@ -615,7 +616,8 @@ namespace Chisel.Core
                 {
                     var surfaceLoopIndex = surfaceLoopList.loopIndices[l];
                     var surfaceLoop      = surfaceLoopList.allLoops[surfaceLoopIndex];
-                    var interiorCategory = (CategoryIndex)surfaceLoop.info.interiorCategory;
+                    var surfaceLoopInfo  = surfaceLoopList.allInfos[surfaceLoopIndex];
+                    var interiorCategory = (CategoryIndex)surfaceLoopInfo.interiorCategory;
                     if (interiorCategory > CategoryIndex.LastCategory)
                         Debug.Assert(false, $"Invalid final category {interiorCategory}");
 
@@ -650,10 +652,12 @@ namespace Chisel.Core
 
                     var loopIndex   = surfaceLoopList.loopIndices[l];
                     var loop        = surfaceLoopList.allLoops[loopIndex];
+                    var loopInfo    = surfaceLoopList.allInfos[loopIndex];
                     if (loop.edges.Length < 3)
                         continue;
 
                     loops.Add(loop);
+                    loopInfos.Add(loopInfo);
                 }
             }
 
@@ -661,12 +665,12 @@ namespace Chisel.Core
             var outputSurfaces  = new List<ChiselSurfaceRenderBuffer>(loops.Count * meshQueries.Length); // TODO: should be same size as brush.surfaces.Length
             for (int l = 0; l < loops.Count; l++)
             {
-                var loop            = loops[l];
-                var interiorCategory = (CategoryIndex)loop.info.interiorCategory;
+                var loop             = loops[l];
+                var loopInfo         = loopInfos[l];
+                var interiorCategory = (CategoryIndex)loopInfo.interiorCategory;
 
 
-                var info            = loop.info;
-                var polygonIndex	= info.basePlaneIndex;      // TODO: fix this
+                var polygonIndex	= loopInfo.basePlaneIndex;      // TODO: fix this
                 var meshPolygon		= meshPolygons[polygonIndex];
                 var surfaceIndex	= meshPolygon.surfaceID;    // TODO: fix this
 
@@ -686,14 +690,14 @@ namespace Chisel.Core
                     {
                         // Ensure we have the rotation properly calculated, and have a valid normal
                         quaternion rotation;
-                        if (((Vector3)info.worldPlane.xyz) == Vector3.forward)
+                        if (((Vector3)loopInfo.worldPlane.xyz) == Vector3.forward)
                             rotation = quaternion.identity;
                         else
-                            rotation = (quaternion)Quaternion.FromToRotation(info.worldPlane.xyz, Vector3.forward);
+                            rotation = (quaternion)Quaternion.FromToRotation(loopInfo.worldPlane.xyz, Vector3.forward);
 
                         // TODO: all separate loops on same surface should be put in same OutputSurfaceMesh!                    
 
-                        surfaceIndices = context.TriangulateLoops(loop, brushVertices, loop.edges.ToArray().ToList(), rotation);
+                        surfaceIndices = context.TriangulateLoops(loopInfo, brushVertices, loop.edges.ToArray().ToList(), rotation);
 
                     
                         #if false
@@ -747,7 +751,7 @@ namespace Chisel.Core
                 Vector3[] surfaceNormals = null;
                 if (anySurfaceTargetHasNormals)
                 {
-                    var normal = (interiorCategory == CategoryIndex.ValidReverseAligned || interiorCategory == CategoryIndex.ReverseAligned) ? -info.worldPlane.xyz : info.worldPlane.xyz;
+                    var normal = (interiorCategory == CategoryIndex.ValidReverseAligned || interiorCategory == CategoryIndex.ReverseAligned) ? -loopInfo.worldPlane.xyz : loopInfo.worldPlane.xyz;
 
                     surfaceNormals = surfaceVertices == null ? null : new Vector3[surfaceVertices.Length];
                     if (surfaceVertices != null)
@@ -775,7 +779,7 @@ namespace Chisel.Core
                 {
                     var meshQuery = meshQueries[t];
 
-                    var core_surface_flags = info.layers.layerUsage;
+                    var core_surface_flags = loopInfo.layers.layerUsage;
                     if ((core_surface_flags & meshQuery.LayerQueryMask) != meshQuery.LayerQuery)
                     {
                         continue;
@@ -788,9 +792,9 @@ namespace Chisel.Core
                         // TODO: turn this into array lookup
                         switch (meshQuery.LayerParameterIndex)
                         {
-                            case LayerParameterIndex.LayerParameter1: surfaceParameter = info.layers.layerParameter1; break;
-                            case LayerParameterIndex.LayerParameter2: surfaceParameter = info.layers.layerParameter2; break;
-                            case LayerParameterIndex.LayerParameter3: surfaceParameter = info.layers.layerParameter3; break;
+                            case LayerParameterIndex.LayerParameter1: surfaceParameter = loopInfo.layers.layerParameter1; break;
+                            case LayerParameterIndex.LayerParameter2: surfaceParameter = loopInfo.layers.layerParameter2; break;
+                            case LayerParameterIndex.LayerParameter3: surfaceParameter = loopInfo.layers.layerParameter3; break;
                         }
                     }
 

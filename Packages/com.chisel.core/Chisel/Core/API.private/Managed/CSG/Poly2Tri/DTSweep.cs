@@ -424,7 +424,7 @@ namespace Poly2Tri
 
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public int[] TriangulateLoops(Chisel.Core.Loop loop, VertexSoup vertices, List<Chisel.Core.Edge> inputEdges, quaternion rotation)
+        public int[] TriangulateLoops(SurfaceInfo loopInfo, VertexSoup vertices, List<Chisel.Core.Edge> inputEdges, quaternion rotation)
         {
             if (inputEdges.Count < 4)
             {
@@ -507,7 +507,7 @@ namespace Poly2Tri
                 children[i] = new List<int>();
 
 
-            MathExtensions.CalculateTangents(loop.info.worldPlane.xyz, out float3 right, out float3 forward);
+            MathExtensions.CalculateTangents(loopInfo.worldPlane.xyz, out float3 right, out float3 forward);
             for (int l1 = foundLoops.Count - 1; l1 >= 0; l1--)
             {
                 if (foundLoops[l1].Count == 0)

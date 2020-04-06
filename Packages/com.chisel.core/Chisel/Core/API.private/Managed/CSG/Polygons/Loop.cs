@@ -34,11 +34,9 @@ namespace Chisel.Core
         }
 #endif
 
-        public NativeList<Edge>             edges;
-        
+        public NativeList<Edge>             edges;        
         [NonSerialized] public List<int>    holeIndices = new List<int>();
-        [NonSerialized] public SurfaceInfo  info;
-
+        
         public bool Valid { [MethodImpl(MethodImplOptions.AggressiveInlining)] get { return edges.Length >= 3; } }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -48,10 +46,16 @@ namespace Chisel.Core
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Loop(NativeList<Edge> edges, in SurfaceInfo info)
+        public Loop(NativeList<Edge> edges)
         {
             this.edges = edges;
-            this.info = info;
+        } 
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public Loop(Loop original)
+        {
+            edges = new NativeList<Edge>(Allocator.Persistent);
+            this.edges.AddRange(original.edges);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -63,7 +67,6 @@ namespace Chisel.Core
             for (int j = 0; j < srcIndices.Length; j++)
                 srcIndices[j] = vertexSoup.AddNoResize(vertices[j]);
 
-            var surfaceInfo = brushIntersectionLoop.Value.surfaceInfo;
             {
                 edges = new NativeList<Edge>(Allocator.Persistent);
                 edges.Capacity = srcIndices.Length;
@@ -72,53 +75,9 @@ namespace Chisel.Core
                     edges.Add(new Edge() { index1 = srcIndices[j - 1], index2 = srcIndices[j] });
                 }
                 edges.Add(new Edge() { index1 = srcIndices[srcIndices.Length - 1], index2 = srcIndices[0] });
-
-                this.info = surfaceInfo;
             }
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public unsafe Loop(NativeListArray<Edge>.NativeList srcEdges, SurfaceInfo surfaceInfo)
-        {
-            {
-                edges = new NativeList<Edge>(Allocator.Persistent);
-                edges.Capacity = srcEdges.Length;
-                for (int j = 0; j < srcEdges.Length; j++)
-                    edges.Add(srcEdges[j]);
-                this.info = surfaceInfo;
-            }
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Loop(Loop original)
-        {
-            edges = new NativeList<Edge>(Allocator.Persistent);
-            this.edges  .AddRange(original.edges);
-            this.info = original.info;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Loop(Loop original, CategoryGroupIndex newHoleCategory)
-        {
-            edges = new NativeList<Edge>(Allocator.Persistent);
-            this.edges.AddRange(original.edges);
-            this.info = original.info;
-            this.info.interiorCategory = newHoleCategory;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        unsafe public Loop(in SurfaceInfo surfaceInfo, ushort* srcIndices, int offset, int length)
-        {
-            edges = new NativeList<Edge>(Allocator.Persistent);
-            edges.Capacity = length;
-            for (int j = 1; j < length; j++)
-            {
-                edges.Add(new Edge() { index1 = srcIndices[offset + j - 1], index2 = srcIndices[offset + j] });
-            }
-            edges.Add(new Edge() { index1 = srcIndices[offset + length - 1], index2 = srcIndices[offset] });
-
-            this.info = surfaceInfo;
-        }
 
         ~Loop()
         {
