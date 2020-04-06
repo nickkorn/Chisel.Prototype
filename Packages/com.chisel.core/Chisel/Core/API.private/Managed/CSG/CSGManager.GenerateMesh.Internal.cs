@@ -603,20 +603,20 @@ namespace Chisel.Core
 
             CSGManager.GetTreeToNodeSpaceMatrix(brushNodeID, out Matrix4x4 worldToLocal);
 
-            var surfaceLoops = output.brushSurfaceLoops.surfaces;
+            var brushLoops = output.brushSurfaceLoops;
             var maxLoops = 0;
-            for (int s = 0; s < surfaceLoops.Length; s++)
-                maxLoops += surfaceLoops[s].loopIndices.Length;
+            for (int s = 0; s < brushLoops.surfaces.Length; s++)
+                maxLoops += brushLoops.surfaces[s].loopIndices.Length;
 
             var loops       = new List<NativeListArray<Edge>.NativeList>(maxLoops);
             var loopInfos   = new List<SurfaceInfo>(maxLoops);
-            for (int s = 0; s < surfaceLoops.Length; s++)
+            for (int s = 0; s < brushLoops.surfaces.Length; s++)
             {
-                var surfaceLoopList = surfaceLoops[s];
-                for (int l = 0; l < surfaceLoopList.loopIndices.Length; l++)
+                var surfaceLoops = brushLoops.surfaces[s];
+                for (int l = 0; l < surfaceLoops.loopIndices.Length; l++)
                 {
-                    var surfaceLoopIndex = surfaceLoopList.loopIndices[l];
-                    var surfaceLoopInfo  = surfaceLoopList.allInfos[surfaceLoopIndex];
+                    var surfaceLoopIndex = surfaceLoops.loopIndices[l];
+                    var surfaceLoopInfo  = brushLoops.allInfos[surfaceLoopIndex];
                     var interiorCategory = (CategoryIndex)surfaceLoopInfo.interiorCategory;
                     if (interiorCategory > CategoryIndex.LastCategory)
                         Debug.Assert(false, $"Invalid final category {interiorCategory}");
@@ -650,7 +650,7 @@ namespace Chisel.Core
                     //if (brushNodeID != 3)// || s!=5)
                     //    continue;
 
-                    var surfaceLoopEdges   = surfaceLoopList.allEdges[surfaceLoopIndex];
+                    var surfaceLoopEdges   = brushLoops.allEdges[surfaceLoopIndex];
                     if (surfaceLoopEdges.Length < 3)
                         continue;
 

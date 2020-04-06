@@ -16,15 +16,15 @@ namespace Chisel.Core
 #if USE_MANAGED_CSG_IMPLEMENTATION
     public struct SurfaceLoops
     {
-        public NativeList<int>          loopIndices;//l
-        public NativeListArray<int>     holeIndices;//index
-        public NativeList<SurfaceInfo>  allInfos;   //index
-        public NativeListArray<Edge>    allEdges;   //index
+        public NativeList<int>          loopIndices;
     }
 
     public sealed class BrushLoops : IDisposable
     {
         public SurfaceLoops[] surfaces;
+        public NativeListArray<int>     holeIndices;
+        public NativeList<SurfaceInfo>  allInfos;
+        public NativeListArray<Edge>    allEdges;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public BrushLoops() {}
@@ -37,10 +37,17 @@ namespace Chisel.Core
             {
                 surfaces[i] = new SurfaceLoops();
                 surfaces[i].loopIndices = new NativeList<int>(Allocator.TempJob);
+#if false
                 surfaces[i].holeIndices = new NativeListArray<int>(Allocator.TempJob);
                 surfaces[i].allInfos    = new NativeList<SurfaceInfo>(Allocator.TempJob);
                 surfaces[i].allEdges    = new NativeListArray<Edge>(Allocator.TempJob);
             }
+#else
+            }
+            holeIndices = new NativeListArray<int>(Allocator.TempJob);
+            allInfos    = new NativeList<SurfaceInfo>(Allocator.TempJob);
+            allEdges    = new NativeListArray<Edge>(Allocator.TempJob);
+#endif
         }
          
         ~BrushLoops() { Dispose(); }
@@ -52,13 +59,20 @@ namespace Chisel.Core
                 foreach (var surfaceLoop in surfaces)
                 {
                     if (surfaceLoop.loopIndices.IsCreated) surfaceLoop.loopIndices.Dispose();
+#if false
                     if (surfaceLoop.holeIndices.IsCreated) surfaceLoop.holeIndices.Dispose();
                     if (surfaceLoop.allInfos.IsCreated) surfaceLoop.allInfos.Dispose();
                     if (surfaceLoop.allEdges.IsCreated) surfaceLoop.allEdges.Dispose();
                 }
+#else
+                }
+                if (holeIndices.IsCreated) holeIndices.Dispose();
+                if (allInfos.IsCreated) allInfos.Dispose();
+                if (allEdges.IsCreated) allEdges.Dispose();
+#endif
                 surfaces = null;
             }
         }
     }
 #endif
-}
+                }
