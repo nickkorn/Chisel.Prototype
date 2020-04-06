@@ -650,14 +650,12 @@ namespace Chisel.Core
                     //if (brushNodeID != 3)// || s!=5)
                     //    continue;
 
-                    var loopIndex   = surfaceLoopList.loopIndices[l];
-                    var loopEdges   = surfaceLoopList.allEdges[loopIndex];
-                    var loopInfo    = surfaceLoopList.allInfos[loopIndex];
-                    if (loopEdges.Length < 3)
+                    var surfaceLoopEdges   = surfaceLoopList.allEdges[surfaceLoopIndex];
+                    if (surfaceLoopEdges.Length < 3)
                         continue;
 
-                    loops.Add(loopEdges);
-                    loopInfos.Add(loopInfo);
+                    loops.Add(surfaceLoopEdges);
+                    loopInfos.Add(surfaceLoopInfo);
                 }
             }
 

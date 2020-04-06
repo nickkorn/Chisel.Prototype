@@ -16,10 +16,10 @@ namespace Chisel.Core
 #if USE_MANAGED_CSG_IMPLEMENTATION
     public struct SurfaceLoops
     {
-        public NativeList<int>          loopIndices;
-        public NativeListArray<int>     holeIndices;
-        public NativeList<SurfaceInfo>  allInfos;
-        public NativeListArray<Edge>    allEdges;
+        public NativeList<int>          loopIndices;//l
+        public NativeListArray<int>     holeIndices;//index
+        public NativeList<SurfaceInfo>  allInfos;   //index
+        public NativeListArray<Edge>    allEdges;   //index
     }
 
     public sealed class BrushLoops : IDisposable
