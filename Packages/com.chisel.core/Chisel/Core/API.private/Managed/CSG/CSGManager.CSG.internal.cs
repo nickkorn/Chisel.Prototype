@@ -69,7 +69,7 @@ namespace Chisel.Core
             Reset(treeInfo);
 
             // NOTE: THIS IS RUN **PER MODEL** AND WE HAVE MULTIPLE MODELS IN THE TEST SCENE
-            // TODO: Make sure we complete for each model, or ensure that everything in model is stored separately
+            // TODO: Make sure we complete for each model, or ensure that everything in model is stored completely separately
 
             OperationTables.EnsureInitialized(); // <-- store this in ChiselLookup & make blob
 
@@ -490,10 +490,9 @@ namespace Chisel.Core
             for (int b = 0; b < treeBrushesArray.Length; b++)
             {
                 var brushNodeID = treeBrushesArray[b];
-                // TODO: put somewhere else
-                Profiler.BeginSample("ChiselWireframe.UpdateOutline");
-                ChiselWireframe.UpdateOutline(brushNodeID);
-                Profiler.EndSample();
+                var brushInfo   = CSGManager.GetBrushInfo(brushNodeID);
+                brushInfo.brushOutlineGeneration++;
+                brushInfo.brushOutlineDirty = true;
             }
         }
 

@@ -109,6 +109,7 @@ namespace Chisel.Core
         {
             public int					    brushMeshInstanceID;
             public UInt64                   brushOutlineGeneration;
+            public bool                     brushOutlineDirty = true;
             
             public BrushLoops               brushSurfaceLoops;
             public BrushOutputLoops		    brushOutputLoops	= new BrushOutputLoops();
@@ -128,6 +129,7 @@ namespace Chisel.Core
             public void Reset() 
             {
                 Dispose();
+                brushOutlineDirty = true;
                 brushOutlineGeneration  = 0;
                 brushOutline.Reset();
                 brushOutputLoops.Clear();
