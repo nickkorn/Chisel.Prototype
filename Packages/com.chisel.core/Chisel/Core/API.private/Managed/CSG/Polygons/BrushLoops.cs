@@ -14,7 +14,7 @@ using ReadOnlyAttribute = Unity.Collections.ReadOnlyAttribute;
 namespace Chisel.Core
 {
 #if USE_MANAGED_CSG_IMPLEMENTATION
-    public sealed class BrushLoops : IDisposable
+    public sealed class BrushOutputLoops : IDisposable
     {
         public NativeList<SurfaceInfo>  intersectionSurfaceInfos;
         public NativeListArray<Edge>    intersectionEdges;
@@ -35,7 +35,7 @@ namespace Chisel.Core
                 intersectionSurfaceInfos.Dispose();
         }
 
-        ~BrushLoops() { Dispose(); }
+        ~BrushOutputLoops() { Dispose(); }
         public void Dispose()
         {
             Clear();

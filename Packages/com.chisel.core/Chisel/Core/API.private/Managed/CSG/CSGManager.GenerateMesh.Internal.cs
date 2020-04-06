@@ -109,8 +109,8 @@ namespace Chisel.Core
             public int					    brushMeshInstanceID;
             public UInt64                   brushOutlineGeneration;
             
-            public SurfaceLoops             brushSurfaceLoops;
-            public BrushLoops			    brushOutputLoops	= new BrushLoops();
+            public BrushLoops             brushSurfaceLoops;
+            public BrushOutputLoops			    brushOutputLoops	= new BrushOutputLoops();
             public ChiselBrushRenderBuffer  renderBuffers       = new ChiselBrushRenderBuffer();
 
             public BrushOutline             brushOutline        = new BrushOutline();
@@ -577,10 +577,9 @@ namespace Chisel.Core
         
 
         static readonly Poly2Tri.DTSweep context = new Poly2Tri.DTSweep();
-        internal static unsafe void GenerateSurfaceRenderBuffers(int                   brushNodeID, 
-                                                          //SurfaceLoops        loopList, 
-                                                          MeshQuery[]           meshQueries,
-                                                          VertexChannelFlags    vertexChannelMask)
+        internal static unsafe void GenerateSurfaceRenderBuffers(int                brushNodeID, 
+                                                                 MeshQuery[]        meshQueries,
+                                                                 VertexChannelFlags vertexChannelMask)
         {
             var output			= CSGManager.GetBrushInfo(brushNodeID);
             var brushInstance	= CSGManager.GetBrushMeshID(brushNodeID);
@@ -606,15 +605,17 @@ namespace Chisel.Core
             var surfaceLoops = output.brushSurfaceLoops.surfaces;
             var maxLoops = 0;
             for (int s = 0; s < surfaceLoops.Length; s++)
-                maxLoops += surfaceLoops[s].Count;
+                maxLoops += surfaceLoops[s].loopIndices.Count;
 
             var loops = new List<Loop>(maxLoops);
             for (int s = 0; s < surfaceLoops.Length; s++)
             {
                 var surfaceLoopList = surfaceLoops[s];
-                for (int l = 0; l < surfaceLoopList.Count; l++)
+                for (int l = 0; l < surfaceLoopList.loopIndices.Count; l++)
                 {
-                    var interiorCategory = (CategoryIndex)surfaceLoopList[l].info.interiorCategory;
+                    var surfaceLoopIndex = surfaceLoopList.loopIndices[l];
+                    var surfaceLoop      = surfaceLoopList.allLoops[surfaceLoopIndex];
+                    var interiorCategory = (CategoryIndex)surfaceLoop.info.interiorCategory;
                     if (interiorCategory > CategoryIndex.LastCategory)
                         Debug.Assert(false, $"Invalid final category {interiorCategory}");
 
@@ -647,7 +648,8 @@ namespace Chisel.Core
                     //if (brushNodeID != 3)// || s!=5)
                     //    continue;
 
-                    var loop = surfaceLoopList[l];
+                    var loopIndex   = surfaceLoopList.loopIndices[l];
+                    var loop        = surfaceLoopList.allLoops[loopIndex];
                     if (loop.edges.Length < 3)
                         continue;
 
