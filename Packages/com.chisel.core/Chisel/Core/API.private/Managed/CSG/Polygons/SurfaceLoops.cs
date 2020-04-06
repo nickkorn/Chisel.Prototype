@@ -16,23 +16,23 @@ namespace Chisel.Core
 #if USE_MANAGED_CSG_IMPLEMENTATION
     public sealed class SurfaceLoops : IDisposable
     {
-        public List<int>            loopIndices     = new List<int>();
-        public List<List<int>>      holeIndices     = new List<List<int>>();
-        public List<SurfaceInfo>    allInfos        = new List<SurfaceInfo>();
-        public List<Loop>           allLoops        = new List<Loop>();
-
+        public List<int>                loopIndices     = new List<int>();
+        public List<List<int>>          holeIndices     = new List<List<int>>();
+        public List<SurfaceInfo>        allInfos        = new List<SurfaceInfo>();
+        public List<NativeList<Edge>>   allEdges        = new List<NativeList<Edge>>();
+        
         ~SurfaceLoops() { Dispose(); }
 
         public void Dispose()
         {
-            if (allLoops != null)
+            if (allEdges != null)
             {
-                foreach (var loop in allLoops)
+                foreach (var edges in allEdges)
                 {
-                    if (loop != null)
-                        loop.Dispose();
+                    if (edges.IsCreated)
+                        edges.Dispose();
                 }
-                allLoops = null;
+                allEdges = null;
             }
         }
     }

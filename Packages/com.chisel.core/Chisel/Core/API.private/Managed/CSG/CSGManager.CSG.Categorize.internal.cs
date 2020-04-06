@@ -29,7 +29,7 @@ namespace Chisel.Core
 
 
         //*
-        internal static unsafe void Dump(System.Text.StringBuilder builder, Loop categorized_loop, in VertexSoup soup, Quaternion rotation)
+        internal static unsafe void Dump(System.Text.StringBuilder builder, NativeList<Edge> categorized_loop, in VertexSoup soup, Quaternion rotation)
         {
             //builder.AppendLine($"loop ({categorized_loop.indices.Count}):");
             //builder.AppendLine($"loop {categorized_loop.loopIndex}:");
@@ -62,9 +62,9 @@ namespace Chisel.Core
             */
 
             var vertices = soup.GetUnsafeReadOnlyPtr();
-            for (int i = 0; i < categorized_loop.edges.Length; i++)
+            for (int i = 0; i < categorized_loop.Length; i++)
             {
-                var edge = categorized_loop.edges[i];
+                var edge = categorized_loop[i];
                 var index1 = edge.index1;
                 var index2 = edge.index2;
                 var vertex1 = ((float3)(rotation * vertices[index1])).xy;
@@ -78,15 +78,15 @@ namespace Chisel.Core
         #endregion
 
         #region CleanUp
-        internal static unsafe float3 CalculatePlaneEdges(in Loop loop, in VertexSoup soup)
+        internal static unsafe float3 CalculatePlaneEdges(in NativeList<Edge> edges, in VertexSoup soup)
         {
             // Newell's algorithm to create a plane for concave polygons.
             // NOTE: doesn't work well for self-intersecting polygons
             var normal = Vector3.zero;
             var vertices = soup.GetUnsafeReadOnlyPtr();
-            for (int n = 0; n < loop.edges.Length; n++)
+            for (int n = 0; n < edges.Length; n++)
             {
-                var edge = loop.edges[n];
+                var edge = edges[n];
                 var prevVertex = vertices[edge.index1];
                 var currVertex = vertices[edge.index2];
                 normal.x = normal.x + ((prevVertex.y - currVertex.y) * (prevVertex.z + currVertex.z));

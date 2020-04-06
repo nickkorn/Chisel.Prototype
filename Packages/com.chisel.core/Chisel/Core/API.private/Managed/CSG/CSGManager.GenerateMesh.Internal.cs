@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Entities;
 using Unity.Mathematics;
@@ -607,7 +608,7 @@ namespace Chisel.Core
             for (int s = 0; s < surfaceLoops.Length; s++)
                 maxLoops += surfaceLoops[s].loopIndices.Count;
 
-            var loops       = new List<Loop>(maxLoops);
+            var loops       = new List<NativeList<Edge>>(maxLoops);
             var loopInfos   = new List<SurfaceInfo>(maxLoops);
             for (int s = 0; s < surfaceLoops.Length; s++)
             {
@@ -615,7 +616,6 @@ namespace Chisel.Core
                 for (int l = 0; l < surfaceLoopList.loopIndices.Count; l++)
                 {
                     var surfaceLoopIndex = surfaceLoopList.loopIndices[l];
-                    var surfaceLoop      = surfaceLoopList.allLoops[surfaceLoopIndex];
                     var surfaceLoopInfo  = surfaceLoopList.allInfos[surfaceLoopIndex];
                     var interiorCategory = (CategoryIndex)surfaceLoopInfo.interiorCategory;
                     if (interiorCategory > CategoryIndex.LastCategory)
@@ -651,12 +651,12 @@ namespace Chisel.Core
                     //    continue;
 
                     var loopIndex   = surfaceLoopList.loopIndices[l];
-                    var loop        = surfaceLoopList.allLoops[loopIndex];
+                    var loopEdges   = surfaceLoopList.allEdges[loopIndex];
                     var loopInfo    = surfaceLoopList.allInfos[loopIndex];
-                    if (loop.edges.Length < 3)
+                    if (loopEdges.Length < 3)
                         continue;
 
-                    loops.Add(loop);
+                    loops.Add(loopEdges);
                     loopInfos.Add(loopInfo);
                 }
             }
@@ -665,7 +665,7 @@ namespace Chisel.Core
             var outputSurfaces  = new List<ChiselSurfaceRenderBuffer>(loops.Count * meshQueries.Length); // TODO: should be same size as brush.surfaces.Length
             for (int l = 0; l < loops.Count; l++)
             {
-                var loop             = loops[l];
+                var loopEdges        = loops[l];
                 var loopInfo         = loopInfos[l];
                 var interiorCategory = (CategoryIndex)loopInfo.interiorCategory;
 
@@ -697,27 +697,12 @@ namespace Chisel.Core
 
                         // TODO: all separate loops on same surface should be put in same OutputSurfaceMesh!                    
 
-                        surfaceIndices = context.TriangulateLoops(loopInfo, brushVertices, loop.edges.ToArray().ToList(), rotation);
+                        surfaceIndices = context.TriangulateLoops(loopInfo, brushVertices, loopEdges.ToArray().ToList(), rotation);
 
-                    
-                        #if false
-                        var builder = new System.Text.StringBuilder();
-                        //builder.AppendLine($"{surfaceLoopList[l].loopIndex}: {s}/{l}/{surfaceLoopList[l].info.worldPlane}");
-                        builder.AppendLine($"{loop.info.basePlaneIndex}/{l}/{interiorCategory}/{loop.indices.Count}/{loop.edges.Count}");
-                        CSGManagerPerformCSG.Dump(builder, loop, brushVertices, Quaternion.FromToRotation(loop.info.worldPlane.normal, Vector3.forward));
-                        for (int i = 0; i < surfaceIndices.Length; i++)
-                        {
-                            builder.Append(i);
-                            builder.Append(", ");
-                        }
-                        builder.AppendLine();
-                        Debug.Log(builder.ToString());
-                        #endif
                     }
                     catch (System.Exception e)
                     {
                         Debug.LogException(e);
-                        //Debug.Log($"BrushNodeID: {loop.info.brush.brushNodeID} / BasePlaneIndex: {loop.info.basePlaneIndex} / WorldPlane: {loop.info.worldPlane}");// / LoopIndex: {loop.loopIndex}");
                     }
                 } finally { UnityEngine.Profiling.Profiler.EndSample(); }
 

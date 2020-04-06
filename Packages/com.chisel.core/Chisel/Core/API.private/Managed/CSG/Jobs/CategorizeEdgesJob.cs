@@ -145,41 +145,20 @@ namespace Chisel.Core
 
 
         // Note: Assumes polygons are convex
-        public unsafe static bool AreLoopsOverlapping(Loop polygon1, Loop polygon2)
+        public unsafe static bool AreLoopsOverlapping(NativeList<Edge> polygon1, NativeListArray<Edge>.NativeList polygon2)
         {
-            if (!polygon1.edges.IsCreated ||
-                !polygon2.edges.IsCreated)
+            if (!polygon1.IsCreated)
                 return false;
-            if (polygon1.edges.Length < 3 ||
-                polygon2.edges.Length < 3)
-                return false;
-
-            if (polygon1.edges.Length != polygon2.edges.Length)
-                return false;
-
-            for (int i = 0; i < polygon1.edges.Length; i++)
-            {
-                if (IndexOf(polygon2.edges, polygon1.edges[i], out bool _) == -1)
-                    return false;
-            }
-            return true;
-        }
-
-        // Note: Assumes polygons are convex
-        public unsafe static bool AreLoopsOverlapping(Loop polygon1, NativeListArray<Edge>.NativeList polygon2)
-        {
-            if (!polygon1.edges.IsCreated)
-                return false;
-            if (polygon1.edges.Length < 3 ||
+            if (polygon1.Length < 3 ||
                 polygon2.Length < 3)
                 return false;
 
-            if (polygon1.edges.Length != polygon2.Length)
+            if (polygon1.Length != polygon2.Length)
                 return false;
 
-            for (int i = 0; i < polygon1.edges.Length; i++)
+            for (int i = 0; i < polygon1.Length; i++)
             {
-                if (IndexOf(polygon2, polygon1.edges[i], out bool _) == -1)
+                if (IndexOf(polygon2, polygon1[i], out bool _) == -1)
                     return false;
             }
             return true;
