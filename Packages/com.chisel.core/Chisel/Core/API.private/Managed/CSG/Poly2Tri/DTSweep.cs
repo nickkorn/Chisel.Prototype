@@ -56,10 +56,20 @@ using Debug = UnityEngine.Debug;
 
 namespace Chisel.Core
 {
-    public struct Edge
+    public struct Edge : IEquatable<Edge>
     {
         public ushort index1;
         public ushort index2;
+
+        public bool Equals(Edge other)
+        {
+            return index1 == other.index1 && index2 == other.index2;
+        }
+        public override int GetHashCode()
+        {
+            return (int)math.hash(new int2(index1, index2));
+        }
+
         public override string ToString() => $"({index1}, {index2})";
         
         internal void Flip()
