@@ -110,8 +110,8 @@ namespace Chisel.Core
             public int					    brushMeshInstanceID;
             public UInt64                   brushOutlineGeneration;
             
-            public BrushLoops             brushSurfaceLoops;
-            public BrushOutputLoops			    brushOutputLoops	= new BrushOutputLoops();
+            public BrushLoops               brushSurfaceLoops;
+            public BrushOutputLoops		    brushOutputLoops	= new BrushOutputLoops();
             public ChiselBrushRenderBuffer  renderBuffers       = new ChiselBrushRenderBuffer();
 
             public BrushOutline             brushOutline        = new BrushOutline();
@@ -120,8 +120,7 @@ namespace Chisel.Core
 
             public void Dispose()
             {
-                if (brushSurfaceLoops != null) brushSurfaceLoops.Dispose();
-                brushSurfaceLoops = null;
+                if (brushSurfaceLoops.IsCreated) brushSurfaceLoops.Dispose();
                 brushOutputLoops.Dispose();
             }
 
@@ -604,18 +603,19 @@ namespace Chisel.Core
             CSGManager.GetTreeToNodeSpaceMatrix(brushNodeID, out Matrix4x4 worldToLocal);
 
             var brushLoops = output.brushSurfaceLoops;
+            var surfaceLoopIndices = brushLoops.surfaceLoopIndices;
             var maxLoops = 0;
-            for (int s = 0; s < brushLoops.surfaces.Length; s++)
-                maxLoops += brushLoops.surfaces[s].loopIndices.Length;
+            for (int s = 0; s < surfaceLoopIndices.Length; s++)
+                maxLoops += surfaceLoopIndices[s].Length;
 
             var loops       = new List<NativeListArray<Edge>.NativeList>(maxLoops);
             var loopInfos   = new List<SurfaceInfo>(maxLoops);
-            for (int s = 0; s < brushLoops.surfaces.Length; s++)
+            for (int s = 0; s < surfaceLoopIndices.Length; s++)
             {
-                var surfaceLoops = brushLoops.surfaces[s];
-                for (int l = 0; l < surfaceLoops.loopIndices.Length; l++)
+                var loopIndices = surfaceLoopIndices[s];
+                for (int l = 0; l < loopIndices.Length; l++)
                 {
-                    var surfaceLoopIndex = surfaceLoops.loopIndices[l];
+                    var surfaceLoopIndex = loopIndices[l];
                     var surfaceLoopInfo  = brushLoops.allInfos[surfaceLoopIndex];
                     var interiorCategory = (CategoryIndex)surfaceLoopInfo.interiorCategory;
                     if (interiorCategory > CategoryIndex.LastCategory)
