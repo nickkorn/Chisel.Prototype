@@ -14,30 +14,12 @@ using ReadOnlyAttribute = Unity.Collections.ReadOnlyAttribute;
 namespace Chisel.Core
 {
 #if USE_MANAGED_CSG_IMPLEMENTATION
-    public sealed class SurfaceLoops : IDisposable
+    public struct SurfaceLoops
     {
         public NativeList<int>          loopIndices;
         public NativeListArray<int>     holeIndices;
         public NativeList<SurfaceInfo>  allInfos;
         public NativeListArray<Edge>    allEdges;
-        
-        ~SurfaceLoops() { Dispose(); }
-
-        public SurfaceLoops()
-        {
-            loopIndices = new NativeList<int>(Allocator.TempJob);
-            holeIndices = new NativeListArray<int>(Allocator.TempJob);
-            allInfos    = new NativeList<SurfaceInfo>(Allocator.TempJob);
-            allEdges    = new NativeListArray<Edge>(Allocator.TempJob);
-        }
-
-        public void Dispose()
-        {
-            if (loopIndices.IsCreated)  loopIndices.Dispose();
-            if (holeIndices.IsCreated)  holeIndices.Dispose();
-            if (allInfos.IsCreated)     allInfos.Dispose();
-            if (allEdges.IsCreated)     allEdges.Dispose();
-        }
     }
 
     public sealed class BrushLoops : IDisposable
@@ -52,7 +34,13 @@ namespace Chisel.Core
         {
             surfaces = new SurfaceLoops[surfaceCount];
             for (int i = 0; i < surfaceCount; i++)
+            {
                 surfaces[i] = new SurfaceLoops();
+                surfaces[i].loopIndices = new NativeList<int>(Allocator.TempJob);
+                surfaces[i].holeIndices = new NativeListArray<int>(Allocator.TempJob);
+                surfaces[i].allInfos    = new NativeList<SurfaceInfo>(Allocator.TempJob);
+                surfaces[i].allEdges    = new NativeListArray<Edge>(Allocator.TempJob);
+            }
         }
          
         ~BrushLoops() { Dispose(); }
@@ -61,8 +49,13 @@ namespace Chisel.Core
         {
             if (surfaces != null)
             {
-                foreach (var surfaceLoops in surfaces)
-                    surfaceLoops.Dispose();
+                foreach (var surfaceLoop in surfaces)
+                {
+                    if (surfaceLoop.loopIndices.IsCreated) surfaceLoop.loopIndices.Dispose();
+                    if (surfaceLoop.holeIndices.IsCreated) surfaceLoop.holeIndices.Dispose();
+                    if (surfaceLoop.allInfos.IsCreated) surfaceLoop.allInfos.Dispose();
+                    if (surfaceLoop.allEdges.IsCreated) surfaceLoop.allEdges.Dispose();
+                }
                 surfaces = null;
             }
         }

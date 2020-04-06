@@ -11,6 +11,7 @@ using Unity.Collections.LowLevel.Unsafe;
 using Profiler = UnityEngine.Profiling.Profiler;
 using System.Runtime.CompilerServices;
 using Unity.Burst;
+using ReadOnlyAttribute = Unity.Collections.ReadOnlyAttribute;
 
 namespace Chisel.Core
 {
@@ -536,6 +537,11 @@ namespace Chisel.Core
             ref var nodes           = ref routingTable.Value.nodes;
             ref var routingLookups  = ref routingTable.Value.routingLookups;
 
+            ref var chiselLookupValues  = ref ChiselLookup.Value;
+            var brushWorldPlanes        = chiselLookupValues.brushWorldPlanes;
+            var brushesTouchedByBrushes = chiselLookupValues.brushesTouchedByBrushes;
+
+
             var surfaceCount = basePolygonSurfaceInfos.Length;
 
             var allBrushSurfaces = brushLoops.surfaces;/*!!*/
@@ -547,16 +553,11 @@ namespace Chisel.Core
                 var info = basePolygonSurfaceInfos[p];
                 info.interiorCategory = CategoryGroupIndex.First;
 
-                var srcEdges = basePolygonEdges[p];
-                var dstEdges = new NativeList<Edge>(srcEdges.Length, Allocator.Persistent);
-                for (int e = 0; e < srcEdges.Length; e++)
-                    dstEdges.AddNoResize(srcEdges[e]);/*!!*/
-
                 var surfaceLoops = allBrushSurfaces[p];
                 surfaceLoops.loopIndices.Add(0);/*!!*/
                 surfaceLoops.holeIndices.Add();
                 surfaceLoops.allInfos.Add(info);/*!!*/
-                surfaceLoops.allEdges.Add(dstEdges);/*!!*/
+                surfaceLoops.allEdges.Add(basePolygonEdges[p]);/*!!*/
             }
 
             for (int i = 0, offset = 0; i < routingLookups.Length; i++)
@@ -574,8 +575,6 @@ namespace Chisel.Core
                         if (surfaceLoopEdges.Length < 3)
                             continue;
                         
-                        var surfaceHoleIndices      = surfaceLoops.holeIndices[l];
-
                         var surfaceLoopInfo         = surfaceLoops.allInfos[surfaceLoopIndex];
                         var currentInteriorCategory = surfaceLoopInfo.interiorCategory; /*!!*/
 
@@ -613,15 +612,20 @@ namespace Chisel.Core
                                 continue;
 
                             Profiler.BeginSample("Intersect");
-                            Intersect(brushVertices, 
-                                      surfaceLoops,     
-                                      surfaceLoopEdges, 
-                                      ref surfaceLoopInfo,
-                                      surfaceHoleIndices,
-                                      intersectionLoop, 
-                                      intersectionInfo, 
-                                      intersectionCategory);
-                            surfaceLoops.allInfos[surfaceLoopIndex] = surfaceLoopInfo;
+                            var intersectLoopsJob = new IntersectLoopsJob
+                            {
+                                brushVertices           = brushVertices,
+                                brushWorldPlanes        = chiselLookupValues.brushWorldPlanes,
+                                brushesTouchedByBrushes = chiselLookupValues.brushesTouchedByBrushes,
+                                l                       = l,
+                                surfaceLoopIndex        = surfaceLoopIndex,
+                                intersectionLoop        = intersectionLoop,
+                                newHoleCategory         = intersectionCategory,
+
+                                intersectionInfo        = intersectionInfo,
+                                surfaceLoops            = surfaceLoops
+                            };
+                            intersectLoopsJob.Run();
                             Profiler.EndSample();
                         }                        
                     }
@@ -639,131 +643,147 @@ namespace Chisel.Core
             return true;
         }
 
-        internal static unsafe void Intersect(in VertexSoup                     brushVertices, 
-                                              SurfaceLoops                      surfaceLoops, 
-                                              NativeListArray<Edge>.NativeList  currentLoopEdges, 
-                                              ref SurfaceInfo                   currentInfo, 
-                                              NativeListArray<int>.NativeList   currentHoleIndices, 
-                                              NativeListArray<Edge>.NativeList  intersectionLoop, 
-                                              SurfaceInfo                       intersectionInfo, 
-                                              CategoryGroupIndex                newHoleCategory)
+        [BurstCompile(CompileSynchronously = true)]
+        unsafe struct IntersectLoopsJob : IJob
         {
-            ref var chiselLookupValues  = ref ChiselLookup.Value;
-            var brushWorldPlanes        = chiselLookupValues.brushWorldPlanes;
-            var brushesTouchedByBrushes = chiselLookupValues.brushesTouchedByBrushes;
+            [ReadOnly] public VertexSoup brushVertices;
+            [ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushWorldPlanes>>      brushWorldPlanes;
+            [ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushesTouchedByBrush>> brushesTouchedByBrushes;
+            [ReadOnly] public int l;
+            [ReadOnly] public int surfaceLoopIndex;
+            [ReadOnly] public NativeListArray<Edge>.NativeList    intersectionLoop;
+            [ReadOnly] public CategoryGroupIndex newHoleCategory;
 
-            // It might look like we could just set the interiorCategory of brush_intersection here, and let all other cut loops copy from it below,
-            // but the same brush_intersection might be used by another categorized_loop and then we'd try to reroute it again, which wouldn't work
-            //brush_intersection.interiorCategory = newHoleCategory;
+            public SurfaceInfo intersectionInfo;
+            public SurfaceLoops surfaceLoops;
 
-            var result = OperationResult.Fail;
-            var intersectEdgesJob = new IntersectEdgesJob
+            public void Execute()
             {
-                vertices        = brushVertices,
-                edges1          = intersectionLoop,
-                edges2          = currentLoopEdges,
-                worldPlanes1    = brushWorldPlanes[intersectionInfo.brushNodeIndex],
-                worldPlanes2    = brushWorldPlanes[currentInfo.brushNodeIndex],
+                var currentLoopEdges    = surfaceLoops.allEdges[surfaceLoopIndex];
+                var currentInfo         = surfaceLoops.allInfos[surfaceLoopIndex];
+                var currentHoleIndices  = surfaceLoops.holeIndices[l];
 
-                result          = &result,
-                outEdges        = new NativeList<Edge>(math.max(intersectionLoop.Length, currentLoopEdges.Length), Allocator.Persistent)
-            };
-            intersectEdgesJob.Run();
+                // It might look like we could just set the interiorCategory of brush_intersection here, and let all other cut loops copy from it below,
+                // but the same brush_intersection might be used by another categorized_loop and then we'd try to reroute it again, which wouldn't work
+                //brush_intersection.interiorCategory = newHoleCategory;
 
-            // *somehow* put whats below in a job
+                var outEdges = new NativeList<Edge>(math.max(intersectionLoop.Length, currentLoopEdges.Length), Allocator.Temp);
 
-            if (result == OperationResult.Outside ||
-                result == OperationResult.Fail)
-            {
-                intersectEdgesJob.outEdges.Dispose();
-            } else
-            if (result == OperationResult.Polygon2InsidePolygon1)
-            {
-                // This new piece overrides the current loop
-                currentLoopEdges.Clear();
-                currentLoopEdges.AddRange(intersectEdgesJob.outEdges);
-                currentInfo.interiorCategory = newHoleCategory;
-                intersectEdgesJob.outEdges.Dispose();
-            } else
-            if (result == OperationResult.Overlapping)
-            {
-                intersectEdgesJob.outEdges.Dispose();
-                currentInfo.interiorCategory = newHoleCategory;
-            } else
-            {
-                // FIXME: when brush_intersection and categorized_loop are grazing each other, 
-                //          technically we cut it but we shouldn't be creating it as a separate polygon + hole (bug7)
-
-                // the output of cutting operations are both holes for the original polygon (categorized_loop)
-                // and new polygons on the surface of the brush that need to be categorized
-                intersectionInfo.interiorCategory = newHoleCategory;
-                var intersectedHoleIndices  = new List<int>();
-
-                // the output of cutting operations are both holes for the original polygon (categorized_loop)
-                // and new polygons on the surface of the brush that need to be categorized
-                if (currentHoleIndices.Capacity < currentHoleIndices.Length + 1)
-                    currentHoleIndices.Capacity = currentHoleIndices.Length + 1;
-
-                if (currentHoleIndices.Length > 0)
+                var result  = OperationResult.Fail;
+                var intersectEdgesJob = new IntersectEdgesJob
                 {
-                    ref var brushIntersections = ref brushesTouchedByBrushes[currentInfo.brushNodeIndex].Value.brushIntersections;
-                    for (int h = 0; h < currentHoleIndices.Length; h++)
+                    vertices        = brushVertices,
+                    edges1          = intersectionLoop,
+                    edges2          = currentLoopEdges,
+                    worldPlanes1    = brushWorldPlanes[intersectionInfo.brushNodeIndex],
+                    worldPlanes2    = brushWorldPlanes[currentInfo.brushNodeIndex],
+
+                    result          = &result,
+                    outEdges        = outEdges
+                };
+                intersectEdgesJob.Execute();
+
+                // *somehow* put whats below in a job
+
+                if (result == OperationResult.Outside ||
+                    result == OperationResult.Fail)
+                {
+                    outEdges.Dispose();
+                } else
+                if (result == OperationResult.Polygon2InsidePolygon1)
+                {
+                    // This new piece overrides the current loop
+                    currentLoopEdges.Clear();
+                    currentLoopEdges.AddRange(outEdges);
+                    currentInfo.interiorCategory = newHoleCategory;
+                    surfaceLoops.allInfos[surfaceLoopIndex] = currentInfo;
+                    outEdges.Dispose();
+                } else
+                if (result == OperationResult.Overlapping)
+                {
+                    outEdges.Dispose();
+                    currentInfo.interiorCategory = newHoleCategory;
+                    surfaceLoops.allInfos[surfaceLoopIndex] = currentInfo;
+                } else
+                {
+                    // FIXME: when brush_intersection and categorized_loop are grazing each other, 
+                    //          technically we cut it but we shouldn't be creating it as a separate polygon + hole (bug7)
+
+                    // the output of cutting operations are both holes for the original polygon (categorized_loop)
+                    // and new polygons on the surface of the brush that need to be categorized
+                    intersectionInfo.interiorCategory = newHoleCategory;
+                    var intersectedHoleIndices = new NativeList<int>(Allocator.Temp);
+
+                    // the output of cutting operations are both holes for the original polygon (categorized_loop)
+                    // and new polygons on the surface of the brush that need to be categorized
+                    if (currentHoleIndices.Capacity < currentHoleIndices.Length + 1)
+                        currentHoleIndices.Capacity = currentHoleIndices.Length + 1;
+
+                    if (currentHoleIndices.Length > 0)
                     {
-                        // Need to make a copy so we can edit it without causing side effects
-                        var holeIndex   = currentHoleIndices[h];
-                        var holeEdges   = surfaceLoops.allEdges[holeIndex];
-                        if (holeEdges.Length < 3)
-                            continue;
-
-                        var holeInfo        = surfaceLoops.allInfos[holeIndex];
-                        var holeBrushNodeID = holeInfo.brushNodeIndex + 1;
-
-                        // TODO: Optimize and make this a BlobAsset that's created in a pass,
-                        //       this BlobAsset must make it easy to quickly determine if two
-                        //       brushes intersect. Use this for both routing table generation 
-                        //       and loop merging.
-                        bool touches = false;
-                        for (int t = 0; t < brushIntersections.Length; t++)
+                        ref var brushIntersections = ref brushesTouchedByBrushes[currentInfo.brushNodeIndex].Value.brushIntersections;
+                        for (int h = 0; h < currentHoleIndices.Length; h++)
                         {
-                            if (brushIntersections[t].nodeIndex == holeBrushNodeID)
+                            // Need to make a copy so we can edit it without causing side effects
+                            var holeIndex   = currentHoleIndices[h];
+                            var holeEdges   = surfaceLoops.allEdges[holeIndex];
+                            if (holeEdges.Length < 3)
+                                continue;
+
+                            var holeInfo        = surfaceLoops.allInfos[holeIndex];
+                            var holeBrushNodeID = holeInfo.brushNodeIndex + 1;
+
+                            // TODO: Optimize and make this a BlobAsset that's created in a pass,
+                            //       this BlobAsset must make it easy to quickly determine if two
+                            //       brushes intersect. Use this for both routing table generation 
+                            //       and loop merging.
+                            bool touches = false;
+                            for (int t = 0; t < brushIntersections.Length; t++)
                             {
-                                touches = true;
-                                break;
+                                if (brushIntersections[t].nodeIndex == holeBrushNodeID)
+                                {
+                                    touches = true;
+                                    break;
+                                }
                             }
-                        }
 
-                        // But only if they touch
-                        if (touches)
-                        {
-                            intersectedHoleIndices.Add(surfaceLoops.allEdges.Length);
-                            surfaceLoops.allInfos.Add(holeInfo);
-                            
+                            // But only if they touch
+                            if (touches)
                             {
-                                surfaceLoops.allEdges.Add(holeEdges);
+                                intersectedHoleIndices.Add(surfaceLoops.allEdges.Length);
+                                surfaceLoops.allInfos.Add(holeInfo);
+                            
+                                {
+                                    surfaceLoops.allEdges.Add(holeEdges);
+                                }
                             }
                         }
                     }
-                }
 
-                // TODO: Separate loop "shapes" from category/loop-hole hierarchy, 
-                //       so we can simply assign the same shape to a hole and loop without 
-                //       needing to copy data we can create a new shape when we modify it.
+                    // TODO: Separate loop "shapes" from category/loop-hole hierarchy, 
+                    //       so we can simply assign the same shape to a hole and loop without 
+                    //       needing to copy data we can create a new shape when we modify it.
 
-                // this loop is a hole 
-                currentHoleIndices.Add(surfaceLoops.allEdges.Length);
-                surfaceLoops.allInfos.Add(intersectionInfo);
-                {
-                    surfaceLoops.allEdges.Add(intersectEdgesJob.outEdges);
-                }
+                    // this loop is a hole 
+                    currentHoleIndices.Add(surfaceLoops.allEdges.Length);
+                    surfaceLoops.allInfos.Add(intersectionInfo);
+                    {
+                        surfaceLoops.allEdges.Add(outEdges);
+                    }
 
-                // but also a polygon on its own
-                surfaceLoops.loopIndices.Add(surfaceLoops.allEdges.Length);
-                surfaceLoops.holeIndices.Add(intersectedHoleIndices);
-                surfaceLoops.allInfos.Add(intersectionInfo);
-                {
-                    surfaceLoops.allEdges.Add(intersectEdgesJob.outEdges);
+                    // but also a polygon on its own
+                    surfaceLoops.loopIndices.Add(surfaceLoops.allEdges.Length);
+                    surfaceLoops.holeIndices.Add(intersectedHoleIndices);
+                    surfaceLoops.allInfos.Add(intersectionInfo);
+                    {
+                        surfaceLoops.allEdges.Add(outEdges);
+                    }
+
+                    intersectedHoleIndices.Dispose();
+                    outEdges.Dispose();
                 }
             }
+
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
