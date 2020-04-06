@@ -22,7 +22,6 @@ namespace Chisel.Core
     { 
         [NoAlias, ReadOnly] public int                                                          index;
         [NoAlias, ReadOnly] public NativeArray<int>                                             treeBrushesArray;
-        //[NoAlias, ReadOnly] public NativeArray<BrushSurfacePair>                                intersectionLoopBlobsKeys;
         [NoAlias, ReadOnly] public NativeHashMap<BrushSurfacePair, BlobAssetReference<BrushIntersectionLoop>> intersectionLoopBlobs;
         [NoAlias, ReadOnly] public NativeHashMap<int, BlobAssetReference<BasePolygonsBlob>>     basePolygonBlobs;
         [NoAlias, ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushWorldPlanes>>     brushWorldPlanes;

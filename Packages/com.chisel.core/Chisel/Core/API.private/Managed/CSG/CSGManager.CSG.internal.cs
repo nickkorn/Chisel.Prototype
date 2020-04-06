@@ -71,19 +71,18 @@ namespace Chisel.Core
             // NOTE: THIS IS RUN **PER MODEL** AND WE HAVE MULTIPLE MODELS IN THE TEST SCENE
             // TODO: Make sure we complete for each model, or ensure that everything in model is stored completely separately
 
-            OperationTables.EnsureInitialized(); // <-- store this in ChiselLookup & make blob
-
             var treeBrushes = treeInfo.treeBrushes;
             if (treeInfo.treeBrushes.Count > 0)
             {
-                using (var treeBrushesArray = treeBrushes.ToNativeArray(Allocator.TempJob))
+                JobHandle performAllCSGJobHandle = default(JobHandle);
+                var treeBrushesArray = treeBrushes.ToNativeArray(Allocator.TempJob);
                 {
                     ref var chiselLookupValues = ref ChiselLookup.Value;
                     // Clean up values we're rebuilding below
                     chiselLookupValues.RemoveByBrushID(treeBrushesArray);
 
-                    using (var brushMeshInstanceIDs = new NativeArray<int>(treeBrushesArray.Length, Allocator.TempJob))
-                    using (var brushMeshLookup = new NativeHashMap<int, BlobAssetReference<BrushMeshBlob>>(treeBrushesArray.Length, Allocator.TempJob))
+                    var brushMeshInstanceIDs = new NativeArray<int>(treeBrushesArray.Length, Allocator.TempJob);
+                    var brushMeshLookup      = new NativeHashMap<int, BlobAssetReference<BrushMeshBlob>>(treeBrushesArray.Length, Allocator.TempJob);
                     {
                         // TODO: somehow just keep this up to date instead of rebuilding it from scratch every update
                         FindBrushMeshInstanceIDs(treeBrushesArray, brushMeshInstanceIDs);
@@ -111,13 +110,13 @@ namespace Chisel.Core
                             var createBlobPolygonsBlobs = new CreateBlobPolygonsBlobs()
                             {
                                 // Read
-                                treeBrushes = treeBrushesArray,
-                                brushMeshInstanceIDs = brushMeshInstanceIDs,
-                                brushMeshBlobs = chiselLookupValues.brushMeshBlobs,
-                                transformations = chiselLookupValues.transformations,
+                                treeBrushes             = treeBrushesArray,
+                                brushMeshInstanceIDs    = brushMeshInstanceIDs,
+                                brushMeshBlobs          = chiselLookupValues.brushMeshBlobs,
+                                transformations         = chiselLookupValues.transformations,
 
                                 // Write
-                                basePolygons = chiselLookupValues.basePolygons.AsParallelWriter()
+                                basePolygons            = chiselLookupValues.basePolygons.AsParallelWriter()
                             };
                             generateBasePolygonLoopsJob = createBlobPolygonsBlobs.Schedule(treeBrushesArray.Length, 64);
                         } finally { Profiler.EndSample(); }
@@ -132,14 +131,14 @@ namespace Chisel.Core
                             var createBrushWorldPlanesJob = new CreateBrushWorldPlanesJob()
                             {
                                 // Read
-                                treeBrushes = treeBrushesArray,
-                                brushMeshLookup = brushMeshLookup,
-                                transformations = chiselLookupValues.transformations,
+                                treeBrushes             = treeBrushesArray,
+                                brushMeshLookup         = brushMeshLookup,
+                                transformations         = chiselLookupValues.transformations,
 
                                 // Write
-                                brushWorldPlanes = chiselLookupValues.brushWorldPlanes.AsParallelWriter()
+                                brushWorldPlanes        = chiselLookupValues.brushWorldPlanes.AsParallelWriter()
                             };
-                            updateBrushWorldPlanesJob = createBrushWorldPlanesJob.Schedule(treeBrushesArray.Length, 64);
+                            updateBrushWorldPlanesJob   = createBrushWorldPlanesJob.Schedule(treeBrushesArray.Length, 64);
                         } finally { Profiler.EndSample(); }
 
 
@@ -151,28 +150,28 @@ namespace Chisel.Core
                         {
                             // TODO: optimize, use hashed grid
 
-                            var triangleArraySize = GeometryMath.GetTriangleArraySize(treeBrushesArray.Length);
+                            var triangleArraySize       = GeometryMath.GetTriangleArraySize(treeBrushesArray.Length);
                             var brushBrushIntersections = new NativeMultiHashMap<int, BrushPair>(triangleArraySize * 2, Allocator.TempJob);
                             var findAllIntersectionsJob = new FindAllIntersectionsJob()
                             {
                                 // Read
-                                brushNodeIDs = treeBrushesArray,
-                                transformations = chiselLookupValues.transformations,
-                                brushMeshBlobs = chiselLookupValues.brushMeshBlobs,
-                                basePolygons = chiselLookupValues.basePolygons,
-                                brushMeshIDs = brushMeshInstanceIDs,
+                                brushNodeIDs            = treeBrushesArray,
+                                transformations         = chiselLookupValues.transformations,
+                                brushMeshBlobs          = chiselLookupValues.brushMeshBlobs,
+                                basePolygons            = chiselLookupValues.basePolygons,
+                                brushMeshIDs            = brushMeshInstanceIDs,
 
                                 // Write
-                                output = brushBrushIntersections.AsParallelWriter()
+                                output                  = brushBrushIntersections.AsParallelWriter()
                             };
                             var findAllIntersectionsJobHandle = findAllIntersectionsJob.Schedule(triangleArraySize, 64, generateBasePolygonLoopsJob);
 
                             var storeBrushIntersectionsJob = new StoreBrushIntersectionsJob()
                             {
                                 // Read
-                                treeNodeIndex = treeNodeIndex,
-                                treeBrushes = treeBrushesArray,
-                                compactTree = compactTree,
+                                treeNodeIndex           = treeNodeIndex,
+                                treeBrushes             = treeBrushesArray,
+                                compactTree             = compactTree,
                                 brushBrushIntersections = brushBrushIntersections,
 
                                 // Write
@@ -189,16 +188,15 @@ namespace Chisel.Core
                         try
                         {
                             // Build categorization trees for brushes
-                            var createRoutingTableJob = new CreateRoutingTableJob()
+                            var createRoutingTableJob = new CreateRoutingTableJob
                             {
                                 // Read
-                                treeBrushes = treeBrushesArray,
+                                treeBrushes             = treeBrushesArray,
                                 brushesTouchedByBrushes = chiselLookupValues.brushesTouchedByBrushes,
-                                compactTree = compactTree,
-                                operationTables = OperationTables.Rows,
+                                compactTree             = compactTree,
 
                                 // Write
-                                routingTableLookup = chiselLookupValues.routingTableLookup.AsParallelWriter()
+                                routingTableLookup      = chiselLookupValues.routingTableLookup.AsParallelWriter()
                             };
                             updateBrushCategorizationTablesJob = createRoutingTableJob.Schedule(treeBrushesArray.Length, 64, findIntersectingBrushesJob);
                         } finally { Profiler.EndSample(); }
@@ -218,20 +216,26 @@ namespace Chisel.Core
                                 var uniqueBrushPairs = new NativeList<BrushPair>(maxPairs, Allocator.TempJob);
                                 var findBrushPairsJob = new FindBrushPairsJob
                                 {
-                                    maxPairs = maxPairs,
-                                    treeBrushes = treeBrushesArray,
-                                    brushesTouchedByBrushes = chiselLookupValues.brushesTouchedByBrushes,
-                                    uniqueBrushPairs = uniqueBrushPairs,
+                                    // Read
+                                    maxPairs                    = maxPairs,
+                                    treeBrushes                 = treeBrushesArray,
+                                    brushesTouchedByBrushes     = chiselLookupValues.brushesTouchedByBrushes,
+                                    
+                                    // Write
+                                    uniqueBrushPairs            = uniqueBrushPairs,
                                 };
                                 var findBrushPairsJobHandle = findBrushPairsJob.Schedule(findIntersectingBrushesJob);
 
                                 var intersectingBrushes = new NativeList<BlobAssetReference<BrushPairIntersection>>(GeometryMath.GetTriangleArraySize(treeBrushesArray.Length), Allocator.TempJob);
                                 var prepareBrushPairIntersectionsJob = new PrepareBrushPairIntersectionsJob
                                 {
-                                    uniqueBrushPairs = uniqueBrushPairs.AsDeferredJobArray(),
-                                    brushMeshBlobLookup = brushMeshLookup,
-                                    transformations = chiselLookupValues.transformations,
-                                    intersectingBrushes = intersectingBrushes.AsParallelWriter()
+                                    // Read
+                                    uniqueBrushPairs        = uniqueBrushPairs.AsDeferredJobArray(),
+                                    brushMeshBlobLookup     = brushMeshLookup,
+                                    transformations         = chiselLookupValues.transformations,
+
+                                    // Write
+                                    intersectingBrushes     = intersectingBrushes.AsParallelWriter()
                                 };
                                 var prepareBrushPairIntersectionsJobHandle = prepareBrushPairIntersectionsJob.Schedule(maxPairs, 64, findBrushPairsJobHandle);
                                 var createBrushPairsJobHandle = JobHandle.CombineDependencies(prepareBrushPairIntersectionsJobHandle, findBrushPairsJobHandle);
@@ -239,9 +243,12 @@ namespace Chisel.Core
 
                                 var findAllIntersectionLoopsJob = new CSGManagerPerformCSG.FindAllIntersectionLoopsJob
                                 {
-                                    brushWorldPlanes = chiselLookupValues.brushWorldPlanes,
-                                    intersectingBrushes = intersectingBrushes.AsDeferredJobArray(),
-                                    outputSurfaces = intersectionLoopBlobs.AsParallelWriter()
+                                    // Read
+                                    brushWorldPlanes        = chiselLookupValues.brushWorldPlanes,
+                                    intersectingBrushes     = intersectingBrushes.AsDeferredJobArray(),
+
+                                    // Write
+                                    outputSurfaces          = intersectionLoopBlobs.AsParallelWriter()
                                 };
                                 findAllIntersectionLoopsJobHandle = findAllIntersectionLoopsJob.Schedule(maxPairs, 64, JobHandle.CombineDependencies(updateBrushWorldPlanesJob, createBrushPairsJobHandle));
                                 findAllIntersectionLoopsJobHandle = JobHandle.CombineDependencies(findAllIntersectionLoopsJobHandle, prepareBrushPairIntersectionsJobHandle);
@@ -260,31 +267,11 @@ namespace Chisel.Core
 
                                 for (int index = 0; index < treeBrushesArray.Length; index++)
                                 {
-                                    var intersectionSurfaceInfos    = new NativeList<SurfaceInfo>(0, Allocator.TempJob);
-                                    var intersectionEdges           = new NativeListArray<Edge>(16, Allocator.TempJob);
                                     var basePolygonSurfaceInfos     = new NativeList<SurfaceInfo>(0, Allocator.TempJob);
                                     var basePolygonEdges            = new NativeListArray<Edge>(16, Allocator.TempJob);
+                                    var intersectionSurfaceInfos    = new NativeList<SurfaceInfo>(0, Allocator.TempJob);
+                                    var intersectionEdges           = new NativeListArray<Edge>(16, Allocator.TempJob);
                                     var vertexSoup                  = new VertexSoup(64, Allocator.TempJob);
-
-                                    var findLoopOverlapIntersectionsJob = new FindLoopOverlapIntersectionsJob
-                                    {
-                                        index                       = index,
-
-                                        treeBrushesArray            = treeBrushesArray,
-
-                                        intersectionLoopBlobs       = intersectionLoopBlobs,
-
-                                        brushWorldPlanes            = brushWorldPlaneBlobs,
-                                        basePolygonBlobs            = basePolygonBlobs,
-
-                                        vertexSoup                  = vertexSoup,
-                                        basePolygonEdges            = basePolygonEdges,
-                                        basePolygonSurfaceInfos     = basePolygonSurfaceInfos,
-                                        intersectionEdges           = intersectionEdges,
-                                        intersectionSurfaceInfos    = intersectionSurfaceInfos
-                                    };
-                                    findLoopOverlapIntersectionsJobHandle = JobHandle.CombineDependencies(findLoopOverlapIntersectionsJob.Schedule(dependencies), findLoopOverlapIntersectionsJobHandle);
-
 
                                     //***GET RID OF THIS***//
                                     var brushNodeID = treeBrushesArray[index];
@@ -300,13 +287,31 @@ namespace Chisel.Core
                                     outputLoops.intersectionSurfaceInfos    = intersectionSurfaceInfos;
                                     outputLoops.intersectionEdges           = intersectionEdges;
                                     //***GET RID OF THIS***//
+
+                                    var findLoopOverlapIntersectionsJob = new FindLoopOverlapIntersectionsJob
+                                    {
+                                        // Read
+                                        index                       = index,
+                                        treeBrushesArray            = treeBrushesArray,
+                                        intersectionLoopBlobs       = intersectionLoopBlobs,
+                                        brushWorldPlanes            = brushWorldPlaneBlobs,
+                                        basePolygonBlobs            = basePolygonBlobs,
+
+                                        // Read/Write
+                                        vertexSoup                  = vertexSoup,
+                                        basePolygonEdges            = basePolygonEdges,
+                                        basePolygonSurfaceInfos     = basePolygonSurfaceInfos,
+                                        intersectionEdges           = intersectionEdges,
+                                        intersectionSurfaceInfos    = intersectionSurfaceInfos
+                                    };
+                                    findLoopOverlapIntersectionsJobHandle = JobHandle.CombineDependencies(findLoopOverlapIntersectionsJob.Schedule(dependencies), findLoopOverlapIntersectionsJobHandle);
+
                                 }
                                 intersectionLoopBlobs.Dispose(JobHandle.CombineDependencies(findLoopOverlapIntersectionsJobHandle, findAllIntersectionLoopsJobHandle));
                             }
                             finally { Profiler.EndSample(); }
                         }
 
-                        JobHandle performAllCSGJobHandle = default(JobHandle);
                         Profiler.BeginSample("PerformAllCSG");
                         try
                         {
@@ -337,15 +342,8 @@ namespace Chisel.Core
                                 if (output.brushSurfaceLoops.IsCreated)
                                     output.brushSurfaceLoops.Dispose();
 
-                                if (brushMeshID == 0 ||
-                                    outputLoops.basePolygonSurfaceInfos.Length == 0)
+                                if (brushMeshID == 0)
                                     continue;
-
-                                if (!routingTableLookup.TryGetValue(brushNodeIndex, out BlobAssetReference<RoutingTable> routingTable))
-                                {
-                                    Debug.LogError("No routing table found");
-                                    continue;
-                                }
 
                                 var brushVertices = chiselLookupValues.vertexSoups[brushNodeIndex];
 
@@ -353,13 +351,17 @@ namespace Chisel.Core
                                 output.brushSurfaceLoops.Allocate();
                                 var performCSGJob = new PerformCSGJob
                                 {
-                                    routingTable                = routingTable,
+                                    // Read
+                                    brushNodeIndex              = brushNodeIndex,
+                                    //routingTable                = routingTable,
                                     brushVertices               = brushVertices,
+                                    routingTableLookup          = routingTableLookup,
                                     brushWorldPlanes            = brushWorldPlanes,
-                                    brushesTouchedByBrushes     = brushesTouchedByBrushes,
-                        
+                                    brushesTouchedByBrushes     = brushesTouchedByBrushes,                        
                                     intersectionEdges           = outputLoops.intersectionEdges,
                                     intersectionSurfaceInfos    = outputLoops.intersectionSurfaceInfos,
+
+                                    // Read / Write
                                     basePolygonSurfaceInfos     = outputLoops.basePolygonSurfaceInfos,
                                     basePolygonEdges            = outputLoops.basePolygonEdges,
 
@@ -370,18 +372,9 @@ namespace Chisel.Core
                                 // TODO: generate surface triangles (blobAssets), use brushSurfaceLoops, 
                                 //       remove from BrushInfo
                             }
-
-                            performAllCSGJobHandle.Complete();
                         }
                         finally { Profiler.EndSample(); }
-
-                        Profiler.BeginSample("UpdateAllOutlines");
-                        try
-                        {
-                            UpdateAllOutlines(treeBrushesArray);
-                        }
-                        finally { Profiler.EndSample(); }
-
+                        /*
                         Profiler.BeginSample("Complete");
                         try
                         {
@@ -389,11 +382,20 @@ namespace Chisel.Core
                             findIntersectingBrushesJob.Complete();
                             findIntersectingBrushesJob.Complete();
                         } finally { Profiler.EndSample(); }
+                        */
+                        Profiler.BeginSample("DirtyAllOutlines");
+                        try
+                        {
+                            UpdateAllOutlines(treeBrushesArray);
+                        }
+                        finally { Profiler.EndSample(); }
                     }
+                    brushMeshInstanceIDs.Dispose(performAllCSGJobHandle);
+                    brushMeshLookup.Dispose(performAllCSGJobHandle);
                 }
+                treeBrushesArray.Dispose(performAllCSGJobHandle);
+                performAllCSGJobHandle.Complete();
             }
-
-            OperationTables.EnsureCleanedUp(); // <-- store this in ChiselLookup & make blob
 
             {
                 var flags = nodeFlags[treeNodeIndex];
@@ -498,21 +500,34 @@ namespace Chisel.Core
 
         [BurstCompile(CompileSynchronously = true)]
         unsafe struct PerformCSGJob : IJob
-        { 
-            [NoAlias, ReadOnly] public BlobAssetReference<RoutingTable> routingTable;
-            [NoAlias, ReadOnly] public VertexSoup                       brushVertices;
+        {
+            [NoAlias, ReadOnly] public int                                                              brushNodeIndex;
+            //[NoAlias, ReadOnly] public BlobAssetReference<RoutingTable>                                 routingTable;
+            [NoAlias, ReadOnly] public VertexSoup                                                       brushVertices;
+            [NoAlias, ReadOnly] public NativeHashMap<int, BlobAssetReference<RoutingTable>>             routingTableLookup;
             [NoAlias, ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushWorldPlanes>>         brushWorldPlanes;
             [NoAlias, ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushesTouchedByBrush>>    brushesTouchedByBrushes;
 
             [NoAlias, ReadOnly] public NativeList<SurfaceInfo>  intersectionSurfaceInfos;
             [NoAlias, ReadOnly] public NativeListArray<Edge>    intersectionEdges;
+
             [NoAlias] public NativeList<SurfaceInfo>            basePolygonSurfaceInfos;    // <-- should be readonly?
             [NoAlias] public NativeListArray<Edge>              basePolygonEdges;           // <-- should be readonly?
 
-            public BrushLoops                                   brushLoops;
+            [NoAlias] public BrushLoops                         brushLoops;
 
             public void Execute()
             {
+                if (basePolygonSurfaceInfos.Length == 0)
+                    return;
+
+
+                if (!routingTableLookup.TryGetValue(brushNodeIndex, out BlobAssetReference<RoutingTable> routingTable))
+                {
+                    //Debug.LogError("No routing table found");
+                    return;
+                }
+
                 ref var nodes                   = ref routingTable.Value.nodes;
                 ref var routingLookups          = ref routingTable.Value.routingLookups;
                 
