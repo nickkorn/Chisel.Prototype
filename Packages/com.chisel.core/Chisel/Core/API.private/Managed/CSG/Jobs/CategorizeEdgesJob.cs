@@ -145,10 +145,8 @@ namespace Chisel.Core
 
 
         // Note: Assumes polygons are convex
-        public unsafe static bool AreLoopsOverlapping(NativeList<Edge> polygon1, NativeListArray<Edge>.NativeList polygon2)
+        public unsafe static bool AreLoopsOverlapping(NativeListArray<Edge>.NativeList polygon1, NativeListArray<Edge>.NativeList polygon2)
         {
-            if (!polygon1.IsCreated)
-                return false;
             if (polygon1.Length < 3 ||
                 polygon2.Length < 3)
                 return false;

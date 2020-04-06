@@ -18,6 +18,8 @@ using ReadOnlyAttribute = Unity.Collections.ReadOnlyAttribute;
 
 namespace Chisel.Core
 {
+    using Chisel.Core.LowLevel.Unsafe;
+
     [DebuggerDisplay("Length = {Length}, Capacity = {Capacity}, IsCreated = {IsCreated}")]
     public unsafe struct UnsafeListArray : IDisposable
     {
@@ -25,6 +27,7 @@ namespace Chisel.Core
         public UnsafeList** Ptr;
 
         public int Length;
+        public int Capacity;
         public int InitialListCapacity;
 
         public Allocator Allocator;
@@ -36,25 +39,65 @@ namespace Chisel.Core
 
             arrayData->Allocator = allocator;
             arrayData->Length = 0;
+            arrayData->Capacity = 0;
 
             return arrayData;
         }
 
-        public void Allocate(int length)
+        void ResizeCapacity(int capacity)
         {
-            CheckAlreadyAllocated(Length);
-            var bytesToMalloc = sizeof(UnsafeList*) * length;
-            Ptr = (UnsafeList**)UnsafeUtility.Malloc(bytesToMalloc, UnsafeUtility.AlignOf<long>(), Allocator);
-            UnsafeUtility.MemClear(Ptr, bytesToMalloc);
+            var oldBytesToMalloc = sizeof(UnsafeList*) * Capacity;
+            var newBytesToMalloc = sizeof(UnsafeList*) * capacity;
+            var newPtr = (UnsafeList**)UnsafeUtility.Malloc(newBytesToMalloc, UnsafeUtility.AlignOf<long>(), Allocator);
+            UnsafeUtility.MemClear(newPtr, newBytesToMalloc);
+            if (Ptr != null)
+            {
+                UnsafeUtility.MemCpy(newPtr, Ptr, oldBytesToMalloc);
+                UnsafeUtility.Free(Ptr, Allocator);
+            }
+            Ptr = newPtr;
+            Capacity = capacity;
+        }
+
+        public void ResizeExact(int length)
+        {
+            if (length == Length)
+                return;
+            if (length < Capacity)
+            {
+                Length = length;
+                return;
+            }
+
+            ResizeCapacity(length);
             Length = length;
+        }
+
+        public void Resize(int length)
+        {
+            if (length == Length)
+                return;
+            if (length < Capacity)
+            {
+                Length = length;
+                return;
+            }
+            var capacity = (int)((length * 1.5f) + 0.5f);
+            ResizeCapacity(capacity);
+            Length = length;
+        }
+
+        public UnsafeList* InitializeIndex(int index, int sizeOf, int alignOf, int capacity, NativeArrayOptions options = NativeArrayOptions.UninitializedMemory)
+        {
+            CheckIndexInRange(index, Length);
+            var ptr = UnsafeList.Create(sizeOf, alignOf, capacity, Allocator, options);
+            Ptr[index] = ptr;
+            return ptr;
         }
 
         public UnsafeList* InitializeIndex(int index, int sizeOf, int alignOf, NativeArrayOptions options = NativeArrayOptions.UninitializedMemory)
         {
-            CheckIndexInRange(index, Length);
-            var ptr = UnsafeList.Create(sizeOf, alignOf, InitialListCapacity, Allocator, options);
-            Ptr[index] = ptr;
-            return ptr;
+            return InitializeIndex(index, sizeOf, alignOf, InitialListCapacity, options);
         }
 
         [Conditional("ENABLE_UNITY_COLLECTIONS_CHECKS")]
@@ -116,6 +159,7 @@ namespace Chisel.Core
 
             Ptr = null;
             Length = 0;
+            Capacity = 0;
         }
 
         [BurstCompile]
@@ -141,12 +185,16 @@ namespace Chisel.Core
                 var jobHandle = new UnsafeDisposeJob { Ptr = Ptr, Length = Length, Allocator = Allocator }.Schedule(inputDeps);
 
                 Ptr = null;
+                Length = 0;
+                Capacity = 0;
                 Allocator = Allocator.Invalid;
 
                 return jobHandle;
             }
 
             Ptr = null;
+            Length = 0;
+            Capacity = 0;
 
             return inputDeps;
         }
@@ -174,6 +222,13 @@ namespace Chisel.Core
         {
             return IndexOf(value) != -1;
         }
+
+        public int AllocateItem()
+        {
+            var prevLength = Length;
+            Resize(prevLength + 1);
+            return prevLength;
+        }
     }
     
     [NativeContainer]
@@ -193,6 +248,7 @@ namespace Chisel.Core
         internal UnsafeListArray* m_Array;
         
         public int Length { [return: AssumeRange(0, int.MaxValue)] get { return m_Array->Length; } }
+        public int Capacity { [return: AssumeRange(0, int.MaxValue)] get { return m_Array->Capacity; } }
         public bool IsCreated => m_Array != null;
 
         public NativeListArray(Allocator allocator)
@@ -231,11 +287,64 @@ namespace Chisel.Core
 #endif
         }
 
-        public void Allocate(int length)
+        public void ResizeExact(int length)
         {
+#if ENABLE_UNITY_COLLECTIONS_CHECKS
+            AtomicSafetyHandle.CheckWriteAndBumpSecondaryVersion(m_Safety);
+#endif
             if (length < 0)
                 throw new ArgumentOutOfRangeException(nameof(length), "Length must be >= 0");
-            m_Array->Allocate(length);
+            m_Array->ResizeExact(length);
+        }
+
+        public int Add()
+        {
+#if ENABLE_UNITY_COLLECTIONS_CHECKS
+            AtomicSafetyHandle.CheckWriteAndBumpSecondaryVersion(m_Safety);
+#endif
+            return m_Array->AllocateItem();
+        }
+
+        public int Add(NativeListArray<T>.NativeList other)
+        {
+#if ENABLE_UNITY_COLLECTIONS_CHECKS
+            AtomicSafetyHandle.CheckWriteAndBumpSecondaryVersion(m_Safety);
+#endif
+            var index = m_Array->AllocateItem();
+            var ptr = m_Array->Ptr[index];
+            if (ptr == null)
+                ptr = m_Array->InitializeIndex(index, UnsafeUtility.SizeOf<T>(), UnsafeUtility.AlignOf<T>(), other.Length);
+            var dstList = new NativeList(m_Array->Ptr[index], ref m_Safety);
+            dstList.AddRangeNoResize(other);
+            return index;
+        }
+
+        public int Add(NativeList<T> other)
+        {
+#if ENABLE_UNITY_COLLECTIONS_CHECKS
+            AtomicSafetyHandle.CheckWriteAndBumpSecondaryVersion(m_Safety);
+#endif
+            var index = m_Array->AllocateItem();
+            var ptr = m_Array->Ptr[index];
+            if (ptr == null)
+                ptr = m_Array->InitializeIndex(index, UnsafeUtility.SizeOf<T>(), UnsafeUtility.AlignOf<T>(), other.Length);
+            var dstList = new NativeList(m_Array->Ptr[index], ref m_Safety);
+            dstList.AddRangeNoResize(other);
+            return index;
+        }
+
+        public int Add(List<T> other)
+        {
+#if ENABLE_UNITY_COLLECTIONS_CHECKS
+            AtomicSafetyHandle.CheckWriteAndBumpSecondaryVersion(m_Safety);
+#endif
+            var index = m_Array->AllocateItem();
+            var ptr = m_Array->Ptr[index];
+            if (ptr == null)
+                ptr = m_Array->InitializeIndex(index, UnsafeUtility.SizeOf<T>(), UnsafeUtility.AlignOf<T>(), other.Count);
+            var dstList = new NativeList(m_Array->Ptr[index], ref m_Safety);
+            dstList.AddRangeNoResize(other);
+            return index;
         }
 
         [return: AssumeRange(0, int.MaxValue)]
@@ -409,6 +518,19 @@ namespace Chisel.Core
                 m_ListData->AddNoResize(value);
             }
 
+            public void AddRangeNoResize(List<T> items)
+            {
+#if ENABLE_UNITY_COLLECTIONS_CHECKS
+                AtomicSafetyHandle.CheckWriteAndThrow(m_Safety);
+#endif
+                var length = items.Count;
+                CheckArgPositive(length);
+                if (m_ListData->Capacity < length)
+                    m_ListData->SetCapacity<T>(length);
+                for (int i=0;i<length;i++)
+                    m_ListData->AddNoResize<T>(items[i]);
+            }
+
             public void AddRangeNoResize(void* ptr, int length)
             {
 #if ENABLE_UNITY_COLLECTIONS_CHECKS
@@ -423,6 +545,11 @@ namespace Chisel.Core
                 AddRangeNoResize(list.GetUnsafePtr(), list.Length);
             }
 
+            public void AddRangeNoResize(NativeListArray<T>.NativeList list)
+            {
+                AddRangeNoResize(list.GetUnsafePtr(), list.Length);
+            }
+
             public void Add(T value)
             {
 #if ENABLE_UNITY_COLLECTIONS_CHECKS
@@ -430,10 +557,12 @@ namespace Chisel.Core
 #endif
                 m_ListData->Add(value);
             }
+
             public void AddRange(NativeArray<T> elements)
             {
                 AddRange(elements.GetUnsafeReadOnlyPtr(), elements.Length);
             }
+
             public unsafe void AddRange(void* elements, int count)
             {
 #if ENABLE_UNITY_COLLECTIONS_CHECKS
@@ -442,6 +571,7 @@ namespace Chisel.Core
 #endif
                 m_ListData->AddRange<T>(elements, AssumePositive(count));
             }
+
             public void RemoveAtSwapBack(int index)
             {
 #if ENABLE_UNITY_COLLECTIONS_CHECKS

@@ -213,10 +213,10 @@ namespace Chisel.Core
                                 var uniqueBrushPairs = new NativeList<BrushPair>(maxPairs, Allocator.TempJob);
                                 var findBrushPairsJob = new FindBrushPairsJob
                                 {
-                                    maxPairs                    = maxPairs,
-                                    treeBrushes                 = treeBrushesArray,
-                                    brushesTouchedByBrushes     = chiselLookupValues.brushesTouchedByBrushes,
-                                    uniqueBrushPairs            = uniqueBrushPairs,
+                                    maxPairs                = maxPairs,
+                                    treeBrushes             = treeBrushesArray,
+                                    brushesTouchedByBrushes = chiselLookupValues.brushesTouchedByBrushes,
+                                    uniqueBrushPairs        = uniqueBrushPairs,
                                 };
                                 var findBrushPairsJobHandle = findBrushPairsJob.Schedule(findIntersectingBrushesJob);
 
@@ -476,7 +476,7 @@ namespace Chisel.Core
                     var intersectionSurfaceInfos    = outputLoops.intersectionSurfaceInfos;
                     intersectionLoops               = new NativeListArray<Edge>(16, Allocator.TempJob);
                     intersectionSurfaceInfo         = new NativeArray<SurfaceInfo>(routingTableNodes.Length * surfaceCount, Allocator.TempJob);
-                    intersectionLoops.Allocate(routingTableNodes.Length * surfaceCount);
+                    intersectionLoops.ResizeExact(routingTableNodes.Length * surfaceCount);
                     for (int i = 0; i < intersectionSurfaceInfos.Length; i++)
                     {
                         var surfaceInfo     = intersectionSurfaceInfos[i];
@@ -554,7 +554,7 @@ namespace Chisel.Core
 
                 var surfaceLoops = allBrushSurfaces[p];
                 surfaceLoops.loopIndices.Add(0);/*!!*/
-                surfaceLoops.holeIndices.Add(new List<int>());
+                surfaceLoops.holeIndices.Add();
                 surfaceLoops.allInfos.Add(info);/*!!*/
                 surfaceLoops.allEdges.Add(dstEdges);/*!!*/
             }
@@ -567,7 +567,7 @@ namespace Chisel.Core
                     var surfaceLoops        = allBrushSurfaces[surfaceIndex];/*!!*/
                     var intersectionLoop    = intersectionLoops[offset];
                     var intersectionInfo    = intersectionSurfaceInfo[offset];
-                    for (int l = surfaceLoops.loopIndices.Count - 1; l >= 0; l--)
+                    for (int l = surfaceLoops.loopIndices.Length - 1; l >= 0; l--)
                     {
                         var surfaceLoopIndex    = surfaceLoops.loopIndices[l];/*!!*/
                         var surfaceLoopEdges    = surfaceLoops.allEdges[surfaceLoopIndex];
@@ -614,8 +614,8 @@ namespace Chisel.Core
 
                             Profiler.BeginSample("Intersect");
                             Intersect(brushVertices, 
-                                      surfaceLoops, /*!!*/
-                                      surfaceLoopEdges, /*!!*/
+                                      surfaceLoops,     
+                                      surfaceLoopEdges, 
                                       ref surfaceLoopInfo,
                                       surfaceHoleIndices,
                                       intersectionLoop, 
@@ -639,8 +639,19 @@ namespace Chisel.Core
             return true;
         }
 
-        internal static unsafe void Intersect(in VertexSoup brushVertices, SurfaceLoops surfaceLoops, NativeList<Edge> currentLoopEdges, ref SurfaceInfo currentInfo, List<int> currentHoleIndices, NativeListArray<Edge>.NativeList intersectionLoop, SurfaceInfo intersectionInfo, CategoryGroupIndex newHoleCategory)
+        internal static unsafe void Intersect(in VertexSoup                     brushVertices, 
+                                              SurfaceLoops                      surfaceLoops, 
+                                              NativeListArray<Edge>.NativeList  currentLoopEdges, 
+                                              ref SurfaceInfo                   currentInfo, 
+                                              NativeListArray<int>.NativeList   currentHoleIndices, 
+                                              NativeListArray<Edge>.NativeList  intersectionLoop, 
+                                              SurfaceInfo                       intersectionInfo, 
+                                              CategoryGroupIndex                newHoleCategory)
         {
+            ref var chiselLookupValues  = ref ChiselLookup.Value;
+            var brushWorldPlanes        = chiselLookupValues.brushWorldPlanes;
+            var brushesTouchedByBrushes = chiselLookupValues.brushesTouchedByBrushes;
+
             // It might look like we could just set the interiorCategory of brush_intersection here, and let all other cut loops copy from it below,
             // but the same brush_intersection might be used by another categorized_loop and then we'd try to reroute it again, which wouldn't work
             //brush_intersection.interiorCategory = newHoleCategory;
@@ -650,9 +661,9 @@ namespace Chisel.Core
             {
                 vertices        = brushVertices,
                 edges1          = intersectionLoop,
-                edges2          = currentLoopEdges.AsDeferredJobArray(),
-                worldPlanes1    = ChiselLookup.Value.brushWorldPlanes[intersectionInfo.brushNodeIndex],
-                worldPlanes2    = ChiselLookup.Value.brushWorldPlanes[currentInfo.brushNodeIndex],
+                edges2          = currentLoopEdges,
+                worldPlanes1    = brushWorldPlanes[intersectionInfo.brushNodeIndex],
+                worldPlanes2    = brushWorldPlanes[currentInfo.brushNodeIndex],
 
                 result          = &result,
                 outEdges        = new NativeList<Edge>(math.max(intersectionLoop.Length, currentLoopEdges.Length), Allocator.Persistent)
@@ -690,13 +701,13 @@ namespace Chisel.Core
 
                 // the output of cutting operations are both holes for the original polygon (categorized_loop)
                 // and new polygons on the surface of the brush that need to be categorized
-                if (currentHoleIndices.Capacity < currentHoleIndices.Count + 1)
-                    currentHoleIndices.Capacity = currentHoleIndices.Count + 1;
+                if (currentHoleIndices.Capacity < currentHoleIndices.Length + 1)
+                    currentHoleIndices.Capacity = currentHoleIndices.Length + 1;
 
-                if (currentHoleIndices.Count > 0)
+                if (currentHoleIndices.Length > 0)
                 {
-                    ref var brushIntersections = ref ChiselLookup.Value.brushesTouchedByBrushes[currentInfo.brushNodeIndex].Value.brushIntersections;
-                    for (int h = 0; h < currentHoleIndices.Count; h++)
+                    ref var brushIntersections = ref brushesTouchedByBrushes[currentInfo.brushNodeIndex].Value.brushIntersections;
+                    for (int h = 0; h < currentHoleIndices.Length; h++)
                     {
                         // Need to make a copy so we can edit it without causing side effects
                         var holeIndex   = currentHoleIndices[h];
@@ -724,13 +735,11 @@ namespace Chisel.Core
                         // But only if they touch
                         if (touches)
                         {
-                            intersectedHoleIndices.Add(surfaceLoops.allEdges.Count);
+                            intersectedHoleIndices.Add(surfaceLoops.allEdges.Length);
                             surfaceLoops.allInfos.Add(holeInfo);
                             
                             {
-                                var edges = new NativeList<Edge>(Allocator.Persistent);
-                                edges.AddRange(holeEdges);
-                                surfaceLoops.allEdges.Add(edges);
+                                surfaceLoops.allEdges.Add(holeEdges);
                             }
                         }
                     }
@@ -741,22 +750,18 @@ namespace Chisel.Core
                 //       needing to copy data we can create a new shape when we modify it.
 
                 // this loop is a hole 
-                currentHoleIndices.Add(surfaceLoops.allEdges.Count);
+                currentHoleIndices.Add(surfaceLoops.allEdges.Length);
                 surfaceLoops.allInfos.Add(intersectionInfo);
                 {
-                    var edges = new NativeList<Edge>(Allocator.Persistent);
-                    edges.AddRange(intersectEdgesJob.outEdges);
-                    surfaceLoops.allEdges.Add(edges);
+                    surfaceLoops.allEdges.Add(intersectEdgesJob.outEdges);
                 }
 
                 // but also a polygon on its own
-                surfaceLoops.loopIndices.Add(surfaceLoops.allEdges.Count);
+                surfaceLoops.loopIndices.Add(surfaceLoops.allEdges.Length);
                 surfaceLoops.holeIndices.Add(intersectedHoleIndices);
                 surfaceLoops.allInfos.Add(intersectionInfo);
                 {
-                    var edges = new NativeList<Edge>(Allocator.Persistent);
-                    edges.AddRange(intersectEdgesJob.outEdges);
-                    surfaceLoops.allEdges.Add(edges);
+                    surfaceLoops.allEdges.Add(intersectEdgesJob.outEdges);
                 }
             }
         }
@@ -764,7 +769,7 @@ namespace Chisel.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static void RemoveEmptyLoops(SurfaceLoops surfaceLoops)
         {
-            for (int l = surfaceLoops.loopIndices.Count - 1; l >= 0; l--)
+            for (int l = surfaceLoops.loopIndices.Length - 1; l >= 0; l--)
             {
                 var loopIndex   = surfaceLoops.loopIndices[l];
                 var loopEdges   = surfaceLoops.allEdges[loopIndex];
@@ -775,13 +780,13 @@ namespace Chisel.Core
                 }
 
                 var holeIndices = surfaceLoops.holeIndices[l];
-                for (int h = holeIndices.Count - 1; h >= 0; h--)
+                for (int h = holeIndices.Length - 1; h >= 0; h--)
                 {
                     var holeIndex   = holeIndices[h];
                     var holeEdges   = surfaceLoops.allEdges[holeIndex];
                     if (holeEdges.Length < 3)
                     {
-                        holeIndices.RemoveAt(h);
+                        holeIndices.RemoveAtSwapBack(h);
                         break;
                     }
                 }
@@ -799,7 +804,7 @@ namespace Chisel.Core
         static HashSet<Edge> s_UniqueEdges = new HashSet<Edge>();
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static bool AddEdges(NativeList<Edge> edges, NativeList<Edge> addEdges, bool removeDuplicates = false)
+        public static bool AddEdges(NativeListArray<Edge>.NativeList edges, NativeListArray<Edge>.NativeList addEdges, bool removeDuplicates = false)
         {
             if (addEdges.Length == 0)
                 return false;
@@ -842,7 +847,7 @@ namespace Chisel.Core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static int IndexOf(NativeList<Edge> edges, Edge edge, out bool inverted)
+        public static int IndexOf(NativeListArray<Edge>.NativeList edges, Edge edge, out bool inverted)
         {
             //var builder = new System.Text.StringBuilder();
             for (int e = 0; e < edges.Length; e++)
@@ -858,7 +863,10 @@ namespace Chisel.Core
 
         internal unsafe static void CleanUp(in VertexSoup brushVertices, SurfaceLoops surfaceLoops)
         {
-            for (int l = surfaceLoops.loopIndices.Count - 1; l >= 0; l--)
+            ref var chiselLookupValues  = ref ChiselLookup.Value;
+            var brushWorldPlanes        = chiselLookupValues.brushWorldPlanes;
+
+            for (int l = surfaceLoops.loopIndices.Length - 1; l >= 0; l--)
             {
                 var baseloopIndex   = surfaceLoops.loopIndices[l];
                 var baseLoopEdges   = surfaceLoops.allEdges[baseloopIndex];
@@ -876,28 +884,28 @@ namespace Chisel.Core
                 }
 
                 var holeIndices = surfaceLoops.holeIndices[l];
-                if (holeIndices.Count == 0)
+                if (holeIndices.Length == 0)
                     continue;
 
                 var baseLoopInfo = surfaceLoops.allInfos[baseloopIndex];
                 
-                for (int h = holeIndices.Count - 1; h >= 0; h--)
+                for (int h = holeIndices.Length - 1; h >= 0; h--)
                 {
                     var holeIndex   = holeIndices[h];
                     var holeEdges   = surfaceLoops.allEdges[holeIndex];
                     if (holeEdges.Length < 3)
                     {
-                        holeIndices.RemoveAt(h);
+                        holeIndices.RemoveAtSwapBack(h);
                         continue;
                     }
                     var holeNormal = CSGManagerPerformCSG.CalculatePlaneEdges(holeEdges, brushVertices);
                     if (math.all(holeNormal == float3.zero))
                     {
-                        holeIndices.RemoveAt(h);
+                        holeIndices.RemoveAtSwapBack(h);
                         continue;
                     }
                 }
-                if (holeIndices.Count == 0)
+                if (holeIndices.Length == 0)
                     continue;
 
                 using (var allWorldPlanes   = new NativeList<float4>(Allocator.TempJob))
@@ -906,7 +914,7 @@ namespace Chisel.Core
                 {
                     int edgeOffset = 0;
                     int planeOffset = 0;
-                    for (int h = 0; h < holeIndices.Count; h++)
+                    for (int h = 0; h < holeIndices.Length; h++)
                     {
                         var holeIndex   = holeIndices[h];
                         var holeInfo    = surfaceLoops.allInfos[holeIndex];
@@ -927,7 +935,7 @@ namespace Chisel.Core
                             }
                         }
 
-                        ref var worldPlanes = ref ChiselLookup.Value.brushWorldPlanes[holeInfo.brushNodeIndex].Value.worldPlanes;
+                        ref var worldPlanes = ref brushWorldPlanes[holeInfo.brushNodeIndex].Value.worldPlanes;
                         
                         var edgesLength     = holeEdges.Length;
                         var planesLength    = worldPlanes.Length;
@@ -950,7 +958,7 @@ namespace Chisel.Core
                     }
                     if (baseLoopEdges.Length > 0)
                     {
-                        ref var worldPlanes = ref ChiselLookup.Value.brushWorldPlanes[baseLoopInfo.brushNodeIndex].Value.worldPlanes;
+                        ref var worldPlanes = ref brushWorldPlanes[baseLoopInfo.brushNodeIndex].Value.worldPlanes;
 
                         var planesLength    = worldPlanes.Length;
                         var edgesLength     = baseLoopEdges.Length;
@@ -978,13 +986,13 @@ namespace Chisel.Core
                             var subtractEdgesJob = new SubtractEdgesJob()
                             {
                                 vertices            = brushVertices,
-                                segmentIndex        = holeIndices.Count,
+                                segmentIndex        = holeIndices.Length,
                                 destroyedEdges      = destroyedEdges,
                                 allWorldPlanes      = allWorldPlanes,
                                 allSegments         = allSegments,
                                 allEdges            = allEdges
                             };
-                            subtractEdgesJob.Run(holeIndices.Count);
+                            subtractEdgesJob.Run(holeIndices.Length);
                         }
 
                         // TODO: optimize, keep track which holes (potentially) intersect
@@ -993,17 +1001,17 @@ namespace Chisel.Core
                             var mergeEdgesJob = new MergeEdgesJob()
                             {
                                 vertices            = brushVertices,
-                                segmentCount        = holeIndices.Count,
+                                segmentCount        = holeIndices.Length,
                                 destroyedEdges      = destroyedEdges,
                                 allWorldPlanes      = allWorldPlanes,
                                 allSegments         = allSegments,
                                 allEdges            = allEdges
                             };
-                            mergeEdgesJob.Run(GeometryMath.GetTriangleArraySize(holeIndices.Count));
+                            mergeEdgesJob.Run(GeometryMath.GetTriangleArraySize(holeIndices.Length));
                         }
 
                         {
-                            var segment = allSegments[holeIndices.Count];
+                            var segment = allSegments[holeIndices.Length];
                             for (int e = baseLoopEdges.Length - 1; e >= 0; e--)
                             {
                                 if (destroyedEdges[segment.edgeOffset + e] == 0)
@@ -1012,7 +1020,7 @@ namespace Chisel.Core
                             }
                         }
 
-                        for (int h1 = holeIndices.Count - 1; h1 >= 0; h1--)
+                        for (int h1 = holeIndices.Length - 1; h1 >= 0; h1--)
                         {
                             var holeIndex1  = holeIndices[h1];
                             var holeEdges1  = surfaceLoops.allEdges[holeIndex1];
@@ -1027,7 +1035,7 @@ namespace Chisel.Core
                     }
                 }
 
-                for (int h = holeIndices.Count - 1; h >= 0; h--)
+                for (int h = holeIndices.Length - 1; h >= 0; h--)
                 {
                     var holeIndex   = holeIndices[h];
                     var holeEdges   = surfaceLoops.allEdges[holeIndex];
@@ -1040,7 +1048,7 @@ namespace Chisel.Core
             }
 
             // TODO: remove the need for this
-            for (int l = surfaceLoops.loopIndices.Count - 1; l >= 0; l--)
+            for (int l = surfaceLoops.loopIndices.Length - 1; l >= 0; l--)
             {
                 var baseloopIndex   = surfaceLoops.loopIndices[l];
                 var baseLoopEdges   = surfaceLoops.allEdges[baseloopIndex];

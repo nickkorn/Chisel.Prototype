@@ -85,7 +85,7 @@ namespace Chisel.Core
                 return;
 
 
-            basePolygonEdges.Allocate(surfaceCount);
+            basePolygonEdges.ResizeExact(surfaceCount);
             basePolygonSurfaceInfos.ResizeUninitialized(surfaceCount);
 
 
@@ -141,7 +141,7 @@ namespace Chisel.Core
                 return;
             }
 
-            intersectionEdges.Allocate(brushIntersectionLoops.Length);
+            intersectionEdges.ResizeExact(brushIntersectionLoops.Length);
             intersectionSurfaceInfos.Capacity = brushIntersectionLoops.Length;
 
             brushIntersectionLoops.Sort(new SortByBasePlaneIndex());

@@ -606,14 +606,14 @@ namespace Chisel.Core
             var surfaceLoops = output.brushSurfaceLoops.surfaces;
             var maxLoops = 0;
             for (int s = 0; s < surfaceLoops.Length; s++)
-                maxLoops += surfaceLoops[s].loopIndices.Count;
+                maxLoops += surfaceLoops[s].loopIndices.Length;
 
-            var loops       = new List<NativeList<Edge>>(maxLoops);
+            var loops       = new List<NativeListArray<Edge>.NativeList>(maxLoops);
             var loopInfos   = new List<SurfaceInfo>(maxLoops);
             for (int s = 0; s < surfaceLoops.Length; s++)
             {
                 var surfaceLoopList = surfaceLoops[s];
-                for (int l = 0; l < surfaceLoopList.loopIndices.Count; l++)
+                for (int l = 0; l < surfaceLoopList.loopIndices.Length; l++)
                 {
                     var surfaceLoopIndex = surfaceLoopList.loopIndices[l];
                     var surfaceLoopInfo  = surfaceLoopList.allInfos[surfaceLoopIndex];

@@ -78,7 +78,7 @@ namespace Chisel.Core
         #endregion
 
         #region CleanUp
-        internal static unsafe float3 CalculatePlaneEdges(in NativeList<Edge> edges, in VertexSoup soup)
+        internal static unsafe float3 CalculatePlaneEdges(in NativeListArray<Edge>.NativeList edges, in VertexSoup soup)
         {
             // Newell's algorithm to create a plane for concave polygons.
             // NOTE: doesn't work well for self-intersecting polygons
