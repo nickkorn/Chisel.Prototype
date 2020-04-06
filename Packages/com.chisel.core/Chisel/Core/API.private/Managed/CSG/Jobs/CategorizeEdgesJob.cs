@@ -37,7 +37,6 @@ namespace Chisel.Core
         const float kEpsilon = CSGManagerPerformCSG.kDistanceEpsilon;
 
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static int IndexOf(NativeArray<Edge> edges, int edgesOffset, int edgesLength, Edge edge, out bool inverted)
         {
             for (int e = edgesOffset; e < edgesOffset + edgesLength; e++)
@@ -48,7 +47,17 @@ namespace Chisel.Core
             inverted = false;
             return -1;
         }
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static int IndexOf(NativeListArray<Edge>.NativeList edges, int edgesOffset, int edgesLength, Edge edge, out bool inverted)
+        {
+            for (int e = edgesOffset; e < edgesOffset + edgesLength; e++)
+            {
+                if (edges[e].index1 == edge.index1 && edges[e].index2 == edge.index2) { inverted = false; return e; }
+                if (edges[e].index1 == edge.index2 && edges[e].index2 == edge.index1) { inverted = true; return e; }
+            }
+            inverted = false;
+            return -1;
+        }
+
         public static int IndexOf(NativeArray<Edge> edges, Edge edge, out bool inverted)
         {
             for (int e = 0; e < edges.Length; e++)
@@ -60,7 +69,17 @@ namespace Chisel.Core
             return -1;
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static int IndexOf(NativeListArray<Edge>.NativeList edges, Edge edge, out bool inverted)
+        {
+            for (int e = 0; e < edges.Length; e++)
+            {
+                if (edges[e].index1 == edge.index1 && edges[e].index2 == edge.index2) { inverted = false; return e; }
+                if (edges[e].index1 == edge.index2 && edges[e].index2 == edge.index1) { inverted = true; return e; }
+            }
+            inverted = false;
+            return -1;
+        }
+
         public static unsafe bool IsOutsidePlanes(NativeList<float4> planes, int planesOffset, int planesLength, float4 localVertex)
         {
             var planePtr = (float4*)planes.GetUnsafeReadOnlyPtr();
@@ -75,7 +94,6 @@ namespace Chisel.Core
             return false;
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static unsafe bool IsOutsidePlanes(ref BlobArray<float4> planes, float4 localVertex)
         {
             for (int n = 0; n < planes.Length; n++)
@@ -89,7 +107,6 @@ namespace Chisel.Core
             return false;
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static EdgeCategory CategorizeEdge(Edge edge, in NativeList<float4> planes, in NativeArray<Edge> edges, in LoopSegment segment, in VertexSoup vertices)
         {
             // TODO: use something more clever than looping through all edges
@@ -103,6 +120,18 @@ namespace Chisel.Core
         }
 
         internal static EdgeCategory CategorizeEdge(Edge edge, ref BlobArray<float4> planes, in NativeArray<Edge> edges, in VertexSoup vertices)
+        {
+            // TODO: use something more clever than looping through all edges
+            if (IndexOf(edges, edge, out bool inverted) != -1)
+                return (inverted) ? EdgeCategory.ReverseAligned : EdgeCategory.Aligned;
+            var midPoint = (vertices[edge.index1] + vertices[edge.index2]) * 0.5f;
+
+            if (IsOutsidePlanes(ref planes, new float4(midPoint, 1)))
+                return EdgeCategory.Outside;
+            return EdgeCategory.Inside;
+        }
+
+        internal static EdgeCategory CategorizeEdge(Edge edge, ref BlobArray<float4> planes, in NativeListArray<Edge>.NativeList edges, in VertexSoup vertices)
         {
             // TODO: use something more clever than looping through all edges
             if (IndexOf(edges, edge, out bool inverted) != -1)
@@ -130,7 +159,27 @@ namespace Chisel.Core
 
             for (int i = 0; i < polygon1.edges.Length; i++)
             {
-                if (IndexOf(polygon2.edges, polygon1.edges[i], out bool inverted) == -1)
+                if (IndexOf(polygon2.edges, polygon1.edges[i], out bool _) == -1)
+                    return false;
+            }
+            return true;
+        }
+
+        // Note: Assumes polygons are convex
+        public unsafe static bool AreLoopsOverlapping(Loop polygon1, NativeListArray<Edge>.NativeList polygon2)
+        {
+            if (!polygon1.edges.IsCreated)
+                return false;
+            if (polygon1.edges.Length < 3 ||
+                polygon2.Length < 3)
+                return false;
+
+            if (polygon1.edges.Length != polygon2.Length)
+                return false;
+
+            for (int i = 0; i < polygon1.edges.Length; i++)
+            {
+                if (IndexOf(polygon2, polygon1.edges[i], out bool _) == -1)
                     return false;
             }
             return true;
@@ -246,6 +295,109 @@ namespace Chisel.Core
         [NoAlias,ReadOnly] public VertexSoup                 vertices;
         [NoAlias,ReadOnly] public NativeArray<Edge>          edges1;
         [NoAlias,ReadOnly] public NativeArray<Edge>          edges2;
+        [NoAlias,ReadOnly] public BlobAssetReference<BrushWorldPlanes> worldPlanes1;
+        [NoAlias,ReadOnly] public BlobAssetReference<BrushWorldPlanes> worldPlanes2;
+
+        [NativeDisableUnsafePtrRestriction]
+        [WriteOnly] public OperationResult* result; // FIXME: SHOULD NOT DO THIS
+        [NoAlias,WriteOnly] public NativeList<Edge> outEdges;
+
+        public void Execute()
+        {
+            if (edges1.Length == 0 ||
+                edges2.Length == 0)
+            {
+                *result = OperationResult.Outside;
+                return;
+            }
+
+            int inside2 = 0, outside2 = 0;
+            var categories2 = new NativeArray<EdgeCategory>(edges2.Length, Allocator.Temp);
+            for (int e = 0; e < edges2.Length; e++)
+            {
+                var category = BooleanEdgesUtility.CategorizeEdge(edges2[e], ref worldPlanes1.Value.worldPlanes, edges1, vertices);
+                categories2[e] = category;
+                if (category == EdgeCategory.Inside) inside2++;
+                else if (category == EdgeCategory.Outside) outside2++;
+            }
+            var aligned2 = edges2.Length - (inside2 + outside2);
+
+            int inside1 = 0, outside1 = 0;
+            var categories1 = new NativeArray<EdgeCategory>(edges1.Length, Allocator.Temp);
+            for (int e = 0; e < edges1.Length; e++)
+            {
+                var category = BooleanEdgesUtility.CategorizeEdge(edges1[e], ref worldPlanes2.Value.worldPlanes, edges2, vertices);
+                categories1[e] = category;
+                if (category == EdgeCategory.Inside) inside1++;
+                else if (category == EdgeCategory.Outside) outside1++;
+            }
+            var aligned1 = edges1.Length - (inside1 + outside1);
+
+            // Completely aligned
+            if ((outside1 + inside1) == 0 &&
+                (outside2 + inside2) == 0)
+            {
+                *result = OperationResult.Overlapping;
+            } else
+            // polygon1 edges Completely inside polygon2
+            if (inside1 == 0 && outside2 == 0)
+            {
+                outEdges.AddRange(edges2);
+                *result = OperationResult.Polygon2InsidePolygon1;
+            } else
+            // polygon2 edges Completely inside polygon1
+            if (outside1 == 0 && inside2 == 0)
+            {
+                // polygon1 Completely inside polygon2
+                outEdges.AddRange(edges1);
+                *result = OperationResult.Polygon1InsidePolygon2;
+            }  else
+            // Completely outside
+            if ((inside1 + aligned1) == 0 && (aligned2 + inside2) == 0)
+            {
+                *result = OperationResult.Outside;
+            } else
+            {
+                int outEdgesLength = 0; // Can't read from outEdges.Length since it's marked as WriteOnly
+                for (int e = 0; e < edges1.Length; e++)
+                {
+                    var category = categories1[e];
+                    if (category == EdgeCategory.Inside)
+                    {
+                        outEdges.Add(edges1[e]);
+                        outEdgesLength++;
+                    }
+                }
+
+                for (int e = 0; e < edges2.Length; e++)
+                {
+                    var category = categories2[e];
+                    if (category != EdgeCategory.Outside)
+                    {
+                        outEdges.Add(edges2[e]);
+                        outEdgesLength++;
+                    }
+                }
+
+                if (outEdgesLength < 3)
+                    *result = OperationResult.Outside;
+                else
+                    *result = OperationResult.Cut;
+            }
+
+            categories1.Dispose();
+            categories2.Dispose();
+        }
+    }
+    
+
+    // Note: Assumes polygons are convex
+    [BurstCompile(CompileSynchronously = true)]
+    unsafe struct IntersectEdgesJob2 : IJob
+    {
+        [NoAlias,ReadOnly] public VertexSoup                        vertices;
+        [NoAlias,ReadOnly] public NativeListArray<Edge>.NativeList  edges1;
+        [NoAlias,ReadOnly] public NativeArray<Edge>                 edges2;
         [NoAlias,ReadOnly] public BlobAssetReference<BrushWorldPlanes> worldPlanes1;
         [NoAlias,ReadOnly] public BlobAssetReference<BrushWorldPlanes> worldPlanes2;
 

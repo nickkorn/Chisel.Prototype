@@ -28,6 +28,7 @@ namespace Chisel.Core
                 basePolygonEdges.Dispose();
             if (basePolygonSurfaceInfos.IsCreated)
                 basePolygonSurfaceInfos.Dispose();
+
             if (intersectionEdges.IsCreated)
                 intersectionEdges.Dispose();
             if (intersectionSurfaceInfos.IsCreated)
