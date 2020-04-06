@@ -35,7 +35,6 @@ namespace Chisel.Core
 #endif
 
         public NativeList<Edge>             edges;        
-        [NonSerialized] public List<int>    holeIndices = new List<int>();
         
         public bool Valid { [MethodImpl(MethodImplOptions.AggressiveInlining)] get { return edges.Length >= 3; } }
 
@@ -88,7 +87,6 @@ namespace Chisel.Core
         {
             if (edges.IsCreated)
                 edges.Dispose();
-            holeIndices.Clear();
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
