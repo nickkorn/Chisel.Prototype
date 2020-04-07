@@ -410,7 +410,6 @@ namespace Chisel.Core
             return true;
         }
 
-        static readonly Poly2Tri.DTSweep context = new Poly2Tri.DTSweep();
         internal static unsafe void GenerateSurfaceRenderBuffers(int brushNodeID)
         {
             var brushNodeIndex      = brushNodeID - 1;
@@ -418,6 +417,7 @@ namespace Chisel.Core
             var brushLoops          = output.brushSurfaceLoops;
             if (!brushLoops.IsCreated)
                 return;
+
 
             var treeNodeID              = nodeHierarchies[brushNodeIndex].treeNodeID;
             var chiselLookupValues      = ChiselTreeLookup.Value[treeNodeID - 1];
@@ -439,6 +439,9 @@ namespace Chisel.Core
                 maxIndices += length;
                 maxLoops = math.max(maxLoops, length);
             }
+
+            var context = new Poly2Tri.DTSweep();
+            context.Initialize(brushVertices, Allocator.TempJob);
 
             var loops               = new List<NativeListArray<Edge>.NativeList>(maxLoops);
             var loopInfos           = new List<SurfaceInfo>(maxLoops);
@@ -496,34 +499,37 @@ namespace Chisel.Core
                     interiorCategory = (CategoryIndex)loopInfo.interiorCategory;
 
                     Debug.Assert(surfaceIndex == loopInfo.basePlaneIndex);
-                
-                    Int32[] surfaceIndicesArray = null;
+
+                    var surfaceIndicesArray = new NativeList<int>(Allocator.TempJob);
                     try
                     {
-                        surfaceIndicesArray = context.TriangulateLoops(loopInfo, brushVertices, loopEdges.ToArray().ToList(), rotation);
+                        context.TriangulateLoops(loopInfo, rotation, loopEdges.ToArray().ToList(), surfaceIndicesArray);
                     }
                     catch (System.Exception e)
                     {
                         Debug.LogException(e);
+                        surfaceIndicesArray.Clear();
                     }
 
-                    if (surfaceIndicesArray == null ||
-                        surfaceIndicesArray.Length < 3)
-                        continue;
-
-                    if (interiorCategory == CategoryIndex.ValidReverseAligned ||
-                        interiorCategory == CategoryIndex.ReverseAligned)
+                    if (surfaceIndicesArray.Length >= 3)
                     {
-                        var maxCount = surfaceIndicesArray.Length - 1;
-                        for (int n = (maxCount / 2); n >= 0; n--)
-                        {
-                            var t = surfaceIndicesArray[n];
-                            surfaceIndicesArray[n] = surfaceIndicesArray[maxCount - n];
-                            surfaceIndicesArray[maxCount - n] = t;
-                        }
-                    }
 
-                    surfaceIndexList.AddRange(surfaceIndicesArray);
+                        if (interiorCategory == CategoryIndex.ValidReverseAligned ||
+                            interiorCategory == CategoryIndex.ReverseAligned)
+                        {
+                            var maxCount = surfaceIndicesArray.Length - 1;
+                            for (int n = (maxCount / 2); n >= 0; n--)
+                            {
+                                var t = surfaceIndicesArray[n];
+                                surfaceIndicesArray[n] = surfaceIndicesArray[maxCount - n];
+                                surfaceIndicesArray[maxCount - n] = t;
+                            }
+                        }
+
+                        for (int n = 0; n < surfaceIndicesArray.Length; n++)
+                            surfaceIndexList.Add(surfaceIndicesArray[n]);
+                    }
+                    surfaceIndicesArray.Dispose();
                 }
 
                 if (surfaceIndexList.Count == 0)
@@ -604,6 +610,7 @@ namespace Chisel.Core
                 surfaceRenderBuffers.AddNoResize(surfaceRenderBuffer);
             }
 
+            context.Dispose();
             if (surfaceRenderBuffers.Length == 0)
             {
                 surfaceRenderBuffers.Dispose();

@@ -83,7 +83,7 @@ namespace Chisel.Core
 
 namespace Poly2Tri
 {
-    public unsafe sealed class DTSweep
+    public unsafe struct DTSweep : IDisposable
     {
         const double PI_div2     = (double)(Math.PI / 2);
         const double PI_3div4    = (double)(3 * Math.PI / 4);
@@ -101,7 +101,6 @@ namespace Poly2Tri
             public fixed ushort neighbors[3];
             fixed byte          edgeFlags[3];
 
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public DelaunayTriangle(ushort p1, ushort p2, ushort p3)
             {
                 indices[0] = p1;
@@ -112,16 +111,12 @@ namespace Poly2Tri
                 neighbors[1] = ushort.MaxValue;
                 neighbors[2] = ushort.MaxValue;
             }
-
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void ClearDelauney()
             {
                 edgeFlags[0] &= (byte)~EdgeFlags.Delaunay;
                 edgeFlags[1] &= (byte)~EdgeFlags.Delaunay;
                 edgeFlags[2] &= (byte)~EdgeFlags.Delaunay;
             }
-
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void SetDelauneyEdge(int index, bool value)
             {
                 if (value)
@@ -129,10 +124,9 @@ namespace Poly2Tri
                 else
                     edgeFlags[index] &= (byte)~EdgeFlags.Delaunay;
             }
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+
             public bool GetDelaunayEdge(int idx) { return (edgeFlags[idx] & (byte)EdgeFlags.Delaunay) != 0; }
 
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void SetConstrainedEdge(int index, bool value)
             {
                 if (value)
@@ -141,19 +135,14 @@ namespace Poly2Tri
                     edgeFlags[index] &= (byte)~EdgeFlags.Constrained;
             }
 
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public bool GetConstrainedEdge(int idx) { return (edgeFlags[idx] & (byte)EdgeFlags.Constrained) != 0; }
 
-
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public ushort IndexOf(ushort p)
             {
                 if (indices[0] == p) return (ushort)0; else if (indices[1] == p) return (ushort)1; else if (indices[2] == p) return (ushort)2;
                 return ushort.MaxValue;
             }
 
-
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public bool Contains(ushort p)
             {
                 if (indices[0] == p || indices[1] == p || indices[2] == p) 
@@ -168,7 +157,6 @@ namespace Poly2Tri
             /// <param name="p1">Point 1 of the shared edge</param>
             /// <param name="p2">Point 2 of the shared edge</param>
             /// <param name="t">This triangle's new neighbor</param>
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void MarkNeighbor(ushort p1, ushort p2, ushort triangleIndex)
             {
                 ushort i = EdgeIndex(p1, p2);
@@ -180,31 +168,26 @@ namespace Poly2Tri
             }
 
 
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public ushort NeighborCWFrom(ushort point)
             {
                 return neighbors[(IndexOf(point) + 1) % 3];
             }
 
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public ushort NeighborCCWFrom(ushort point)
             {
                 return neighbors[(IndexOf(point) + 2) % 3];
             }
 
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public ushort NeighborAcrossFrom(ushort point)
             {
                 return neighbors[IndexOf(point)];
             }
 
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public ushort PointCCWFrom(ushort point)
             {
                 return indices[(IndexOf(point) + 1) % 3];
             }
 
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public ushort PointCWFrom(ushort point)
             {
                 return indices[(IndexOf(point) + 2) % 3];
@@ -215,7 +198,6 @@ namespace Poly2Tri
             /// </summary>
             /// <param name="oPoint">The origin point to rotate around</param>
             /// <param name="nPoint">???</param>
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void Legalize(ushort oPoint, ushort nPoint)
             {
                 //RotateCW();
@@ -233,7 +215,6 @@ namespace Poly2Tri
             }
 
 
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void MarkConstrainedEdge(int index) { SetConstrainedEdge(index, true); }
 
 
@@ -241,7 +222,6 @@ namespace Poly2Tri
             /// <summary>
             /// Mark edge as constrained
             /// </summary>
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void MarkConstrainedEdge(ushort p, ushort q)
             {
                 ushort i = EdgeIndex(p, q);
@@ -255,7 +235,6 @@ namespace Poly2Tri
             /// Get the index of the neighbor that shares this edge (or ushort.MaxValue if it isn't shared)
             /// </summary>
             /// <returns>index of the shared edge or ushort.MaxValue if edge isn't shared</returns>
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public ushort EdgeIndex(ushort p1, ushort p2)
             {
                 ushort i1 = IndexOf(p1);
@@ -282,40 +261,31 @@ namespace Poly2Tri
                 return ushort.MaxValue;
             }
 
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public bool GetConstrainedEdgeCCW(ushort p) { return GetConstrainedEdge((IndexOf(p) + 2) % 3); }
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public bool GetConstrainedEdgeCW(ushort p) { return GetConstrainedEdge((IndexOf(p) + 1) % 3); }
 
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void SetConstrainedEdgeCCW(ushort p, bool ce)
             {
                 int idx = (IndexOf(p) + 2) % 3;
                 SetConstrainedEdge(idx, ce);
             }
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void SetConstrainedEdgeCW(ushort p, bool ce)
             {
                 int idx = (IndexOf(p) + 1) % 3;
                 SetConstrainedEdge(idx, ce);
             }
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void SetConstrainedEdgeAcross(ushort p, bool ce)
             {
                 int idx = IndexOf(p);
                 SetConstrainedEdge(idx, ce);
             }
 
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public bool GetDelaunayEdgeCCW(ushort p) { return GetDelaunayEdge((IndexOf(p) + 2) % 3); }
 
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public bool GetDelaunayEdgeCW(ushort p) { return GetDelaunayEdge((IndexOf(p) + 1) % 3); }
 
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void SetDelaunayEdgeCCW(ushort p, bool ce) { SetDelauneyEdge((IndexOf(p) + 2) % 3, ce); }
 
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void SetDelaunayEdgeCW(ushort p, bool ce) { SetDelauneyEdge((IndexOf(p) + 1) % 3, ce); }
         
         }
@@ -351,22 +321,69 @@ namespace Poly2Tri
         //
         // SweepContext
         //
-
+        
+        quaternion                          rotation;
         VertexSoup                          vertices;
-        float2[]                            points;
-        ushort[]                            edges;
-        List<DirectedEdge>                  allEdges                = new List<DirectedEdge>();
-        readonly List<int>                  finalTriangleIndices    = new List<int>();
-        readonly List<int>                  triangleIndices         = new List<int>();
-        readonly List<DelaunayTriangle>     triangles               = new List<DelaunayTriangle>();
-        readonly List<bool>                 triangleInterior        = new List<bool>();
-        readonly List<ushort>               sortedPoints            = new List<ushort>();
-        readonly List<AdvancingFrontNode>   advancingFrontNodes     = new List<AdvancingFrontNode>();
+        NativeArray<float2>                 points;
+        NativeArray<ushort>                 edges;
+        NativeList<DirectedEdge>            allEdges;
+        NativeList<int>                     triangleIndices;
+        NativeList<DelaunayTriangle>        triangles;
+        NativeList<bool>                    triangleInterior;
+        NativeList<ushort>                  sortedPoints;
+        NativeList<AdvancingFrontNode>      advancingFrontNodes;
+        List<List<Chisel.Core.Edge>>        edgeLookupEdges;
+        NativeHashMap<ushort, int>          edgeLookups;
+        List<List<Chisel.Core.Edge>>        foundLoops;
 
+        public void Initialize(VertexSoup vertices, Allocator allocator)
+        {
+            this.vertices = vertices;
+            var pointCount = vertices.Length + 2;
+            if (points == null ||
+                points.Length < pointCount)
+                points = new NativeArray<float2>(pointCount, allocator);
+            if (edges == null ||
+                edges.Length < pointCount)
+                edges = new NativeArray<ushort>(pointCount, allocator);
+
+            allEdges                = new NativeList<DirectedEdge>(pointCount, allocator);
+            sortedPoints            = new NativeList<ushort>(pointCount, allocator);
+            triangles               = new NativeList<DelaunayTriangle>(pointCount * 3, allocator);
+            triangleInterior        = new NativeList<bool>(pointCount * 3, allocator);
+            advancingFrontNodes     = new NativeList<AdvancingFrontNode>(pointCount, allocator);
+            edgeLookupEdges         = new List<List<Chisel.Core.Edge>>();
+            edgeLookups             = new NativeHashMap<ushort, int>(pointCount, allocator);
+            foundLoops              = new List<List<Chisel.Core.Edge>>();
+        }
+        void Clear()
+        {
+            for (int i = 0; i < edges.Length; i++)
+                edges[i] = ushort.MaxValue;
+
+            allEdges.Clear();
+            triangles.Clear();
+            triangleInterior.Clear();
+            advancingFrontNodes.Clear();
+            sortedPoints.Clear();
+
+        }
+        public void Dispose()
+        {
+            points.Dispose();
+            edges.Dispose();
+            
+            allEdges                .Dispose();
+            sortedPoints            .Dispose();
+            triangles               .Dispose();
+            triangleInterior        .Dispose();
+            advancingFrontNodes     .Dispose();
+            edgeLookups             .Dispose();
+        }
 
         // Inital triangle factor, seed triangle will extend 30% of 
         // PointSet width to both left and right.
-        readonly float ALPHA = 0.3f;
+        const float ALPHA = 0.3f;
 
         ushort headNodeIndex;
         ushort tailNodeIndex;
@@ -384,11 +401,8 @@ namespace Poly2Tri
         DTSweepConstraint edgeEventConstrainedEdge;
         bool edgeEventRight;
 
-        readonly Dictionary<ushort, List<Chisel.Core.Edge>> edgeLookups = new Dictionary<ushort, List<Chisel.Core.Edge>>();
-        readonly List<List<Chisel.Core.Edge>> foundLoops = new List<List<Chisel.Core.Edge>>();
         
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal unsafe static bool IsPointInPolygon(float3 right, float3 forward, List<Chisel.Core.Edge> indices1, List<Chisel.Core.Edge> indices2, VertexSoup vertices)
         {
             int index = 0;
@@ -433,17 +447,20 @@ namespace Poly2Tri
         }
 
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public int[] TriangulateLoops(SurfaceInfo loopInfo, VertexSoup vertices, List<Chisel.Core.Edge> inputEdges, quaternion rotation)
+        public void TriangulateLoops(SurfaceInfo loopInfo, quaternion rotation, List<Chisel.Core.Edge> inputEdges, NativeList<int> triangleIndices)
         {
+            triangleIndices.Clear();
+            this.rotation = rotation;
             if (inputEdges.Count < 4)
             {
-                return Triangulate(vertices, inputEdges, rotation).ToArray();
+                Triangulate(inputEdges, triangleIndices);
+                return;
             }
 
             // This is a hack around bugs in the triangulation code
 
-            finalTriangleIndices.Clear();
+            triangleIndices.Clear();
+            edgeLookupEdges.Clear();
             edgeLookups.Clear();
             foundLoops.Clear();
 
@@ -452,12 +469,13 @@ namespace Poly2Tri
             
             for (int i = 0; i < inputEdges.Count; i++)
             {
-                if (!edgeLookups.TryGetValue(inputEdges[i].index1, out List<Chisel.Core.Edge> edges))
+                if (!edgeLookups.TryGetValue(inputEdges[i].index1, out int edgeLookupIndex))
                 {
-                    edges = new List<Chisel.Core.Edge>();
-                    edgeLookups[inputEdges[i].index1] = edges;
+                    edgeLookupIndex = edgeLookupEdges.Count;
+                    edgeLookups[inputEdges[i].index1] = edgeLookupIndex;
+                    edgeLookupEdges.Add(new List<Chisel.Core.Edge>());
                 }
-                edges.Add(inputEdges[i]);
+                edgeLookupEdges[edgeLookupIndex].Add(inputEdges[i]);
             }
 
 
@@ -467,7 +485,7 @@ namespace Poly2Tri
                 var edge = inputEdges[lastIndex];
                 var newLoops = new List<Chisel.Core.Edge> { edge };
 
-                var edgesStartingAtVertex = edgeLookups[edge.index1];
+                var edgesStartingAtVertex = edgeLookupEdges[edgeLookups[edge.index1]];
                 if (edgesStartingAtVertex.Count > 1)
                     edgesStartingAtVertex.Remove(edge);
                 else
@@ -479,7 +497,7 @@ namespace Poly2Tri
                 var firstIndex = edge.index1;
                 while (edgeLookups.ContainsKey(edge.index2))
                 { 
-                    var nextEdges = edgeLookups[edge.index2];
+                    var nextEdges = edgeLookupEdges[edgeLookups[edge.index2]];
                     Chisel.Core.Edge nextEdge = nextEdges[0];
                     if (nextEdges.Count > 1)
                     {
@@ -509,7 +527,8 @@ namespace Poly2Tri
 
             if (foundLoops.Count <= 1)
             {
-                return Triangulate(vertices, foundLoops[0], rotation).ToArray();
+                Triangulate(foundLoops[0], triangleIndices);
+                return;
             }
 
             var children = new List<int>[foundLoops.Count];
@@ -528,17 +547,11 @@ namespace Poly2Tri
                         continue;
                     if (IsPointInPolygon(right, forward, foundLoops[l1], foundLoops[l2], vertices))
                     {
-                        //children[l1].AddRange(children[l2]);
                         children[l1].Add(l2);
-                        //foundLoops[l1].AddRange(foundLoops[l2]);
-                        //children[l2].Clear();
                     } else
                     if (IsPointInPolygon(right, forward, foundLoops[l2], foundLoops[l1], vertices))
                     {
-                        //children[l2].AddRange(children[l1]);
                         children[l2].Add(l1);
-                        //foundLoops[l2].AddRange(foundLoops[l1]);
-                        //children[l1].Clear();
                         break;
                     }
                 }
@@ -576,29 +589,26 @@ namespace Poly2Tri
             }
 
 
+
+
             for (int l1 = foundLoops.Count - 1; l1 >= 0; l1--)
             {
                 if (foundLoops[l1].Count == 0)
                     continue;
-                finalTriangleIndices.AddRange(Triangulate(vertices, foundLoops[l1], rotation));
+                Triangulate(foundLoops[l1], triangleIndices);
             }
-            
-            return finalTriangleIndices.ToArray();
         }
 
         /// <summary>
         /// Triangulate simple polygon with holes
         /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public List<int> Triangulate(VertexSoup vertices, List<Chisel.Core.Edge> inputEdges, quaternion rotation)
+        public void Triangulate(List<Chisel.Core.Edge> inputEdges, NativeList<int> triangleIndices)
         {
-            this.vertices = vertices;
-            this.rotation = rotation;
-
-            triangleIndices.Clear();
+            var startIndex = triangleIndices.Length;
+            this.triangleIndices = triangleIndices;
             int prevEdgeCount = inputEdges.Count;
             AddMoreTriangles:
-            Clear(vertices.Length);
+            Clear();
             PrepareTriangulation(inputEdges);
             CreateAdvancingFront(0);
             Sweep();
@@ -606,7 +616,7 @@ namespace Poly2Tri
             FinalizationPolygon();
 
             //TODO: Optimize
-            for (int i = 0; i < triangleIndices.Count; i += 3)
+            for (int i = startIndex; i < triangleIndices.Length; i += 3)
             {
                 var index0 = triangleIndices[i + 0];
                 var index1 = triangleIndices[i + 1];
@@ -645,44 +655,12 @@ namespace Poly2Tri
                 prevEdgeCount = inputEdges.Count;
                 goto AddMoreTriangles;
             }
-            return triangleIndices;
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        void Clear(int pointCount)
-        {
-            if (edges == null || 
-                edges.Length < pointCount + 2)
-                edges = new ushort[pointCount + 2];
-
-            for (int i = 0; i < pointCount + 2; i++)
-                edges[i] = ushort.MaxValue;
-
-            allEdges.Clear();
-            if (allEdges.Capacity < pointCount + 2)
-                allEdges.Capacity = pointCount + 2;
-            triangles.Clear();
-            triangleInterior.Clear();
-            advancingFrontNodes.Clear();
-            sortedPoints.Clear();
-            if (sortedPoints.Capacity < pointCount + 2)
-                sortedPoints.Capacity = pointCount + 2;
-            if (points == null ||
-                points.Length < pointCount + 2)
-                points = new float2[pointCount + 2];
-            if (triangles.Capacity < pointCount * 3)
-                triangles.Capacity = pointCount * 3;
-            if (triangleInterior.Capacity < triangles.Capacity)
-                triangleInterior.Capacity = triangles.Capacity;
-            if (triangleIndices.Capacity < triangles.Capacity * 3)
-                triangleIndices.Capacity = triangles.Capacity * 3;
-        }
-
-        quaternion rotation;
 
 
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+
         void AddTriangle(in DelaunayTriangle triangle)
         {
             triangles.Add(triangle);
@@ -690,16 +668,13 @@ namespace Poly2Tri
         }
 
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         bool HasNext(ushort nodeIndex) { if (nodeIndex == ushort.MaxValue) return false; return advancingFrontNodes[nodeIndex].nextNodeIndex != ushort.MaxValue; }
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         bool HasPrev(ushort nodeIndex) { if (nodeIndex == ushort.MaxValue) return false; return advancingFrontNodes[nodeIndex].prevNodeIndex != ushort.MaxValue; }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         ushort LocateNode(float x)
         {
             var nodeIndex = searchNodeIndex;
-            if (nodeIndex >= advancingFrontNodes.Count)
+            if (nodeIndex >= advancingFrontNodes.Length)
                 return ushort.MaxValue;
             if (x < advancingFrontNodes[nodeIndex].nodePoint.x)
             {
@@ -730,10 +705,9 @@ namespace Poly2Tri
             return ushort.MaxValue;
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal ushort CreateAdvancingFrontNode(float2 point, ushort pointIndex, ushort prevIndex, ushort nextIndex)
         {
-            var newIndex = (ushort)advancingFrontNodes.Count;
+            var newIndex = (ushort)advancingFrontNodes.Length;
             advancingFrontNodes.Add(new AdvancingFrontNode() { nodePoint = point, pointIndex = pointIndex, nextNodeIndex = nextIndex, prevNodeIndex = prevIndex, triangleIndex = ushort.MaxValue });
             return newIndex;
         }
@@ -799,7 +773,6 @@ namespace Poly2Tri
         }
 
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         void MeshClean(ushort triangleIndex)
         {
             if (triangleIndex == ushort.MaxValue || triangleInterior[triangleIndex])
@@ -831,14 +804,13 @@ namespace Poly2Tri
 
 
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         void CreateAdvancingFront(int index)
         {
             // Initial triangle
-            var triangleIndex = (ushort)triangles.Count;
+            var triangleIndex = (ushort)triangles.Length;
             AddTriangle(new DelaunayTriangle(sortedPoints[index], tailPointIndex, headPointIndex));
 
-            headNodeIndex = (ushort)advancingFrontNodes.Count;
+            headNodeIndex = (ushort)advancingFrontNodes.Length;
             var middleNodeIndex = (ushort)(headNodeIndex + 1);
             tailNodeIndex = (ushort)(middleNodeIndex + 1);
 
@@ -899,28 +871,26 @@ namespace Poly2Tri
             }
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        int PointComparerMethod(ushort i1, ushort i2)
+        struct PointComparer : IComparer<ushort>
         {
-            var pt1 = points[i1];
-            var pt2 = points[i2];
-            if (pt1.y < pt2.y) return -1; if (pt1.y > pt2.y) return 1;
-            if (pt1.x < pt2.x) return -1; if (pt1.x > pt2.x) return 1;
-            return 0;
+            public NativeArray<float2> points;
+            public int Compare(ushort i1, ushort i2)
+            {
+                var pt1 = points[i1];
+                var pt2 = points[i2];
+                if (pt1.y < pt2.y) return -1; if (pt1.y > pt2.y) return 1;
+                if (pt1.x < pt2.x) return -1; if (pt1.x > pt2.x) return 1;
+                return 0;
+            }
         }
 
 
-        static bool[] s_KnownVertices;
         void PrepareTriangulation(List<Chisel.Core.Edge> inputEdges)
         {
             var min = new float2(float.PositiveInfinity, float.PositiveInfinity);
             var max = new float2(float.NegativeInfinity, float.NegativeInfinity);
 
-            if (s_KnownVertices == null ||
-                s_KnownVertices.Length < vertices.Length)
-                s_KnownVertices = new bool[vertices.Length];
-            else
-                Array.Clear(s_KnownVertices, 0, vertices.Length);
+            var s_KnownVertices = stackalloc bool[vertices.Length];
             for (int e = 0; e < inputEdges.Count; e++)
             {
                 var edge = inputEdges[e];
@@ -962,12 +932,15 @@ namespace Poly2Tri
                 else { P = index1; Q = index2; }
 
                 allEdges.Add(new DirectedEdge() { index2 = P, next = this.edges[Q] });
-                this.edges[Q] = (ushort)(allEdges.Count - 1);
+                this.edges[Q] = (ushort)(allEdges.Length - 1);
             }
 
 
+            var pointComparer = new PointComparer();
+            pointComparer.points = points;
+
             // Sort the points along y-axis
-            sortedPoints.Sort(PointComparerMethod);
+            NativeSortExtension.Sort<ushort, PointComparer>((ushort*)sortedPoints.GetUnsafePtr(), sortedPoints.Length, pointComparer);
 
             headPointIndex = (ushort)(vertices.Length);
             tailPointIndex = (ushort)(vertices.Length + 1);
@@ -991,7 +964,7 @@ namespace Poly2Tri
         void Sweep()
         {
             var sortedPoints = this.sortedPoints;
-            for (int i = 1; i < sortedPoints.Count; i++)
+            for (int i = 1; i < sortedPoints.Length; i++)
             {
                 var pointIndex      = sortedPoints[i];
                 var point           = points[pointIndex];
@@ -1000,7 +973,7 @@ namespace Poly2Tri
                 if (frontNodeIndex == ushort.MaxValue)
                     continue;
 
-                var triangleIndex       = (ushort)triangles.Count;
+                var triangleIndex       = (ushort)triangles.Length;
                 var frontNodeNextIndex  = advancingFrontNodes[frontNodeIndex].nextNodeIndex;
                 AddTriangle(new DelaunayTriangle(pointIndex, advancingFrontNodes[frontNodeIndex].pointIndex, advancingFrontNodes[frontNodeNextIndex].pointIndex));
 
@@ -1119,7 +1092,7 @@ namespace Poly2Tri
 
         void FixupConstrainedEdges()
         {
-            for (int t = 0; t < triangles.Count; t++)
+            for (int t = 0; t < triangles.Length; t++)
             {
                 var triangle = triangles[t];
                 var index0  = triangle.indices[0];
@@ -1360,7 +1333,6 @@ namespace Poly2Tri
         }
 
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         bool IsEdgeSideOfTriangle(ushort triangleIndex, ushort epIndex, ushort eqIndex)
         {
             if (triangleIndex == ushort.MaxValue)
@@ -1455,7 +1427,6 @@ namespace Poly2Tri
 
         /// <param name="triangleIndex2">Opposite triangle</param>
         /// <param name="p">The point in t that isn't shared between the triangles</param>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         ushort OppositePoint(ushort triangleIndex1, ushort triangleIndex2, ushort p)
         {
             return triangles[triangleIndex1].PointCWFrom(triangles[triangleIndex2].PointCWFrom(p));
@@ -1529,7 +1500,6 @@ namespace Poly2Tri
         /// the point in current triangle that is the opposite point to the next
         /// triangle. 
         /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         bool NextFlipPoint(ushort epIndex, ushort eqIndex, ushort otherTriangleIndex, ushort opIndex, out ushort newP)
         {
             newP = ushort.MaxValue;
@@ -1561,7 +1531,6 @@ namespace Poly2Tri
         /// <param name="p">a point shared by both triangles</param>
         /// <param name="op">another point shared by both triangles</param>
         /// <returns>returns the triangle still intersecting the edge</returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         ushort NextFlipTriangle(Orientation o, ushort triangleIndex, ushort otherTriangleIndex, ushort pIndex, ushort opIndex)
         {
             ushort edgeIndex;
@@ -1763,7 +1732,6 @@ namespace Poly2Tri
         }
 
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         bool IsShallow(ushort nodeIndex)
         {
             var node    = advancingFrontNodes[nodeIndex];
@@ -1778,7 +1746,6 @@ namespace Poly2Tri
         /// </summary>
         /// <param name="node">middle node</param>
         /// <returns>the angle between 3 front nodes</returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         double HoleAngle(ushort nodeIndex)
         {
             var node     = advancingFrontNodes[nodeIndex];
@@ -1807,7 +1774,6 @@ namespace Poly2Tri
         /// <summary>
         /// The basin angle is decided against the horizontal line [1,0]
         /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         double BasinAngle(ushort nodeIndex)
         {
             var node = advancingFrontNodes[nodeIndex];
@@ -1828,7 +1794,7 @@ namespace Poly2Tri
             var node     = advancingFrontNodes[nodeIndex];
             var nodePrevIndex = node.prevNodeIndex;
             var nodeNextIndex = node.nextNodeIndex;
-            var triangleIndex = (ushort)triangles.Count;
+            var triangleIndex = (ushort)triangles.Length;
 
             if (nodePrevIndex == ushort.MaxValue ||
                 nodeNextIndex == ushort.MaxValue ||
@@ -2046,7 +2012,6 @@ namespace Poly2Tri
         /// <summary>
         /// Exhaustive search to update neighbor pointers
         /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         void MarkNeighbor(ushort triangleIndex1, ushort triangleIndex2)
         {
             var triangle2 = triangles[triangleIndex2];
@@ -2088,7 +2053,6 @@ namespace Poly2Tri
 
 
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         bool HasEdgeByPoints(ushort p1, ushort p2)
         {
             if (p2 == ushort.MaxValue ||
@@ -2107,7 +2071,6 @@ namespace Poly2Tri
         }
 
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         bool HasEdgeCCW(int triangleIndex, ushort p)
         {
             var triangle = triangles[triangleIndex];
@@ -2152,7 +2115,6 @@ namespace Poly2Tri
         /// <param name="pc">triangle point</param>
         /// <param name="pd">point opposite a</param>
         /// <returns>true if d is inside circle, false if on circle edge</returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         static bool SmartIncircle(double2 pa, double2 pb, double2 pc, double2 pd)
         {
             var pdx = pd.x;
@@ -2194,7 +2156,6 @@ namespace Poly2Tri
         }
 
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         static bool InScanArea(double2 pa, double2 pb, double2 pc, double2 pd)
         {
             var pdx = pd.x;
@@ -2233,7 +2194,6 @@ namespace Poly2Tri
         /// 0 if collinear
         /// A[P1,P2,P3]  =  (x1*y2 - y1*x2) + (x2*y3 - y2*x3) + (x3*y1 - y3*x1)
         ///              =  (x1-x3)*(y2-y3) - (y1-y3)*(x2-x3)
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         static Orientation Orient2d(double2 pa, double2 pb, double2 pc)
         {
             var detleft     = (pa.x - pc.x) * (pb.y - pc.y);
