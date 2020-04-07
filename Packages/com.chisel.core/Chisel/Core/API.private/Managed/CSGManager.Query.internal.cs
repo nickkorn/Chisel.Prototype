@@ -277,7 +277,7 @@ namespace Chisel.Core
             return true;
         }
 
-        internal static bool GetNodesInFrustum(MeshQuery[] meshQueries, // TODO: add meshquery support here
+        internal static bool GetNodesInFrustum(MeshQuery[]          meshQueries, // TODO: add meshquery support here
                                                Plane[]              planes,
                                                out CSGTreeNode[]    nodes)
         {
@@ -303,7 +303,8 @@ namespace Chisel.Core
             var bounds = new Bounds();
             for (int i = 0; i < CSGManager.brushes.Count; i++)
             {
-                var brushNodeID = CSGManager.brushes[i];
+                var brushNodeID     = CSGManager.brushes[i];
+                var brushNodeIndex  = brushNodeID - 1;
                 if (!CSGManager.GetBrushBounds(brushNodeID, ref bounds))
                     continue;
 
@@ -319,11 +320,16 @@ namespace Chisel.Core
                         intersectsFrustum = true;
                 }
 
+                var treeNodeID          = nodeHierarchies[brushNodeIndex].treeNodeID;
+                var chiselLookupValues  = ChiselTreeLookup.Value[treeNodeID - 1];
+
                 if (intersectsFrustum)
                 {
+                    if (!chiselLookupValues.surfaceRenderBuffers.TryGetValue(brushNodeIndex, out var surfaceRenderBuffers))
+                        continue;
+
                     // Double check if the vertices of the brush are inside the frustum
-                    var brushInfo = CSGManager.GetBrushInfo(brushNodeID);
-                    foreach(var surfaceRenderBufferRef in brushInfo.renderBuffers.surfaceRenderBuffers)
+                    foreach(var surfaceRenderBufferRef in surfaceRenderBuffers)
                     {
                         ref var surfaceRenderBuffer = ref surfaceRenderBufferRef.Value;
 

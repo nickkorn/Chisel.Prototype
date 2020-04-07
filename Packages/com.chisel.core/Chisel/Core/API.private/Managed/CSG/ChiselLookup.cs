@@ -410,6 +410,7 @@ namespace Chisel.Core
             public NativeHashMap<int, BlobAssetReference<BrushesTouchedByBrush>>    brushesTouchedByBrushes;
             public NativeHashMap<int, BlobAssetReference<NodeTransformations>>      transformations;
             public Dictionary<int, VertexSoup>                                      vertexSoups;
+            public Dictionary<int, NativeList<BlobAssetReference<ChiselSurfaceRenderBuffer>>>   surfaceRenderBuffers;
 
             public BlobAssetReference<CompactTree>                                  compactTree;
 
@@ -418,40 +419,45 @@ namespace Chisel.Core
                 for (int b = 0; b < treeBrushes.Length; b++)
                 {
                     var brushNodeID = treeBrushes[b];
-                    if (basePolygons.TryGetValue(brushNodeID - 1, out BlobAssetReference<BasePolygonsBlob> basePolygonsBlob))
+                    if (basePolygons.TryGetValue(brushNodeID - 1, out var basePolygonsBlob))
                     {
                         basePolygons.Remove(brushNodeID - 1);
                         if (basePolygonsBlob.IsCreated)
                             basePolygonsBlob.Dispose();
                     }
-                    if (routingTableLookup.TryGetValue(brushNodeID - 1, out BlobAssetReference<RoutingTable> routingTable))
+                    if (routingTableLookup.TryGetValue(brushNodeID - 1, out var routingTable))
                     {
                         routingTableLookup.Remove(brushNodeID - 1);
                         if (routingTable.IsCreated)
                             routingTable.Dispose();
                     }
-                    if (brushWorldPlanes.TryGetValue(brushNodeID - 1, out BlobAssetReference<BrushWorldPlanes> worldPlanes))
+                    if (brushWorldPlanes.TryGetValue(brushNodeID - 1, out var worldPlanes))
                     {
                         brushWorldPlanes.Remove(brushNodeID - 1);
                         if (worldPlanes.IsCreated)
                             worldPlanes.Dispose();
                     }
-                    if (brushesTouchedByBrushes.TryGetValue(brushNodeID - 1, out BlobAssetReference<BrushesTouchedByBrush> brushesTouchedByBrush))
+                    if (brushesTouchedByBrushes.TryGetValue(brushNodeID - 1, out var brushesTouchedByBrush))
                     {
                         brushesTouchedByBrushes.Remove(brushNodeID - 1);
                         if (brushesTouchedByBrush.IsCreated)
                             brushesTouchedByBrush.Dispose();
                     }
-                    if (transformations.TryGetValue(brushNodeID - 1, out BlobAssetReference<NodeTransformations> transformation))
+                    if (transformations.TryGetValue(brushNodeID - 1, out var transformation))
                     {
                         transformations.Remove(brushNodeID - 1);
                         if (transformation.IsCreated)
                             transformation.Dispose();
                     }
-                    if (vertexSoups.TryGetValue(brushNodeID - 1, out VertexSoup vertexSoup))
+                    if (vertexSoups.TryGetValue(brushNodeID - 1, out var vertexSoup))
                     {
                         vertexSoups.Remove(brushNodeID - 1);
                         vertexSoup.Dispose();
+                    }
+                    if (surfaceRenderBuffers.TryGetValue(brushNodeID - 1, out var surfaceRenderBuffer))
+                    {
+                        surfaceRenderBuffers.Remove(brushNodeID - 1);
+                        surfaceRenderBuffer.Dispose();
                     }
                 }
             }
@@ -466,6 +472,7 @@ namespace Chisel.Core
                 brushesTouchedByBrushes = new NativeHashMap<int, BlobAssetReference<BrushesTouchedByBrush>>(1000, Allocator.Persistent);
                 transformations         = new NativeHashMap<int, BlobAssetReference<NodeTransformations>>(1000, Allocator.Persistent);
                 vertexSoups             = new Dictionary<int, VertexSoup>();
+                surfaceRenderBuffers    = new Dictionary<int, NativeList<BlobAssetReference<ChiselSurfaceRenderBuffer>>>();
             }
 
             internal void Dispose()
@@ -534,6 +541,13 @@ namespace Chisel.Core
                                 item.Dispose();
                         }
                     }
+                }
+                if (surfaceRenderBuffers != null)
+                {
+                    foreach (var item in surfaceRenderBuffers)
+                        item.Value.Dispose();
+                    surfaceRenderBuffers.Clear();
+                    surfaceRenderBuffers = null;
                 }
                 if (vertexSoups != null)
                 {

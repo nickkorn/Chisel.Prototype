@@ -377,6 +377,11 @@ namespace Chisel.Core
                                 //{
 
                                 //};
+
+                                performAllCSGJobHandle.Complete();
+                                UnityEngine.Profiling.Profiler.BeginSample("Triangulate");
+                                GenerateSurfaceRenderBuffers(brushNodeID);
+                                UnityEngine.Profiling.Profiler.EndSample();
                             }
                         }
                         finally { Profiler.EndSample(); }
@@ -404,6 +409,209 @@ namespace Chisel.Core
             }
             return true;
         }
+
+        static readonly Poly2Tri.DTSweep context = new Poly2Tri.DTSweep();
+        internal static unsafe void GenerateSurfaceRenderBuffers(int brushNodeID)
+        {
+            var brushNodeIndex      = brushNodeID - 1;
+            var output			    = CSGManager.GetBrushInfo(brushNodeID);
+            var brushLoops          = output.brushSurfaceLoops;
+            if (!brushLoops.IsCreated)
+                return;
+
+            var treeNodeID              = nodeHierarchies[brushNodeIndex].treeNodeID;
+            var chiselLookupValues      = ChiselTreeLookup.Value[treeNodeID - 1];
+
+            var brushVertices           = chiselLookupValues.vertexSoups[brushNodeIndex];
+            var brushWorldPlanes        = chiselLookupValues.brushWorldPlanes[brushNodeIndex];
+            var basePolygonsBlob        = chiselLookupValues.basePolygons[brushNodeIndex];
+
+            var surfaceLoopIndices      = brushLoops.surfaceLoopIndices;
+            var surfaceLoopAllInfos     = brushLoops.allInfos;
+            var surfaceLoopAllEdges     = brushLoops.allEdges;
+            var surfaceRenderBuffers    = new NativeList<BlobAssetReference<ChiselSurfaceRenderBuffer>>(surfaceLoopIndices.Length, Allocator.Persistent);
+            
+            var maxLoops = 0;
+            var maxIndices = 0;
+            for (int s = 0; s < surfaceLoopIndices.Length; s++)
+            {
+                var length = surfaceLoopIndices[s].Length;
+                maxIndices += length;
+                maxLoops = math.max(maxLoops, length);
+            }
+
+            var loops               = new List<NativeListArray<Edge>.NativeList>(maxLoops);
+            var loopInfos           = new List<SurfaceInfo>(maxLoops);
+            var surfaceIndexList    = new List<int>(maxIndices);
+            for (int s = 0; s < surfaceLoopIndices.Length; s++)
+            {
+                loops.Clear();
+                loopInfos.Clear();
+
+                var loopIndices = surfaceLoopIndices[s];
+                for (int l = 0; l < loopIndices.Length; l++)
+                {
+                    var surfaceLoopIndex = loopIndices[l];
+                    var surfaceLoopInfo  = surfaceLoopAllInfos[surfaceLoopIndex];
+                    var _interiorCategory = (CategoryIndex)surfaceLoopInfo.interiorCategory;
+                    if (_interiorCategory > CategoryIndex.LastCategory)
+                        Debug.Assert(false, $"Invalid final category {_interiorCategory}");
+
+                    if (_interiorCategory != CategoryIndex.ValidAligned && 
+                        _interiorCategory != CategoryIndex.ValidReverseAligned)
+                        continue;
+
+                    var surfaceLoopEdges   = surfaceLoopAllEdges[surfaceLoopIndex];
+                    if (surfaceLoopEdges.Length < 3)
+                        continue;
+
+                    loops.Add(surfaceLoopEdges);
+                    loopInfos.Add(surfaceLoopInfo);
+                }
+
+                // TODO: why are we doing this in tree-space? better to do this in brush-space, then we can more easily cache this
+                var surfaceIndex            = s;
+                var surfaceLayers           = basePolygonsBlob.Value.surfaces[surfaceIndex].surfaceInfo.layers;
+                var surfaceWorldPlane       = brushWorldPlanes.Value.worldPlanes[surfaceIndex];
+                var UV0		                = basePolygonsBlob.Value.surfaces[surfaceIndex].UV0;
+                var localSpaceToPlaneSpace	= MathExtensions.GenerateLocalToPlaneSpaceMatrix(surfaceWorldPlane);
+                var uv0Matrix				= math.mul(UV0.ToFloat4x4(), localSpaceToPlaneSpace);
+
+                // Ensure we have the rotation properly calculated, and have a valid normal
+                quaternion rotation;
+                if (((Vector3)surfaceWorldPlane.xyz) == Vector3.forward)
+                    rotation = quaternion.identity;
+                else
+                    rotation = (quaternion)Quaternion.FromToRotation(surfaceWorldPlane.xyz, Vector3.forward);
+
+
+                surfaceIndexList.Clear();
+
+                CategoryIndex   interiorCategory    = CategoryIndex.ValidAligned;
+
+                for (int l = 0; l < loops.Count; l++)
+                {
+                    var loopEdges        = loops[l];
+                    var loopInfo         = loopInfos[l];
+                    interiorCategory = (CategoryIndex)loopInfo.interiorCategory;
+
+                    Debug.Assert(surfaceIndex == loopInfo.basePlaneIndex);
+                
+                    Int32[] surfaceIndicesArray = null;
+                    try
+                    {
+                        surfaceIndicesArray = context.TriangulateLoops(loopInfo, brushVertices, loopEdges.ToArray().ToList(), rotation);
+                    }
+                    catch (System.Exception e)
+                    {
+                        Debug.LogException(e);
+                    }
+
+                    if (surfaceIndicesArray == null ||
+                        surfaceIndicesArray.Length < 3)
+                        continue;
+
+                    if (interiorCategory == CategoryIndex.ValidReverseAligned ||
+                        interiorCategory == CategoryIndex.ReverseAligned)
+                    {
+                        var maxCount = surfaceIndicesArray.Length - 1;
+                        for (int n = (maxCount / 2); n >= 0; n--)
+                        {
+                            var t = surfaceIndicesArray[n];
+                            surfaceIndicesArray[n] = surfaceIndicesArray[maxCount - n];
+                            surfaceIndicesArray[maxCount - n] = t;
+                        }
+                    }
+
+                    surfaceIndexList.AddRange(surfaceIndicesArray);
+                }
+
+                if (surfaceIndexList.Count == 0)
+                    continue;
+
+                var surfaceIndices = surfaceIndexList.ToArray();
+
+                // Only use the vertices that we've found in the indices
+                var surfaceVerticesList = new List<float3>(brushVertices.Length);
+                var indexRemap      = new int[brushVertices.Length];
+                for (int i = 0; i < surfaceIndices.Length; i++)
+                {
+                    var vertexIndexSrc = surfaceIndices[i];
+                    var vertexIndexDst = indexRemap[vertexIndexSrc];
+                    if (vertexIndexDst == 0)
+                    {
+                        vertexIndexDst = surfaceVerticesList.Count;
+                        surfaceVerticesList.Add(brushVertices[vertexIndexSrc]);
+                        indexRemap[vertexIndexSrc] = vertexIndexDst + 1;
+                    } else
+                        vertexIndexDst--;
+                    surfaceIndices[i] = vertexIndexDst;
+                }
+
+                float3[] surfaceVertices = surfaceVerticesList.ToArray();
+                
+                var anySurfaceTargetHasNormals  = true; // TODO: actually determine this
+                var anySurfaceTargetHasUVs      = true; // TODO: actually determine this
+
+                var vertexHash	    = (ulong)Hashing.ComputeHashKey(surfaceVertices);
+                var indicesHash	    = (ulong)Hashing.ComputeHashKey(surfaceIndices);
+                var geometryHash    = Hashing.XXH64_mergeRound(vertexHash, indicesHash);
+
+                var normalHash  = (ulong)0;
+                float3[] surfaceNormals = null;
+                if (anySurfaceTargetHasNormals)
+                {
+                    var normal = (interiorCategory == CategoryIndex.ValidReverseAligned || interiorCategory == CategoryIndex.ReverseAligned) ? -surfaceWorldPlane.xyz : surfaceWorldPlane.xyz;
+
+                    surfaceNormals = surfaceVertices == null ? null : new float3[surfaceVertices.Length];
+                    if (surfaceVertices != null)
+                    {
+                        for (int i = 0; i < surfaceVertices.Length; i++)
+                            surfaceNormals[i] = normal;
+                    }
+                    normalHash = Hashing.ComputeHashKey(surfaceNormals);
+                }
+                var uv0Hash = (ulong)0;
+                float2[] surfaceUV0 = null;
+                if (anySurfaceTargetHasUVs)
+                {
+                    surfaceUV0 = surfaceVertices == null ? null : new float2[surfaceVertices.Length];
+                    if (surfaceVertices != null)
+                    {
+                        for (int v = 0; v < surfaceVertices.Length; v++)
+                            surfaceUV0[v] = math.mul(uv0Matrix, new float4(surfaceVertices[v], 1)).xy;
+                    }
+                    uv0Hash = Hashing.ComputeHashKey(surfaceUV0);
+                }
+
+                var haveUV0     = false; // TODO: actually determine this
+                var haveNormal  = false; // TODO: actually determine this
+
+                var builder = new BlobBuilder(Allocator.TempJob);
+                ref var root = ref builder.ConstructRoot<ChiselSurfaceRenderBuffer>();
+                builder.Construct(ref root.indices,     surfaceIndices);
+                builder.Construct(ref root.vertices,    surfaceVertices);
+                builder.Construct(ref root.normals,     surfaceNormals);
+                builder.Construct(ref root.uv0,         surfaceUV0);
+
+                root.surfaceHash        = Hashing.XXH64_mergeRound(!haveNormal ? 0 : normalHash, !haveUV0 ? 0 : uv0Hash);
+                root.geometryHash       = geometryHash;
+                root.surfaceLayers      = surfaceLayers;
+                root.surfaceIndex       = surfaceIndex;
+                var surfaceRenderBuffer = builder.CreateBlobAssetReference<ChiselSurfaceRenderBuffer>(Allocator.Persistent);
+                builder.Dispose();
+
+                surfaceRenderBuffers.AddNoResize(surfaceRenderBuffer);
+            }
+
+            if (surfaceRenderBuffers.Length == 0)
+            {
+                surfaceRenderBuffers.Dispose();
+                return;
+            }
+            chiselLookupValues.surfaceRenderBuffers[brushNodeIndex] = surfaceRenderBuffers;
+        }
+
 
         internal static bool CleanTree(int treeNodeID)
         {
