@@ -14,12 +14,4 @@ using Unity.Entities;
 
 namespace Chisel.Core
 {
-    [BurstCompile(CompileSynchronously = true)]
-    unsafe struct GenerateSurfaceTrianglesJob : IJob
-    {
-        public void Execute()
-        {
-
-        }
-    }
 }

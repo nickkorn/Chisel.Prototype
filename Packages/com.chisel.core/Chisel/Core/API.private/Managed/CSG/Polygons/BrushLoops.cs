@@ -22,7 +22,6 @@ namespace Chisel.Core
         public NativeListArray<Edge>    basePolygonEdges;
         public VertexSoup               vertexSoup;
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Clear()
         {
             if (basePolygonEdges.IsCreated)

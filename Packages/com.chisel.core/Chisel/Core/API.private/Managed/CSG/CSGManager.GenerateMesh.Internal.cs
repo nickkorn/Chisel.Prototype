@@ -521,7 +521,7 @@ namespace Chisel.Core
                 if (!chiselLookupValues.surfaceRenderBuffers.TryGetValue(brushNodeIndex, out var surfaceRenderBuffers))
                     continue;
 
-                if (surfaceRenderBuffers.Length == 0)
+                if (surfaceRenderBuffers.Length== 0)
                     continue;
 
                 for (int j = 0, count_j = (int)surfaceRenderBuffers.Length; j < count_j; j++)

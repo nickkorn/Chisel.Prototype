@@ -84,12 +84,12 @@ namespace Chisel.Core
 
 namespace Poly2Tri
 {
-    public unsafe struct DTSweep : IDisposable
+    public unsafe struct DTSweep
     {
         const double PI_div2     = (double)(Math.PI / 2);
         const double PI_3div4    = (double)(3 * Math.PI / 4);
 
-        unsafe struct DelaunayTriangle
+        public unsafe struct DelaunayTriangle
         {
             public enum EdgeFlags : byte
             {
@@ -304,7 +304,7 @@ namespace Poly2Tri
             public ushort Q;
         }
 
-        struct AdvancingFrontNode
+        public struct AdvancingFrontNode
         {
             public ushort prevNodeIndex;
             public ushort nextNodeIndex;
@@ -313,7 +313,7 @@ namespace Poly2Tri
             public float2 nodePoint;
         }
 
-        struct DirectedEdge
+        public struct DirectedEdge
         {
             public ushort index2;
             public ushort next;
@@ -323,40 +323,22 @@ namespace Poly2Tri
         // SweepContext
         //
         
-        quaternion                          rotation;
-        VertexSoup                          vertices;
-        NativeArray<float2>                 points;
-        NativeArray<ushort>                 edges;
-        NativeList<DirectedEdge>            allEdges;
-        NativeList<int>                     triangleIndices;
-        NativeList<DelaunayTriangle>        triangles;
-        NativeList<bool>                    triangleInterior;
-        NativeList<ushort>                  sortedPoints;
-        NativeList<AdvancingFrontNode>      advancingFrontNodes;
-        NativeListArray<Chisel.Core.Edge>   edgeLookupEdges;
-        NativeHashMap<ushort, int>          edgeLookups;
-        NativeListArray<Chisel.Core.Edge>   foundLoops;
+        quaternion                                  rotation;
+        public VertexSoup                           vertices;
+        public NativeArray<float2>                  points;
+        public NativeArray<ushort>                  edges;
+        public NativeList<DirectedEdge>             allEdges;
+        public NativeList<int>                      triangleIndices;
+        public NativeList<DelaunayTriangle>         triangles;
+        public NativeList<bool>                     triangleInterior;
+        public NativeList<ushort>                   sortedPoints;
+        public NativeList<AdvancingFrontNode>       advancingFrontNodes;
+        public NativeListArray<Chisel.Core.Edge>    edgeLookupEdges;
+        public NativeHashMap<ushort, int>           edgeLookups;
+        public NativeListArray<Chisel.Core.Edge>    foundLoops;
+        public NativeListArray<int>                 children;
+        public NativeList<Edge>                     inputEdgesCopy;
 
-        public void Initialize(VertexSoup vertices, Allocator allocator)
-        {
-            this.vertices = vertices;
-            var pointCount = vertices.Length + 2;
-            if (points == null ||
-                points.Length < pointCount)
-                points = new NativeArray<float2>(pointCount, allocator);
-            if (edges == null ||
-                edges.Length < pointCount)
-                edges = new NativeArray<ushort>(pointCount, allocator);
-
-            allEdges                = new NativeList<DirectedEdge>(pointCount, allocator);
-            sortedPoints            = new NativeList<ushort>(pointCount, allocator);
-            triangles               = new NativeList<DelaunayTriangle>(pointCount * 3, allocator);
-            triangleInterior        = new NativeList<bool>(pointCount * 3, allocator);
-            advancingFrontNodes     = new NativeList<AdvancingFrontNode>(pointCount, allocator);
-            edgeLookupEdges         = new NativeListArray<Chisel.Core.Edge>(pointCount, allocator);
-            edgeLookups             = new NativeHashMap<ushort, int>(pointCount, allocator);
-            foundLoops              = new NativeListArray<Chisel.Core.Edge>(pointCount, allocator);
-        }
         void Clear()
         {
             for (int i = 0; i < edges.Length; i++)
@@ -367,20 +349,6 @@ namespace Poly2Tri
             triangleInterior.Clear();
             advancingFrontNodes.Clear();
             sortedPoints.Clear();
-        }
-        public void Dispose()
-        {
-            points.Dispose();
-            edges.Dispose();
-            
-            allEdges            .Dispose();
-            sortedPoints        .Dispose();
-            triangles           .Dispose();
-            triangleInterior    .Dispose();
-            advancingFrontNodes .Dispose();
-            edgeLookupEdges     .Dispose();
-            edgeLookups         .Dispose();
-            foundLoops          .Dispose();
         }
 
         // Inital triangle factor, seed triangle will extend 30% of 
@@ -404,50 +372,6 @@ namespace Poly2Tri
         bool edgeEventRight;
 
         
-
-        internal unsafe static bool IsPointInPolygon(float3 right, float3 forward, List<Chisel.Core.Edge> indices1, List<Chisel.Core.Edge> indices2, VertexSoup vertices)
-        {
-            int index = 0;
-            while (index < indices2.Count &&
-                indices1.Contains(indices2[index]))
-                index++;
-
-            if (index >= indices2.Count)
-                return false;
-
-            var point = vertices[indices2[index].index1];
-
-            var px = math.dot(right, point);
-            var py = math.dot(forward, point);
-
-            float ix, iy, jx, jy;
-
-            var vert = vertices[indices1[indices1.Count - 1].index1];
-            ix = math.dot(right,   vert);
-            iy = math.dot(forward, vert);
-
-            bool result = false;
-            for (int i = 0; i < indices1.Count; i++)
-            {
-                jx = ix;
-                jy = iy;
-
-                vert = vertices[indices1[i].index1];
-                ix = math.dot(right,   vert);
-                iy = math.dot(forward, vert);
-
-                if ((py >= iy && py < jy) ||
-                    (py >= jy && py < iy))
-                {
-                    if (ix + (py - iy) / (jy - iy) * (jx - ix) < px)
-                    {
-                        result = !result;
-                    }
-                }
-            }
-            return result;
-        }
-
         internal unsafe static bool IsPointInPolygon(float3 right, float3 forward, in NativeListArray<Chisel.Core.Edge>.NativeList indices1, in NativeListArray<Chisel.Core.Edge>.NativeList indices2, in VertexSoup vertices)
         {
             int index = 0;
@@ -493,13 +417,13 @@ namespace Poly2Tri
 
 
 
-        public void TriangulateLoops(SurfaceInfo loopInfo, quaternion rotation, List<Chisel.Core.Edge> inputEdges, NativeList<int> triangleIndices)
+        public void TriangulateLoops(SurfaceInfo loopInfo, quaternion rotation, NativeListArray<Chisel.Core.Edge>.NativeList inputEdges, NativeList<int> triangleIndices)
         {
             triangleIndices.Clear();
             this.rotation = rotation;
             if (inputEdges.Count < 4)
             {
-                Triangulate(inputEdges, triangleIndices);
+                Triangulate(inputEdges.ToArray(Allocator.Temp), triangleIndices);
                 return;
             }
 
@@ -512,24 +436,29 @@ namespace Poly2Tri
 
             //if (inputEdges.Count == 5)
             //    Debug.Log($"{loop.info.brush.brushNodeID} {loop.info.worldPlane} {inputEdges.Count}");
+
+            inputEdgesCopy.Clear();
+            inputEdgesCopy.AddRange(inputEdges.AsArray());
             
-            for (int i = 0; i < inputEdges.Count; i++)
+            for (int i = 0; i < inputEdgesCopy.Length; i++)
             {
-                if (!edgeLookups.TryGetValue(inputEdges[i].index1, out int edgeLookupIndex))
+                if (!edgeLookups.TryGetValue(inputEdgesCopy[i].index1, out int edgeLookupIndex))
                 {
                     edgeLookupIndex = edgeLookupEdges.Length;
-                    edgeLookups[inputEdges[i].index1] = edgeLookupIndex;
-                    edgeLookupEdges.Add(new List<Chisel.Core.Edge>());
+                    edgeLookups[inputEdgesCopy[i].index1] = edgeLookupIndex;
+                    edgeLookupEdges.Add();
                 }
-                edgeLookupEdges[edgeLookupIndex].Add(inputEdges[i]);
+                edgeLookupEdges[edgeLookupIndex].Add(inputEdgesCopy[i]);
             }
 
 
-            while (inputEdges.Count > 0)
+            while (inputEdgesCopy.Length > 0)
             {
-                var lastIndex = inputEdges.Count - 1;
-                var edge = inputEdges[lastIndex];
-                var newLoops = new List<Chisel.Core.Edge> { edge };
+                var lastIndex   = inputEdgesCopy.Length - 1;
+                var edge        = inputEdgesCopy[lastIndex];
+                var index       = foundLoops.Add();
+                var newLoops    = foundLoops[index];
+                newLoops.Add(edge);
 
                 var edgesStartingAtVertex = edgeLookupEdges[edgeLookups[edge.index1]];
                 if (edgesStartingAtVertex.Length > 1)
@@ -537,7 +466,7 @@ namespace Poly2Tri
                 else
                     edgeLookups.Remove(edge.index1);
 
-                inputEdges.RemoveAt(lastIndex);
+                inputEdgesCopy.RemoveAt(lastIndex);
 
                 var firstIndex = edge.index1;
                 while (edgeLookups.ContainsKey(edge.index2))
@@ -563,12 +492,11 @@ namespace Poly2Tri
                     } else
                         edgeLookups.Remove(edge.index2);
                     newLoops.Add(nextEdge);
-                    inputEdges.Remove(nextEdge);
+                    inputEdgesCopy.Remove(nextEdge);
                     edge = nextEdge;
                     if (edge.index2 == firstIndex)
                         break;
                 }
-                foundLoops.Add(newLoops);
             }
 
             if (foundLoops.Count == 0)
@@ -578,13 +506,12 @@ namespace Poly2Tri
             {
                 if (foundLoops[0].Count == 0)
                     return;
-                Triangulate(foundLoops[0].ToArray().ToList(), triangleIndices);
+                Triangulate(foundLoops[0].ToArray(Allocator.Temp), triangleIndices);
                 return;
             }
 
-            var children = new List<int>[foundLoops.Count];
-            for (int i = 0; i < foundLoops.Count; i++)
-                children[i] = new List<int>();
+            children.Clear();
+            children.ResizeExact(foundLoops.Count);
 
 
             MathExtensions.CalculateTangents(loopInfo.worldPlane.xyz, out float3 right, out float3 forward);
@@ -640,72 +567,27 @@ namespace Poly2Tri
             }
 
 
-
-
             for (int l1 = foundLoops.Count - 1; l1 >= 0; l1--)
             {
                 if (foundLoops[l1].Count == 0)
                     continue;
-                Triangulate(foundLoops[l1].ToArray().ToList(), triangleIndices);
+                Triangulate(foundLoops[l1].ToArray(Allocator.Temp), triangleIndices);
             }
         }
 
         /// <summary>
         /// Triangulate simple polygon with holes
         /// </summary>
-        public void Triangulate(List<Chisel.Core.Edge> inputEdges, NativeList<int> triangleIndices)
+        public void Triangulate(NativeArray<Chisel.Core.Edge> inputEdges, NativeList<int> triangleIndices)
         {
-            var startIndex = triangleIndices.Length;
             this.triangleIndices = triangleIndices;
-            int prevEdgeCount = inputEdges.Count;
-            AddMoreTriangles:
             Clear();
             PrepareTriangulation(inputEdges);
             CreateAdvancingFront(0);
             Sweep();
             FixupConstrainedEdges();
             FinalizationPolygon();
-
-            //TODO: Optimize
-            for (int i = startIndex; i < triangleIndices.Length; i += 3)
-            {
-                var index0 = triangleIndices[i + 0];
-                var index1 = triangleIndices[i + 1];
-                var index2 = triangleIndices[i + 2];
-                for (int e = inputEdges.Count - 1; e >= 0; e--)
-                {
-                    var edge = inputEdges[e];
-                    if (index0 == edge.index1)
-                    {
-                        if (index1 == edge.index2 ||
-                            index2 == edge.index2)
-                        {
-                            inputEdges.RemoveAt(e);
-                        }
-                    } else
-                    if (index1 == edge.index1)
-                    {
-                        if (index0 == edge.index2 ||
-                            index2 == edge.index2)
-                        {
-                            inputEdges.RemoveAt(e);
-                        }
-                    } else
-                    if (index2 == edge.index1)
-                    {
-                        if (index1 == edge.index2 ||
-                            index0 == edge.index2)
-                        {
-                            inputEdges.RemoveAt(e);
-                        }
-                    }
-                }
-            }
-            if (inputEdges.Count > 3 && prevEdgeCount != inputEdges.Count)
-            {
-                prevEdgeCount = inputEdges.Count;
-                goto AddMoreTriangles;
-            }
+            inputEdges.Dispose();
         }
 
 
@@ -936,13 +818,13 @@ namespace Poly2Tri
         }
 
 
-        void PrepareTriangulation(List<Chisel.Core.Edge> inputEdges)
+        void PrepareTriangulation(NativeArray<Chisel.Core.Edge> inputEdges)
         {
             var min = new float2(float.PositiveInfinity, float.PositiveInfinity);
             var max = new float2(float.NegativeInfinity, float.NegativeInfinity);
 
             var s_KnownVertices = stackalloc bool[vertices.Length];
-            for (int e = 0; e < inputEdges.Count; e++)
+            for (int e = 0; e < inputEdges.Length; e++)
             {
                 var edge = inputEdges[e];
                 var index1 = edge.index1;

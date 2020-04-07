@@ -110,6 +110,17 @@ namespace Chisel.Core
                 }
             }
         }
+        public static void Remove<T>(this NativeList<T> list, T item) where T : unmanaged
+        {
+            for (int index = 0; index < list.Length; index++)
+            {
+                if (EqualityComparer<T>.Default.Equals(list[index], item))
+                {
+                    RemoveRange(list, index, 1);
+                    return;
+                }
+            }
+        }
 
         public static void* GetUnsafePtr<T>(this NativeListArray<T>.NativeList list) where T : struct
         {

@@ -75,7 +75,10 @@ namespace Chisel.Core
                 {
                     if (Ptr[i] != null &&
                         Ptr[i]->IsCreated)
+                    {
+                        Ptr[i]->Clear();
                         Ptr[i]->Dispose();
+                    }
                 }
             }
 
@@ -99,7 +102,10 @@ namespace Chisel.Core
                 {
                     if (Ptr[i] != null &&
                         Ptr[i]->IsCreated)
+                    {
+                        Ptr[i]->Clear();
                         Ptr[i]->Dispose();
+                    }
                 }
             }
 
@@ -173,7 +179,10 @@ namespace Chisel.Core
                 {
                     if (Ptr[i] != null &&
                         Ptr[i]->IsCreated)
+                    {
+                        Ptr[i]->Clear();
                         Ptr[i]->Dispose();
+                    }
                 }
                 UnsafeUtility.Free(Ptr, Allocator);
                 Allocator = Allocator.Invalid;
@@ -195,7 +204,13 @@ namespace Chisel.Core
             public void Execute()
             {
                 for (int i = 0; i < Length; i++)
-                    Ptr[i]->Dispose();
+                {
+                    if (Ptr[i]->IsCreated)
+                    {
+                        Ptr[i]->Clear();
+                        Ptr[i]->Dispose();
+                    }
+                }
                 UnsafeUtility.Free(Ptr, Allocator);
             }
         }
@@ -230,7 +245,10 @@ namespace Chisel.Core
             {
                 if (Ptr[i] != null &&
                     Ptr[i]->IsCreated)
+                {
+                    Ptr[i]->Clear();
                     Ptr[i]->Dispose();
+                }
             }
             Length = 0;
         }
@@ -493,7 +511,15 @@ namespace Chisel.Core
             UnsafeListArray.Destroy(m_Array);
             m_Array = null;
         }
-        
+
+        public JobHandle Dispose(JobHandle inputDeps)
+        {
+#if ENABLE_UNITY_COLLECTIONS_CHECKS
+            DisposeSentinel.Dispose(ref m_Safety, ref m_DisposeSentinel);
+#endif
+            return m_Array->Dispose(inputDeps);
+        }
+
         [NativeContainer]
         public unsafe struct NativeList
         {
@@ -545,6 +571,8 @@ namespace Chisel.Core
 #if ENABLE_UNITY_COLLECTIONS_CHECKS
                     AtomicSafetyHandle.CheckReadAndThrow(m_Safety);
 #endif
+                    if (!m_ListData->IsCreated)
+                        return 0;
                     return AssumePositive(m_ListData->Length);
                 }
             }
@@ -556,6 +584,8 @@ namespace Chisel.Core
 #if ENABLE_UNITY_COLLECTIONS_CHECKS
                     AtomicSafetyHandle.CheckReadAndThrow(m_Safety);
 #endif
+                    if (!m_ListData->IsCreated)
+                        return 0;
                     return AssumePositive(m_ListData->Length);
                 }
             }
