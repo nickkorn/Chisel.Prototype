@@ -277,7 +277,7 @@ namespace Chisel.Core
             return true;
         }
 
-        internal static bool GetNodesInFrustum(MeshQuery[]          meshQuery, // TODO: add meshquery support here
+        internal static bool GetNodesInFrustum(MeshQuery[] meshQueries, // TODO: add meshquery support here
                                                Plane[]              planes,
                                                out CSGTreeNode[]    nodes)
         {
@@ -323,16 +323,20 @@ namespace Chisel.Core
                 {
                     // Double check if the vertices of the brush are inside the frustum
                     var brushInfo = CSGManager.GetBrushInfo(brushNodeID);
-                    foreach(var surfaceRenderBuffer in brushInfo.renderBuffers.surfaceRenderBuffers)
+                    foreach(var surfaceRenderBufferRef in brushInfo.renderBuffers.surfaceRenderBuffers)
                     {
+                        ref var surfaceRenderBuffer = ref surfaceRenderBufferRef.Value;
+
                         // Compare surface with 'current' meshquery (is this surface even being rendered???)
-                        for (int n = 0; n < meshQuery.Length; n++)
+                        for (int n = 0; n < meshQueries.Length; n++)
                         {
-                            if ((surfaceRenderBuffer.meshQuery.LayerQuery & meshQuery[n].LayerQuery) == LayerUsageFlags.None)
+                            var meshQuery = meshQueries[n];
+                            var core_surface_flags = surfaceRenderBuffer.surfaceLayers.layerUsage;
+                            if ((core_surface_flags & meshQuery.LayerQueryMask) != meshQuery.LayerQuery)
                                 goto SkipSurface;
                         }
 
-                        var vertices = surfaceRenderBuffer.vertices;
+                        ref var vertices = ref surfaceRenderBuffer.vertices;
                         for (int p = 0; p < 6; p++)
                         {
                             var plane = planes[p];

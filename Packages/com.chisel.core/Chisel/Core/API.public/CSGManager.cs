@@ -16,6 +16,7 @@ namespace Chisel.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool	Flush	()	{ if (!UpdateAllTreeMeshes(out JobHandle handle)) return false; handle.Complete(); return true; }
 
+
         /// <summary>Clears all caches and rebuilds all <see cref="Chisel.Core.CSGTree"/>s.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void	Rebuild	()	{ RebuildAll(); }

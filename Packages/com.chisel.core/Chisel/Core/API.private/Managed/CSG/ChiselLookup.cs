@@ -255,6 +255,7 @@ namespace Chisel.Core
         public SurfaceInfo  surfaceInfo;
         public int          startEdgeIndex;
         public int          endEdgeIndex;
+        public UVMatrix     UV0;
     }
 
     internal struct BasePolygonsBlob
@@ -337,6 +338,7 @@ namespace Chisel.Core
                         brushNodeIndex      = brushNodeIndex,
                         interiorCategory    = (CategoryGroupIndex)(int)CategoryIndex.ValidAligned,
                     },
+                    UV0             = polygon.UV0,
                     startEdgeIndex  = startEdgeIndex,
                     endEdgeIndex    = endEdgeIndex
                 });

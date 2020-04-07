@@ -20,6 +20,7 @@ namespace Chisel.Core
         public NativeListArray<Edge>    intersectionEdges;
         public NativeList<SurfaceInfo>  basePolygonSurfaceInfos;
         public NativeListArray<Edge>    basePolygonEdges;
+        public VertexSoup               vertexSoup;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Clear()

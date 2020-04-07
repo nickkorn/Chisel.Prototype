@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using Unity.Jobs;
 using UnityEngine;
 using UnityEngine.Profiling;
 
@@ -44,7 +45,6 @@ namespace Chisel.Components
     {
         public static event Action              PreReset;
         public static event Action              PostReset;
-        public static event Action<ChiselModel> PreUpdateModel;
         public static event Action<ChiselModel> PostUpdateModel;
         public static event Action              PostUpdateModels;
         
@@ -135,16 +135,6 @@ namespace Chisel.Components
                 if (!tree.Dirty)
                     continue;
 
-                try
-                {
-                    if (PreUpdateModel != null)
-                        PreUpdateModel(model);
-                }
-                catch (Exception ex) // if there's a bug in user-code we don't want to end up in a bad state
-                {
-                    Debug.LogException(ex);
-                }
-
                 Profiler.BeginSample("UpdateModelMeshDescriptions");
                 UpdateModelMeshDescriptions(model);
                 Profiler.EndSample();
@@ -202,33 +192,6 @@ namespace Chisel.Components
                 if (PostUpdateModels != null)
                     PostUpdateModels();
             }
-        }
-
-        public static void UpdateModel(ChiselModel model)
-        {
-            if (PreUpdateModel != null)
-                PreUpdateModel(model);
-
-            UpdateModelMeshDescriptions(model);
-
-            // Re-use existing UnityEngine.Mesh if they exist
-            sharedUnityMeshes.ReuseExistingMeshes(model);
-
-            // Find all meshes whose refCounts are 0
-            sharedUnityMeshes.FindAllUnusedUnityMeshes();
-
-            // Generate new UnityEngine.Mesh instances and fill them with data from the CSG algorithm (if necessary)
-            //	note: reuses garbage collected meshes when possible
-            sharedUnityMeshes.CreateNewMeshes(model);
-
-            // Generate (or re-use) components and set them up properly
-            componentGenerator.Rebuild(model);
-
-            if (PostUpdateModel != null)
-                PostUpdateModel(model);
-
-            // Destroy all meshes whose refCounts are 0
-            sharedUnityMeshes.DestroyNonRecycledUnusedUnityMeshes();
         }
 
         static ChiselGeneratedModelMesh[]		__emptyGeneratedMeshesTable		= new ChiselGeneratedModelMesh[0];		// static to avoid allocations

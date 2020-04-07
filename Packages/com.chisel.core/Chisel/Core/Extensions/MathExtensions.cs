@@ -82,7 +82,7 @@ namespace Chisel.Core
         {
             tangent = Vector3.Cross(normal, ClosestTangentAxis(normal)).normalized;
             binormal = Vector3.Cross(normal, tangent).normalized;
-        }        
+        }
 
         public static void CalculateTangents(float3 normal, out float3 tangent, out float3 binormal)
         {
@@ -97,20 +97,18 @@ namespace Chisel.Core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Matrix4x4 GenerateLocalToPlaneSpaceMatrix(Vector4 planeVector)
+        public static float4x4 GenerateLocalToPlaneSpaceMatrix(float4 planeVector)
         {
-            Vector3 normal = -(Vector3)planeVector;
-            Vector3 tangent;
-            Vector3 biNormal;
-            CalculateTangents(normal, out tangent, out biNormal);
+            float3 normal = -planeVector.xyz;
+            CalculateTangents(normal, out float3 tangent, out float3 biNormal);
             var pointOnPlane = normal * -planeVector.w;
 
-            return new Matrix4x4()
+            return new float4x4
             {
-                m00 = tangent.x,  m01 = tangent.y,	m02 = tangent.z,	m03 = Vector3.Dot(tangent, pointOnPlane),
-                m10 = biNormal.x, m11 = biNormal.y, m12 = biNormal.z,	m13 = Vector3.Dot(biNormal, pointOnPlane),
-                m20 = normal.x,   m21 = normal.y,	m22 = normal.z,		m23 = Vector3.Dot(normal, pointOnPlane),
-                m30 = 0.0f,		  m31 = 0.0f,		m32 = 0.0f,			m33 = 1.0f
+                c0 = new float4(tangent.x, biNormal.x, normal.x, 0.0f),
+                c1 = new float4(tangent.y, biNormal.y, normal.y, 0.0f),
+                c2 = new float4(tangent.z, biNormal.z, normal.z, 0.0f),
+                c3 = new float4(math.dot(tangent, pointOnPlane), math.dot(biNormal, pointOnPlane), math.dot(normal, pointOnPlane), 1.0f)
             };
         }
 

@@ -174,7 +174,7 @@ namespace Chisel.Components
                 if (surfaceIndex < 0 || surfaceIndex >= brushMesh.planes.Length)
                     return Matrix4x4.identity;
                 
-                var localToPlaneSpace   = MathExtensions.GenerateLocalToPlaneSpaceMatrix(brushMesh.planes[surfaceIndex]);
+                var localToPlaneSpace   = (Matrix4x4)MathExtensions.GenerateLocalToPlaneSpaceMatrix(brushMesh.planes[surfaceIndex]);
                 var worldToLocal        = node.hierarchyItem.WorldToLocalMatrix;
                 return localToPlaneSpace * worldToLocal;
             }	

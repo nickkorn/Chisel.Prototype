@@ -13,9 +13,10 @@ namespace Chisel.Core
     {
         public struct Polygon
         {
-            public Int32 firstEdge;
-            public Int32 edgeCount;
-            public SurfaceLayers layerDefinition;
+            public Int32            firstEdge;
+            public Int32            edgeCount;
+            public SurfaceLayers    layerDefinition;
+            public UVMatrix         UV0;
         }
 
         // TODO: turn this into AABB
@@ -53,9 +54,10 @@ namespace Chisel.Core
             {
                 ref var srcPolygon = ref brushMesh.polygons[p];
                 ref var dstPolygon = ref polygonArray[p];
-                dstPolygon.firstEdge = srcPolygon.firstEdge;
-                dstPolygon.edgeCount = srcPolygon.edgeCount;
-                dstPolygon.layerDefinition = srcPolygon.surface.brushMaterial.LayerDefinition;
+                dstPolygon.firstEdge        = srcPolygon.firstEdge;
+                dstPolygon.edgeCount        = srcPolygon.edgeCount;
+                dstPolygon.layerDefinition  = srcPolygon.surface.brushMaterial.LayerDefinition;
+                dstPolygon.UV0              = srcPolygon.surface.surfaceDescription.UV0;
             }
 
             builder.Construct(ref root.localPlanes, brushMesh.planes);

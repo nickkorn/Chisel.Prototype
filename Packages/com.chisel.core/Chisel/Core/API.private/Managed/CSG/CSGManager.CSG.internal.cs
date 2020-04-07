@@ -58,6 +58,7 @@ namespace Chisel.Core
 
         internal static bool UpdateTreeMesh(int treeNodeID, out JobHandle finalJobHandle)
         {
+            Debug.Log("UpdateTreeMesh");
             finalJobHandle = default(JobHandle);
             if (!IsValidNodeID(treeNodeID) || !AssertNodeType(treeNodeID, CSGNodeType.Tree))
                 return false;
@@ -287,6 +288,7 @@ namespace Chisel.Core
                                     outputLoops.basePolygonEdges            = basePolygonEdges;
                                     outputLoops.intersectionSurfaceInfos    = intersectionSurfaceInfos;
                                     outputLoops.intersectionEdges           = intersectionEdges;
+                                    outputLoops.vertexSoup                  = vertexSoup;
                                     //***GET RID OF THIS***//
 
 
@@ -346,18 +348,17 @@ namespace Chisel.Core
                                 if (brushMeshID == 0)
                                     continue;
 
-                                var brushVertices = chiselLookupValues.vertexSoups[brushNodeIndex];
-
                                 output.brushSurfaceLoops = new BrushLoops();
                                 output.brushSurfaceLoops.Allocate();
+
                                 var performCSGJob = new PerformCSGJob
                                 {
                                     // Read
                                     brushNodeIndex              = brushNodeIndex,
-                                    brushVertices               = brushVertices,
                                     routingTableLookup          = routingTableLookup,
                                     brushWorldPlanes            = brushWorldPlanes,
-                                    brushesTouchedByBrushes     = brushesTouchedByBrushes,                        
+                                    brushesTouchedByBrushes     = brushesTouchedByBrushes,
+                                    brushVertices               = outputLoops.vertexSoup,                    
                                     intersectionEdges           = outputLoops.intersectionEdges,
                                     intersectionSurfaceInfos    = outputLoops.intersectionSurfaceInfos,
 
@@ -371,6 +372,11 @@ namespace Chisel.Core
 
                                 // TODO: generate surface triangles (blobAssets), use brushSurfaceLoops, 
                                 //       remove from BrushInfo
+
+                                //var generateSurfaceTrianglesJob = new GenerateSurfaceTrianglesJob
+                                //{
+
+                                //};
                             }
                         }
                         finally { Profiler.EndSample(); }
@@ -381,6 +387,7 @@ namespace Chisel.Core
                             UpdateAllOutlines(treeBrushesArray);
                         }
                         finally { Profiler.EndSample(); }
+
                     }
                     brushMeshInstanceIDs.Dispose(performAllCSGJobHandle);
                     brushMeshLookup.Dispose(performAllCSGJobHandle);
