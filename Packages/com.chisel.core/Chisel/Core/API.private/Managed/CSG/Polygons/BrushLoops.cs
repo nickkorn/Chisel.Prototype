@@ -14,31 +14,13 @@ using ReadOnlyAttribute = Unity.Collections.ReadOnlyAttribute;
 namespace Chisel.Core
 {
 #if USE_MANAGED_CSG_IMPLEMENTATION
-    public sealed class BrushOutputLoops : IDisposable
+    public sealed class BrushOutputLoops
     {
         public NativeList<SurfaceInfo>  intersectionSurfaceInfos;
         public NativeListArray<Edge>    intersectionEdges;
         public NativeList<SurfaceInfo>  basePolygonSurfaceInfos;
         public NativeListArray<Edge>    basePolygonEdges;
         public VertexSoup               vertexSoup;
-
-        public void Clear()
-        {
-            if (basePolygonEdges.IsCreated)
-                basePolygonEdges.Dispose();
-            if (basePolygonSurfaceInfos.IsCreated)
-                basePolygonSurfaceInfos.Dispose();
-
-            if (intersectionEdges.IsCreated)
-                intersectionEdges.Dispose();
-            if (intersectionSurfaceInfos.IsCreated)
-                intersectionSurfaceInfos.Dispose();
-        }
-
-        public void Dispose()
-        {
-            Clear();
-        }
     }
 
 #endif

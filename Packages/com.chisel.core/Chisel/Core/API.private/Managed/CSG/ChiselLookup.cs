@@ -409,7 +409,6 @@ namespace Chisel.Core
             public NativeHashMap<int, BlobAssetReference<BrushWorldPlanes>>         brushWorldPlanes;
             public NativeHashMap<int, BlobAssetReference<BrushesTouchedByBrush>>    brushesTouchedByBrushes;
             public NativeHashMap<int, BlobAssetReference<NodeTransformations>>      transformations;
-            public Dictionary<int, VertexSoup>                                      vertexSoups;
             public Dictionary<int, NativeList<BlobAssetReference<ChiselSurfaceRenderBuffer>>>   surfaceRenderBuffers;
 
             public BlobAssetReference<CompactTree>                                  compactTree;
@@ -449,11 +448,6 @@ namespace Chisel.Core
                         if (transformation.IsCreated)
                             transformation.Dispose();
                     }
-                    if (vertexSoups.TryGetValue(brushNodeID - 1, out var vertexSoup))
-                    {
-                        vertexSoups.Remove(brushNodeID - 1);
-                        vertexSoup.Dispose();
-                    }
                     if (surfaceRenderBuffers.TryGetValue(brushNodeID - 1, out var surfaceRenderBuffer))
                     {
                         surfaceRenderBuffers.Remove(brushNodeID - 1);
@@ -471,7 +465,6 @@ namespace Chisel.Core
                 brushWorldPlanes        = new NativeHashMap<int, BlobAssetReference<BrushWorldPlanes>>(1000, Allocator.Persistent);
                 brushesTouchedByBrushes = new NativeHashMap<int, BlobAssetReference<BrushesTouchedByBrush>>(1000, Allocator.Persistent);
                 transformations         = new NativeHashMap<int, BlobAssetReference<NodeTransformations>>(1000, Allocator.Persistent);
-                vertexSoups             = new Dictionary<int, VertexSoup>();
                 surfaceRenderBuffers    = new Dictionary<int, NativeList<BlobAssetReference<ChiselSurfaceRenderBuffer>>>();
             }
 
@@ -548,13 +541,6 @@ namespace Chisel.Core
                         item.Value.Dispose();
                     surfaceRenderBuffers.Clear();
                     surfaceRenderBuffers = null;
-                }
-                if (vertexSoups != null)
-                {
-                    foreach (var item in vertexSoups)
-                        item.Value.Dispose();
-                    vertexSoups.Clear();
-                    vertexSoups = null;
                 }
                 if (compactTree.IsCreated)
                 {

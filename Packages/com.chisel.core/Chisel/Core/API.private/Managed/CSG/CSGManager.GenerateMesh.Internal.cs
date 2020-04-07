@@ -103,33 +103,21 @@ namespace Chisel.Core
             public override int GetHashCode() { return surfaceParameter.GetHashCode() ^ meshQuery.GetHashCode(); }
         };
 
-        internal sealed class BrushInfo : IDisposable
+        internal sealed class BrushInfo
         {
             public int					    brushMeshInstanceID;
             public UInt64                   brushOutlineGeneration;
             public bool                     brushOutlineDirty = true;
-            
-            public BrushLoops               brushSurfaceLoops;
-            public BrushOutputLoops		    brushOutputLoops	= new BrushOutputLoops();
 
             public BrushOutline             brushOutline        = new BrushOutline();
 
-            ~BrushInfo() { Dispose(); }
-
-            public void Dispose()
-            {
-                if (brushSurfaceLoops.IsCreated) brushSurfaceLoops.Dispose();
-                brushOutputLoops.Dispose();
-            }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void Reset() 
             {
-                Dispose();
                 brushOutlineDirty = true;
                 brushOutlineGeneration  = 0;
                 brushOutline.Reset();
-                brushOutputLoops.Clear();
             }
         }
 
@@ -438,12 +426,6 @@ namespace Chisel.Core
             try
             {
                 CombineSubMeshes(treeInfo, meshQueries, vertexChannelMask);
-            } finally { UnityEngine.Profiling.Profiler.EndSample(); }
-
-            UnityEngine.Profiling.Profiler.BeginSample("CleanTree");
-            try
-            {
-                CleanTree(treeNodeID);
             } finally { UnityEngine.Profiling.Profiler.EndSample(); }
 
 

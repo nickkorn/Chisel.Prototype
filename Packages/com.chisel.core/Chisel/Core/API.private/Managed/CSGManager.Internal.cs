@@ -141,8 +141,6 @@ namespace Chisel.Core
                 data.treeNodeID     = CSGTreeNode.InvalidNodeID;
                 data.parentNodeID   = CSGTreeNode.InvalidNodeID;
                 data.treeInfo       = null;
-                if (data.brushInfo != null)
-                    data.brushInfo.Dispose();
                 data.brushInfo      = null;
             }
 
@@ -349,8 +347,6 @@ namespace Chisel.Core
             nodeFlags[nodeIndex] = flags;
             
             var nodeHierarchy = nodeHierarchies[nodeIndex];
-            if (nodeHierarchy.brushInfo != null)
-                nodeHierarchy.brushInfo.Dispose();
             nodeHierarchy.brushInfo = new BrushInfo();
             nodeHierarchies[nodeIndex]	= nodeHierarchy;
 
