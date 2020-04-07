@@ -77,6 +77,7 @@ namespace Chisel.Core
             if (treeInfo.treeBrushes.Count > 0)
             {
                 JobHandle allPerformAllCSGJobHandle = default(JobHandle);
+                JobHandle allGenerateSurfaceTrianglesJobHandle = default(JobHandle);
                 var treeBrushesArray = treeBrushes.ToNativeArray(Allocator.TempJob);
                 {
                     var chiselLookupValues  = ChiselTreeLookup.Value[treeNodeIndex];
@@ -364,7 +365,6 @@ namespace Chisel.Core
                                 allPerformAllCSGJobHandle = JobHandle.CombineDependencies(performAllCSGJobHandle, allPerformAllCSGJobHandle);
 
 
-
                                 var surfaceRenderBuffers = new NativeList<BlobAssetReference<ChiselSurfaceRenderBuffer>>(0, Allocator.Persistent);
                                 chiselLookupValues.surfaceRenderBuffers[brushNodeIndex] = surfaceRenderBuffers;
 
@@ -381,18 +381,21 @@ namespace Chisel.Core
                                     surfaceLoopAllInfos     = allInfos,
                                     surfaceLoopAllEdges     = allEdges
                                 };
-                                performAllCSGJobHandle.Complete();
-                                generateSurfaceRenderBuffers.Run();
 
-                                outputLoops.intersectionSurfaceInfos.Dispose();
-                                outputLoops.intersectionEdges.Dispose();
-                                outputLoops.basePolygonSurfaceInfos.Dispose();
-                                outputLoops.basePolygonEdges.Dispose();
-                                outputLoops.vertexSoup.Dispose();
+                                var generateSurfaceTrianglesJobHandle = generateSurfaceRenderBuffers.Schedule(performAllCSGJobHandle);
+                                generateSurfaceTrianglesJobHandle.Complete();
+                                allGenerateSurfaceTrianglesJobHandle = JobHandle.CombineDependencies(generateSurfaceTrianglesJobHandle, allGenerateSurfaceTrianglesJobHandle);
 
-                                surfaceLoopIndices  .Dispose();
-                                allInfos            .Dispose();
-                                allEdges            .Dispose();
+                                var disposeDependencies = JobHandle.CombineDependencies(findLoopOverlapIntersectionsJobHandle, generateSurfaceTrianglesJobHandle);
+                                outputLoops.intersectionSurfaceInfos.Dispose(disposeDependencies);
+                                outputLoops.intersectionEdges       .Dispose(disposeDependencies);
+                                outputLoops.basePolygonSurfaceInfos .Dispose(disposeDependencies);
+                                outputLoops.basePolygonEdges        .Dispose(disposeDependencies);
+                                outputLoops.vertexSoup              .Dispose(disposeDependencies);
+
+                                surfaceLoopIndices  .Dispose(generateSurfaceTrianglesJobHandle);
+                                allInfos            .Dispose(generateSurfaceTrianglesJobHandle);
+                                allEdges            .Dispose(generateSurfaceTrianglesJobHandle);
                             }
                             brushOutputLoops.Clear();
                         }
@@ -406,11 +409,11 @@ namespace Chisel.Core
                         finally { Profiler.EndSample(); }
 
                     }
-                    brushMeshInstanceIDs.Dispose(allPerformAllCSGJobHandle);
-                    brushMeshLookup.Dispose(allPerformAllCSGJobHandle);
+                    brushMeshInstanceIDs.Dispose(allGenerateSurfaceTrianglesJobHandle);
+                    brushMeshLookup.Dispose(allGenerateSurfaceTrianglesJobHandle);
                 }
-                treeBrushesArray.Dispose(allPerformAllCSGJobHandle);
-                finalJobHandle = allPerformAllCSGJobHandle;
+                treeBrushesArray.Dispose(allGenerateSurfaceTrianglesJobHandle);
+                finalJobHandle = allGenerateSurfaceTrianglesJobHandle;
             }
 
             {

@@ -183,39 +183,88 @@ namespace Chisel.Core
             UnsafeUtility.Free(m_HashTable, m_AllocatorLabel);
         }
         #endregion
-        
-/*
-        /// <summary>
-        /// Safely disposes of this container and deallocates its memory when the jobs that use it have completed.
-        /// </summary>
-        /// <remarks>You can call this function dispose of the container immediately after scheduling the job. Pass
-        /// the [JobHandle](https://docs.unity3d.com/ScriptReference/Unity.Jobs.JobHandle.html) returned by
-        /// the [Job.Schedule](https://docs.unity3d.com/ScriptReference/Unity.Jobs.IJobExtensions.Schedule.html)
-        /// method using the `jobHandle` parameter so the job scheduler can dispose the container after all jobs
-        /// using it have run.</remarks>
-        /// <param name="inputDeps">The job handle or handles for any scheduled jobs that use this container.</param>
-        /// <returns>A new job handle containing the prior handles as well as the handle for the job that deletes
-        /// the container.</returns>
+
+        [BurstCompile]
+        internal unsafe struct UnsafeDisposeJob : IJob
+        {
+            [NativeDisableUnsafePtrRestriction] public UnsafeList* m_Vertices;
+            [NativeDisableUnsafePtrRestriction] public UnsafeList* m_ChainedIndices;
+            [NativeDisableUnsafePtrRestriction] public void* m_HashTable;
+            public Allocator Allocator;
+
+            public void Execute()
+            {
+                UnsafeList.Destroy(m_Vertices);
+                UnsafeList.Destroy(m_ChainedIndices);
+                UnsafeUtility.Free(m_HashTable, Allocator);
+            }
+        }
+
+        #region Dispose
+        internal static bool ShouldDeallocate(Allocator allocator)
+        {
+            // Allocator.Invalid == container is not initialized.
+            // Allocator.None    == container is initialized, but container doesn't own data.
+            return allocator > Allocator.None;
+        }
+
         public JobHandle Dispose(JobHandle inputDeps)
         {
 #if ENABLE_UNITY_COLLECTIONS_CHECKS
-            // [DeallocateOnJobCompletion] is not supported, but we want the deallocation
-            // to happen in a thread. DisposeSentinel needs to be cleared on main thread.
-            // AtomicSafetyHandle can be destroyed after the job was scheduled (Job scheduling
-            // will check that no jobs are writing to the container).
-            DisposeSentinel.Clear(ref m_DisposeSentinel);
-
-            var jobHandle = new NativeHashMapDisposeJob { Data = new NativeHashMapDispose { m_Buffer = m_HashMapData.m_Buffer, m_AllocatorLabel = m_HashMapData.m_AllocatorLabel, m_Safety = m_Safety } }.Schedule(inputDeps);
-
-            AtomicSafetyHandle.Release(m_Safety);
-#else
-            var jobHandle = new NativeHashMapDisposeJob { Data = new NativeHashMapDispose { m_Buffer = m_HashMapData.m_Buffer, m_AllocatorLabel = m_HashMapData.m_AllocatorLabel }  }.Schedule(inputDeps);
+            DisposeSentinel.Dispose(ref m_Safety, ref m_DisposeSentinel);
 #endif
-            m_HashMapData.m_Buffer = null;
+            if (ShouldDeallocate(m_AllocatorLabel))
+            {
+                var jobHandle = new UnsafeDisposeJob { m_Vertices = m_Vertices, m_ChainedIndices = m_ChainedIndices, m_HashTable = m_HashTable, Allocator = m_AllocatorLabel }.Schedule(inputDeps);
 
-            return jobHandle;
+                m_Vertices = null;
+                m_ChainedIndices = null;
+                m_HashTable = null;
+                m_AllocatorLabel = Allocator.Invalid;
+
+                return jobHandle;
+            }
+
+            m_Vertices = null;
+            m_ChainedIndices = null;
+            m_HashTable = null;
+
+            return inputDeps;
         }
-*/
+        #endregion
+
+        /*
+                /// <summary>
+                /// Safely disposes of this container and deallocates its memory when the jobs that use it have completed.
+                /// </summary>
+                /// <remarks>You can call this function dispose of the container immediately after scheduling the job. Pass
+                /// the [JobHandle](https://docs.unity3d.com/ScriptReference/Unity.Jobs.JobHandle.html) returned by
+                /// the [Job.Schedule](https://docs.unity3d.com/ScriptReference/Unity.Jobs.IJobExtensions.Schedule.html)
+                /// method using the `jobHandle` parameter so the job scheduler can dispose the container after all jobs
+                /// using it have run.</remarks>
+                /// <param name="inputDeps">The job handle or handles for any scheduled jobs that use this container.</param>
+                /// <returns>A new job handle containing the prior handles as well as the handle for the job that deletes
+                /// the container.</returns>
+                public JobHandle Dispose(JobHandle inputDeps)
+                {
+        #if ENABLE_UNITY_COLLECTIONS_CHECKS
+                    // [DeallocateOnJobCompletion] is not supported, but we want the deallocation
+                    // to happen in a thread. DisposeSentinel needs to be cleared on main thread.
+                    // AtomicSafetyHandle can be destroyed after the job was scheduled (Job scheduling
+                    // will check that no jobs are writing to the container).
+                    DisposeSentinel.Clear(ref m_DisposeSentinel);
+
+                    var jobHandle = new NativeHashMapDisposeJob { Data = new NativeHashMapDispose { m_Buffer = m_HashMapData.m_Buffer, m_AllocatorLabel = m_HashMapData.m_AllocatorLabel, m_Safety = m_Safety } }.Schedule(inputDeps);
+
+                    AtomicSafetyHandle.Release(m_Safety);
+        #else
+                    var jobHandle = new NativeHashMapDisposeJob { Data = new NativeHashMapDispose { m_Buffer = m_HashMapData.m_Buffer, m_AllocatorLabel = m_HashMapData.m_AllocatorLabel }  }.Schedule(inputDeps);
+        #endif
+                    m_HashMapData.m_Buffer = null;
+
+                    return jobHandle;
+                }
+        */
 
         #region Checks
         [Conditional("ENABLE_UNITY_COLLECTIONS_CHECKS")]
