@@ -39,7 +39,8 @@ namespace Chisel.Core
             ref var selfPlanes = ref brushWorldPlanes[selfBrushNodeIndex].Value.worldPlanes;
 
             var otherVerticesLength = 0;
-            var otherVertices       = (ushort*)UnsafeUtility.Malloc(otherEdges.Length * sizeof(ushort), 4, Allocator.TempJob);
+            var otherVertices       = stackalloc ushort[otherEdges.Length];
+            //var otherVertices       = (ushort*)UnsafeUtility.Malloc(otherEdges.Length * sizeof(ushort), 4, Allocator.TempJob);
 
             // TODO: use edges instead + 2 planes intersecting each edge
             var vertices = vertexSoup.GetUnsafeReadOnlyPtr();
@@ -69,15 +70,16 @@ namespace Chisel.Core
 
             if (otherVerticesLength == 0)
             {
-                UnsafeUtility.Free(otherVertices, Allocator.TempJob);
+                //UnsafeUtility.Free(otherVertices, Allocator.TempJob);
                 return;
             }
 
             var tempList = new NativeList<ushort>(Allocator.Temp);
             {
-                var tempListPtr = (ushort*)tempList.GetUnsafePtr();
-                var inputEdgesLength = edges.Length;
-                var inputEdges = (Edge*)UnsafeUtility.Malloc(edges.Length * sizeof(Edge), 4, Allocator.TempJob);
+                var tempListPtr         = (ushort*)tempList.GetUnsafePtr();
+                var inputEdgesLength    = edges.Length;
+                var inputEdges          = stackalloc Edge[edges.Length];
+                //var inputEdges = (Edge*)UnsafeUtility.Malloc(edges.Length * sizeof(Edge), 4, Allocator.TempJob);
                 UnsafeUtility.MemCpyReplicate(inputEdges, edges.GetUnsafePtr(), sizeof(Edge) * edges.Length, 1);
                 edges.Clear();
 
@@ -154,8 +156,8 @@ namespace Chisel.Core
                     }
                 }
 
-                UnsafeUtility.Free(inputEdges, Allocator.TempJob);
-                UnsafeUtility.Free(otherVertices, Allocator.TempJob);
+                //UnsafeUtility.Free(inputEdges, Allocator.TempJob);
+                //UnsafeUtility.Free(otherVertices, Allocator.TempJob);
             }
             tempList.Dispose();
         }

@@ -91,7 +91,7 @@ namespace Chisel.Core
 
             // ***********************
             // TODO: get rid of this somehow
-            var intersectionLoopBlobsKeys = intersectionLoopBlobs.GetKeyArray(Allocator.Temp);
+            var intersectionLoopBlobsKeys   = intersectionLoopBlobs.GetKeyArray(Allocator.Temp);
             var brushIntersectionLoops      = new NativeList<BlobAssetReference<BrushIntersectionLoop>>(intersectionLoopBlobsKeys.Length, Allocator.Temp);
             var uniqueBrushIndicesHashMap   = new NativeHashMap<int, Empty>(intersectionLoopBlobsKeys.Length, Allocator.Temp);
             for (int k = 0; k < intersectionLoopBlobsKeys.Length; k++)
@@ -147,7 +147,7 @@ namespace Chisel.Core
             for (int k = 0; k < brushIntersectionLoops.Length; k++)
                 intersectionSurfaceInfos.AddNoResize(brushIntersectionLoops[k].Value.surfaceInfo); /*OUTPUT*/
 
-            var intersectionSurfaceSegments = new NativeArray<int2>(surfaceCount, Allocator.Temp);
+            var intersectionSurfaceSegments = stackalloc int2[surfaceCount];
             {
                 {
                     basePolygonSurfaceInfos.ResizeUninitialized(basePolygonBlob.Value.surfaces.Length);
@@ -284,7 +284,7 @@ namespace Chisel.Core
 
                 // TODO: merge indices across multiple loops when vertices are identical
             }
-            intersectionSurfaceSegments.Dispose();
+            //intersectionSurfaceSegments.Dispose();
             brushIntersectionLoops.Dispose();
             uniqueBrushIndices.Dispose();
         }

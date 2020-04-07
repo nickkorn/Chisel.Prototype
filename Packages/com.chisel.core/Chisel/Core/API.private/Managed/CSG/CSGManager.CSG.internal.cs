@@ -123,6 +123,46 @@ namespace Chisel.Core
                             generateBasePolygonLoopsJob = createBlobPolygonsBlobs.Schedule(treeBrushesArray.Length, 64);
                         } finally { Profiler.EndSample(); }
 
+
+                        // TODO: only change when brush or any touching brush has been added/removed or changes operation/order
+                        JobHandle findIntersectingBrushesJob;
+                        Profiler.BeginSample("FindIntersectingBrushes");
+                        try
+                        {
+                            // TODO: optimize, use hashed grid
+
+                            var triangleArraySize       = GeometryMath.GetTriangleArraySize(treeBrushesArray.Length);
+                            var brushBrushIntersections = new NativeMultiHashMap<int, BrushPair>(triangleArraySize * 2, Allocator.TempJob);
+                            var findAllIntersectionsJob = new FindAllIntersectionsJob
+                            {
+                                // Read
+                                brushNodeIDs            = treeBrushesArray,
+                                transformations         = chiselLookupValues.transformations,
+                                brushMeshBlobs          = chiselMeshValues.brushMeshBlobs,
+                                basePolygons            = chiselLookupValues.basePolygons,
+                                brushMeshIDs            = brushMeshInstanceIDs,
+
+                                // Write
+                                output                  = brushBrushIntersections.AsParallelWriter()
+                            };
+                            var findAllIntersectionsJobHandle = findAllIntersectionsJob.Schedule(//triangleArraySize, 128, 
+                                                                                                 generateBasePolygonLoopsJob);
+
+                            var storeBrushIntersectionsJob = new StoreBrushIntersectionsJob
+                            {
+                                // Read
+                                treeNodeIndex           = treeNodeIndex,
+                                treeBrushes             = treeBrushesArray,
+                                compactTree             = compactTree,
+                                brushBrushIntersections = brushBrushIntersections,
+
+                                // Write
+                                brushesTouchedByBrushes = chiselLookupValues.brushesTouchedByBrushes.AsParallelWriter()
+                            };
+                            findIntersectingBrushesJob = storeBrushIntersectionsJob.Schedule(treeBrushesArray.Length, 64, findAllIntersectionsJobHandle);
+                            brushBrushIntersections.Dispose(findIntersectingBrushesJob);
+                        } finally { Profiler.EndSample(); }
+
                         // TODO: should only do this at creation time + when moved / store with brush component itself
                         JobHandle updateBrushWorldPlanesJob;
                         Profiler.BeginSample("UpdateBrushWorldPlanes");
@@ -140,45 +180,6 @@ namespace Chisel.Core
                                 brushWorldPlanes        = chiselLookupValues.brushWorldPlanes.AsParallelWriter()
                             };
                             updateBrushWorldPlanesJob   = createBrushWorldPlanesJob.Schedule(treeBrushesArray.Length, 64);
-                        } finally { Profiler.EndSample(); }
-
-
-                        // TODO: only change when brush or any touching brush has been added/removed or changes operation/order
-                        JobHandle findIntersectingBrushesJob;
-                        Profiler.BeginSample("FindIntersectingBrushes");
-                        try
-                        {
-                            // TODO: optimize, use hashed grid
-
-                            var triangleArraySize       = GeometryMath.GetTriangleArraySize(treeBrushesArray.Length);
-                            var brushBrushIntersections = new NativeMultiHashMap<int, BrushPair>(triangleArraySize * 2, Allocator.TempJob);
-                            var findAllIntersectionsJob = new FindAllIntersectionsJob()
-                            {
-                                // Read
-                                brushNodeIDs            = treeBrushesArray,
-                                transformations         = chiselLookupValues.transformations,
-                                brushMeshBlobs          = chiselMeshValues.brushMeshBlobs,
-                                basePolygons            = chiselLookupValues.basePolygons,
-                                brushMeshIDs            = brushMeshInstanceIDs,
-
-                                // Write
-                                output                  = brushBrushIntersections.AsParallelWriter()
-                            };
-                            var findAllIntersectionsJobHandle = findAllIntersectionsJob.Schedule(triangleArraySize, 64, generateBasePolygonLoopsJob);
-
-                            var storeBrushIntersectionsJob = new StoreBrushIntersectionsJob()
-                            {
-                                // Read
-                                treeNodeIndex           = treeNodeIndex,
-                                treeBrushes             = treeBrushesArray,
-                                compactTree             = compactTree,
-                                brushBrushIntersections = brushBrushIntersections,
-
-                                // Write
-                                brushesTouchedByBrushes = chiselLookupValues.brushesTouchedByBrushes.AsParallelWriter()
-                            };
-                            findIntersectingBrushesJob = storeBrushIntersectionsJob.Schedule(treeBrushesArray.Length, 64, findAllIntersectionsJobHandle);
-                            brushBrushIntersections.Dispose(findIntersectingBrushesJob);
                         } finally { Profiler.EndSample(); }
 
                         // TODO: only change when brush or any touching brush has been added/removed or changes operation/order
@@ -270,8 +271,9 @@ namespace Chisel.Core
                                     var basePolygonEdges            = new NativeListArray<Edge>(16, Allocator.TempJob);
                                     var intersectionSurfaceInfos    = new NativeList<SurfaceInfo>(0, Allocator.TempJob);
                                     var intersectionEdges           = new NativeListArray<Edge>(16, Allocator.TempJob);
-                                    var vertexSoup                  = new VertexSoup(64, Allocator.TempJob);
+                                    var vertexSoup                  = new VertexSoup(2048, Allocator.TempJob);
 
+                                    
                                     //***GET RID OF THIS***//
                                     var brushNodeID = treeBrushesArray[index];
                                     var brushNodeIndex = brushNodeID - 1;
@@ -286,6 +288,7 @@ namespace Chisel.Core
                                     outputLoops.intersectionSurfaceInfos    = intersectionSurfaceInfos;
                                     outputLoops.intersectionEdges           = intersectionEdges;
                                     //***GET RID OF THIS***//
+
 
                                     var findLoopOverlapIntersectionsJob = new FindLoopOverlapIntersectionsJob
                                     {

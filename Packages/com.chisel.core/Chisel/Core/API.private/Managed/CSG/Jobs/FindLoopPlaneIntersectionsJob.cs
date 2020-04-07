@@ -38,7 +38,7 @@ namespace Chisel.Core
                 return;
             
             var inputEdgesLength    = edges.Length;
-            var inputEdges          = (Edge*)UnsafeUtility.Malloc(edges.Length * sizeof(Edge), 4, Allocator.TempJob);
+            var inputEdges          = stackalloc Edge[inputEdgesLength];// (Edge*)UnsafeUtility.Malloc(edges.Length * sizeof(Edge), 4, Allocator.TempJob);
             UnsafeUtility.MemCpyReplicate(inputEdges, edges.GetUnsafePtr(), sizeof(Edge) * edges.Length, 1);
             edges.Clear();
 
@@ -172,7 +172,7 @@ namespace Chisel.Core
                 }
             }
 
-            UnsafeUtility.Free(inputEdges, Allocator.TempJob);
+            //UnsafeUtility.Free(inputEdges, Allocator.TempJob);
         }
     }
 
@@ -198,7 +198,8 @@ namespace Chisel.Core
                 return;
             
             var inputEdgesLength    = edges.Length;
-            var inputEdges          = (Edge*)UnsafeUtility.Malloc(edges.Length * sizeof(Edge), 4, Allocator.TempJob);
+            var inputEdges          = stackalloc Edge[inputEdgesLength];// (Edge*)UnsafeUtility.Malloc(edges.Length * sizeof(Edge), 4, Allocator.TempJob);
+            //var inputEdges          = (Edge*)UnsafeUtility.Malloc(edges.Length * sizeof(Edge), 4, Allocator.TempJob);
             UnsafeUtility.MemCpyReplicate(inputEdges, edges.GetUnsafePtr(), sizeof(Edge) * edges.Length, 1);
             edges.Clear();
 
@@ -332,7 +333,7 @@ namespace Chisel.Core
                 }
             }
 
-            UnsafeUtility.Free(inputEdges, Allocator.TempJob);
+            //UnsafeUtility.Free(inputEdges, Allocator.TempJob);
         }
     }
 #endif

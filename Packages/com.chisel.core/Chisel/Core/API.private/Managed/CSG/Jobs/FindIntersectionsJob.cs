@@ -257,7 +257,7 @@ namespace Chisel.Core
             // Unity doesn't like it if we sort on a AsDeferredArray, 
             // but doesn't like it if we sort the list, or it cast to an array either .. :(
             var memorySize = sortedFoundIndicesLength * sizeof(PlaneVertexIndexPair);
-            var sortedFoundIndices = (PlaneVertexIndexPair*)UnsafeUtility.Malloc(memorySize, 4, Allocator.Temp);
+            var sortedFoundIndices = stackalloc PlaneVertexIndexPair[sortedFoundIndicesLength];// (PlaneVertexIndexPair*)UnsafeUtility.Malloc(memorySize, 4, Allocator.Temp);
             UnsafeUtility.MemCpy(sortedFoundIndices, foundIndices.GetUnsafeReadOnlyPtr(), memorySize);
             for (int i = 0; i < sortedFoundIndicesLength - 1; i++)
             {
@@ -326,7 +326,7 @@ namespace Chisel.Core
                     });
                 }
             }
-            UnsafeUtility.Free(sortedFoundIndices, Allocator.Temp);
+            //UnsafeUtility.Free(sortedFoundIndices, Allocator.Temp);
         }
     }
     
@@ -467,11 +467,11 @@ namespace Chisel.Core
             for (int i = 0; i < planeIndexOffsets.Length; i++)
                 maxLength = math.max(maxLength, planeIndexOffsets[i].length);
 
-            BlobAssetReference<BrushWorldPlanes> brushWorldPlanes = allBrushWorldPlanes[intersection.Value.brushes[brushNodeIndex].brushNodeIndex];
-            
+            var brushWorldPlanes = allBrushWorldPlanes[intersection.Value.brushes[brushNodeIndex].brushNodeIndex];
+
             // For each segment, we now sort our vertices within each segment, 
             // making the assumption that they are convex
-            var sortedStack = (int2*)UnsafeUtility.Malloc(maxLength * 2 * sizeof(int2), 4, Allocator.Temp);
+            var sortedStack = stackalloc int2[maxLength * 2];// (int2*)UnsafeUtility.Malloc(maxLength * 2 * sizeof(int2), 4, Allocator.Temp);
             var vertices    = soup.GetUnsafeReadOnlyPtr();
             for (int n = planeIndexOffsets.Length - 1; n >= 0; n--)
             {
@@ -482,7 +482,7 @@ namespace Chisel.Core
                 // TODO: use plane information instead
                 SortIndices(vertices, sortedStack, uniqueIndices, offset, length, brushWorldPlanes.Value.worldPlanes[planeIndex].xyz);
             }
-            UnsafeUtility.Free(sortedStack, Allocator.Temp);
+            //UnsafeUtility.Free(sortedStack, Allocator.Temp);
         }
     }
 

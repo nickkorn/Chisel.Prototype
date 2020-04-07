@@ -35,7 +35,6 @@ namespace Chisel.Core
                 intersectionSurfaceInfos.Dispose();
         }
 
-        ~BrushOutputLoops() { Dispose(); }
         public void Dispose()
         {
             Clear();

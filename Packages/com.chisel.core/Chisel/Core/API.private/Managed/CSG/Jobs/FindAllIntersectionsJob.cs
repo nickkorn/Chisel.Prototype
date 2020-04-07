@@ -97,7 +97,7 @@ namespace Chisel.Core
     }
 
     [BurstCompile(CompileSynchronously = true)]
-    unsafe struct FindAllIntersectionsJob : IJobParallelFor
+    unsafe struct FindAllIntersectionsJob : IJob// IJobParallelFor
     {
         const double kEpsilon = CSGManagerPerformCSG.kEpsilon;
 
@@ -201,6 +201,15 @@ namespace Chisel.Core
                     return 0;
             }
             return 1;
+        }
+
+        public void Execute()
+        {
+            var triangleArraySize = GeometryMath.GetTriangleArraySize(brushNodeIDs.Length);
+            for (int index=0;index< triangleArraySize;index++)
+            {
+                Execute(index);
+            }
         }
 
         public void Execute(int index)
