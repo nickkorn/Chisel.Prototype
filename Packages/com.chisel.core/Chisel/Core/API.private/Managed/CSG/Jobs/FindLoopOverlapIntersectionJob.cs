@@ -21,7 +21,7 @@ namespace Chisel.Core
     internal unsafe struct FindLoopOverlapIntersectionsJob : IJob
     { 
         [NoAlias, ReadOnly] public int                                                          index;
-        [NoAlias, ReadOnly] public NativeArray<int>                                             treeBrushesArray;
+        [NoAlias, ReadOnly] public NativeArray<int>                                             treeBrushIDs;
         [NoAlias, ReadOnly] public NativeHashMap<BrushSurfacePair, BlobAssetReference<BrushIntersectionLoop>> intersectionLoopBlobs;
         [NoAlias, ReadOnly] public NativeHashMap<int, BlobAssetReference<BasePolygonsBlob>>     basePolygonBlobs;
         [NoAlias, ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushWorldPlanes>>     brushWorldPlanes;
@@ -74,7 +74,7 @@ namespace Chisel.Core
 
         public unsafe void Execute()
         {
-            var brushNodeID         = treeBrushesArray[index];
+            var brushNodeID         = treeBrushIDs[index];
             var brushNodeIndex      = brushNodeID - 1;
 
             var basePolygonBlob     = basePolygonBlobs[brushNodeIndex];

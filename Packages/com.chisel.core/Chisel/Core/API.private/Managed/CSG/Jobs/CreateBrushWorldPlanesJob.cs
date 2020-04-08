@@ -17,7 +17,7 @@ namespace Chisel.Core
     [BurstCompile(CompileSynchronously = true)]
     public struct CreateBrushWorldPlanesJob : IJobParallelFor   
     {
-        [NoAlias,ReadOnly] public NativeArray<int> treeBrushes;
+        [NoAlias,ReadOnly] public NativeArray<int> treeBrushIDs;
         [NoAlias,ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushMeshBlob>>         brushMeshLookup;
         [NoAlias,ReadOnly] public NativeHashMap<int, BlobAssetReference<NodeTransformations>>   transformations;
 
@@ -25,7 +25,7 @@ namespace Chisel.Core
 
         public void Execute(int index)
         {
-            var brushNodeID     = treeBrushes[index];
+            var brushNodeID     = treeBrushIDs[index];
             var brushNodeIndex  = brushNodeID - 1;
             var worldPlanes     = BrushWorldPlanes.Build(brushMeshLookup[brushNodeIndex], 
                                                          transformations[brushNodeIndex].Value.nodeToTree);
