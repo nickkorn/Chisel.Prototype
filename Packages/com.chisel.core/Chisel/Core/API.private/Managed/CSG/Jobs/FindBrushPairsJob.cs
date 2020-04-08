@@ -20,7 +20,7 @@ namespace Chisel.Core
         public struct Empty { }
 
         [NoAlias, ReadOnly] public int maxPairs;
-        [NoAlias, ReadOnly] public NativeArray<int>      treeBrushIDs;
+        [NoAlias, ReadOnly] public NativeArray<int>      treeBrushIndices;
         [NoAlias, ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushesTouchedByBrush>> brushesTouchedByBrushes;
         [NoAlias, WriteOnly] public NativeList<BrushPair> uniqueBrushPairs;
 
@@ -28,10 +28,9 @@ namespace Chisel.Core
         {
             var brushPairMap = new NativeHashMap<BrushPair, FindBrushPairsJob.Empty>(maxPairs, Allocator.Temp);
             var empty = new Empty();
-            for (int b0 = 0; b0 < treeBrushIDs.Length; b0++)
+            for (int b0 = 0; b0 < treeBrushIndices.Length; b0++)
             {
-                var brushNodeID0            = treeBrushIDs[b0];
-                var brushNodeIndex0         = brushNodeID0 - 1;
+                var brushNodeIndex0         = treeBrushIndices[b0];
                 //var brushesTouchedByBrush = touchedBrushesByTreeBrushes[b0];
                 if (!brushesTouchedByBrushes.TryGetValue(brushNodeIndex0, out BlobAssetReference<BrushesTouchedByBrush> brushesTouchedByBrush))
                     continue;

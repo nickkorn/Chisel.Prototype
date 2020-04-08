@@ -101,14 +101,14 @@ namespace Chisel.Core
     {
         const double kEpsilon = CSGManagerPerformCSG.kEpsilon;
 
-        [NoAlias,ReadOnly] public NativeArray<int>  treeBrushIDs;
+        [NoAlias,ReadOnly] public NativeArray<int>  treeBrushIndices;
         // TODO: store blobs in brushMeshInstanceIDs to avoid indirection?
         [NoAlias,ReadOnly] public NativeArray<int>  brushMeshIDs;
         [NoAlias,ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushMeshBlob>> brushMeshBlobs;
         [NoAlias,ReadOnly] public NativeHashMap<int, BlobAssetReference<NodeTransformations>> transformations;
         [NoAlias,ReadOnly] public NativeHashMap<int, BlobAssetReference<BasePolygonsBlob>> basePolygons;// only need bounds
 
-        [NoAlias,WriteOnly] public NativeMultiHashMap<int, BrushPair>.ParallelWriter output;
+        [NoAlias,WriteOnly] public NativeMultiHashMap<int, BrushPair>.ParallelWriter brushBrushIntersections;
 
         static void TransformOtherIntoBrushSpace(ref float4x4 treeToBrushSpaceMatrix, ref float4x4 brushToTreeSpaceMatrix, ref BlobArray<float4> srcPlanes, float4* dstPlanes)
         {
@@ -205,7 +205,7 @@ namespace Chisel.Core
 
         public void Execute()
         {
-            var triangleArraySize = GeometryMath.GetTriangleArraySize(treeBrushIDs.Length);
+            var triangleArraySize = GeometryMath.GetTriangleArraySize(treeBrushIndices.Length);
             for (int index=0;index< triangleArraySize;index++)
             {
                 Execute(index);
@@ -216,7 +216,7 @@ namespace Chisel.Core
         {
             //output.BeginForEachIndex(index);
 
-            var arrayIndex = GeometryMath.GetTriangleArrayIndex(index, treeBrushIDs.Length);
+            var arrayIndex = GeometryMath.GetTriangleArrayIndex(index, treeBrushIndices.Length);
             var index0 = arrayIndex.x;
             var index1 = arrayIndex.y;
 
@@ -232,19 +232,17 @@ namespace Chisel.Core
                 var brushMesh0 = brushMeshBlobs[brushMeshIDs[index0] - 1];
                 var brushMesh1 = brushMeshBlobs[brushMeshIDs[index1] - 1];
 
-                var bounds0 = basePolygons[treeBrushIDs[index0] - 1].Value.bounds;
-                var bounds1 = basePolygons[treeBrushIDs[index1] - 1].Value.bounds;
+                var bounds0 = basePolygons[treeBrushIndices[index0]].Value.bounds;
+                var bounds1 = basePolygons[treeBrushIndices[index1]].Value.bounds;
 
                 IntersectionType result;
                 if (brushMesh0 != BlobAssetReference<BrushMeshBlob>.Null &&
                     brushMesh1 != BlobAssetReference<BrushMeshBlob>.Null &&
                     bounds0.Intersects(bounds1, kEpsilon))
                 {
-                    var brush0NodeID = treeBrushIDs[index0];
-                    var brush1NodeID = treeBrushIDs[index1];
+                    var brush0NodeIndex = treeBrushIndices[index0];
+                    var brush1NodeIndex = treeBrushIndices[index1];
                     //*
-                    var brush0NodeIndex = brush0NodeID - 1;
-                    var brush1NodeIndex = brush1NodeID - 1;
 
                     ref var transformation0 = ref transformations[brush0NodeIndex].Value;
                     ref var transformation1 = ref transformations[brush1NodeIndex].Value;
@@ -270,18 +268,18 @@ namespace Chisel.Core
                     {
                         if (result == IntersectionType.Intersection)
                         {
-                            output.Add(brush0NodeID, new BrushPair() { brushNodeIndex0 = brush0NodeID, brushNodeIndex1 = brush1NodeID, type = IntersectionType.Intersection });
-                            output.Add(brush1NodeID, new BrushPair() { brushNodeIndex0 = brush1NodeID, brushNodeIndex1 = brush0NodeID, type = IntersectionType.Intersection });
+                            brushBrushIntersections.Add(brush0NodeIndex, new BrushPair() { brushNodeIndex0 = brush0NodeIndex, brushNodeIndex1 = brush1NodeIndex, type = IntersectionType.Intersection });
+                            brushBrushIntersections.Add(brush1NodeIndex, new BrushPair() { brushNodeIndex0 = brush1NodeIndex, brushNodeIndex1 = brush0NodeIndex, type = IntersectionType.Intersection });
                         } else
                         if (result == IntersectionType.AInsideB)
                         {
-                            output.Add(brush0NodeID, new BrushPair() { brushNodeIndex0 = brush0NodeID, brushNodeIndex1 = brush1NodeID, type = IntersectionType.AInsideB });
-                            output.Add(brush1NodeID, new BrushPair() { brushNodeIndex0 = brush1NodeID, brushNodeIndex1 = brush0NodeID, type = IntersectionType.BInsideA });
+                            brushBrushIntersections.Add(brush0NodeIndex, new BrushPair() { brushNodeIndex0 = brush0NodeIndex, brushNodeIndex1 = brush1NodeIndex, type = IntersectionType.AInsideB });
+                            brushBrushIntersections.Add(brush1NodeIndex, new BrushPair() { brushNodeIndex0 = brush1NodeIndex, brushNodeIndex1 = brush0NodeIndex, type = IntersectionType.BInsideA });
                         } else
                         //if (intersectionType == IntersectionType.BInsideA)
                         {
-                            output.Add(brush0NodeID, new BrushPair() { brushNodeIndex0 = brush0NodeID, brushNodeIndex1 = brush1NodeID, type = IntersectionType.BInsideA });
-                            output.Add(brush1NodeID, new BrushPair() { brushNodeIndex0 = brush1NodeID, brushNodeIndex1 = brush0NodeID, type = IntersectionType.AInsideB });
+                            brushBrushIntersections.Add(brush0NodeIndex, new BrushPair() { brushNodeIndex0 = brush0NodeIndex, brushNodeIndex1 = brush1NodeIndex, type = IntersectionType.BInsideA });
+                            brushBrushIntersections.Add(brush1NodeIndex, new BrushPair() { brushNodeIndex0 = brush1NodeIndex, brushNodeIndex1 = brush0NodeIndex, type = IntersectionType.AInsideB });
                         }
                     }
                 }
@@ -294,9 +292,10 @@ namespace Chisel.Core
     unsafe struct StoreBrushIntersectionsJob : IJobParallelFor
     {
         [NoAlias,ReadOnly] public int                               treeNodeIndex;
-        [NoAlias,ReadOnly] public NativeArray<int>                  treeBrushIDs;
+        [NoAlias,ReadOnly] public NativeArray<int>                  treeBrushIndices;
         [NoAlias,ReadOnly] public BlobAssetReference<CompactTree>   compactTree;
         [NoAlias,ReadOnly] public NativeMultiHashMap<int, BrushPair> brushBrushIntersections;
+
         [NoAlias,WriteOnly] public NativeHashMap<int, BlobAssetReference<BrushesTouchedByBrush>>.ParallelWriter brushesTouchedByBrushes;
 
 
@@ -344,17 +343,16 @@ namespace Chisel.Core
                 while (touchingBrushes.MoveNext())
                 {
                     var touchingBrush   = touchingBrushes.Current;
-                    int otherBrushID    = touchingBrush.brushNodeIndex1;
-                    var otherBrushIndex = otherBrushID - 1;
+                    int otherBrushIndex = touchingBrush.brushNodeIndex1;
                     if ((otherBrushIndex < indexOffset || (otherBrushIndex-indexOffset) >= brushIndexToBottomUpIndex.Length))
                         continue;
 
                     var otherBottomUpIndex = brushIndexToBottomUpIndex[otherBrushIndex - indexOffset];
                     brushIntersections.Add(new BrushIntersection()
-                    {
+                    { 
                         nodeIndex       = otherBrushIndex,
                         type            = touchingBrush.type,
-                        bottomUpStart   = bottomUpNodeIndices[otherBottomUpIndex].bottomUpStart,
+                        bottomUpStart   = bottomUpNodeIndices[otherBottomUpIndex].bottomUpStart, 
                         bottomUpEnd     = bottomUpNodeIndices[otherBottomUpIndex].bottomUpEnd
                     });
                 }
@@ -386,12 +384,12 @@ namespace Chisel.Core
 
         public void Execute(int index)
         {
-            var brushNodeID = treeBrushIDs[index];
-            var brushIntersections = brushBrushIntersections.GetValuesForKey(brushNodeID);
+            var brushNodeIndex      = treeBrushIndices[index];
+            var brushIntersections  = brushBrushIntersections.GetValuesForKey(brushNodeIndex);
             {
-                var result = GenerateBrushesTouchedByBrush(compactTree, brushNodeID - 1, treeNodeIndex, brushIntersections);
+                var result = GenerateBrushesTouchedByBrush(compactTree, brushNodeIndex, treeNodeIndex, brushIntersections);
                 if (result.IsCreated)
-                    brushesTouchedByBrushes.TryAdd(brushNodeID - 1, result);
+                    brushesTouchedByBrushes.TryAdd(brushNodeIndex, result);
             }
             brushIntersections.Dispose();
         }

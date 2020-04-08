@@ -598,7 +598,7 @@ namespace Chisel.Core
 
             DirtySelfAndChildren(nodeID);
             SetDirty(nodeID);
-            UpdateBrushTransformation(ref chiselLookupValues.transformations, nodeID);
+            UpdateBrushTransformation(ref chiselLookupValues.transformations, nodeID - 1);
             return true;
         }
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

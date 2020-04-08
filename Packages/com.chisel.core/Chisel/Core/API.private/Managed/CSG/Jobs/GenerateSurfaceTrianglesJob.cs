@@ -36,8 +36,6 @@ namespace Chisel.Core
 
         public void Execute()
         {
-            var brushNodeID = brushNodeIndex + 1;
-
             var maxLoops = 0;
             var maxIndices = 0;
             for (int s = 0; s < surfaceLoopIndices.Length; s++)
