@@ -588,21 +588,25 @@ namespace Chisel.Core
         {
             if (!AssertNodeIDValid(nodeID) || !AssertNodeTypeHasTransformation(nodeID))
                 return false;
-            
-            var treeNodeID          = nodeHierarchies[nodeID - 1].treeNodeID;
+
+            var nodeIndex = nodeID - 1;
+
+            var treeNodeID          = nodeHierarchies[nodeIndex].treeNodeID;
             var chiselLookupValues  = ChiselTreeLookup.Value[treeNodeID - 1];
 
-            var nodeLocalTransform = nodeLocalTransforms[nodeID - 1];
+            var nodeLocalTransform = nodeLocalTransforms[nodeIndex];
             NodeLocalTransform.SetLocalTransformation(ref nodeLocalTransform, localTransformation);
-            nodeLocalTransforms[nodeID - 1] = nodeLocalTransform;
+            nodeLocalTransforms[nodeIndex] = nodeLocalTransform;
 
             DirtySelfAndChildren(nodeID);
             SetDirty(nodeID);
-            UpdateBrushTransformation(ref chiselLookupValues.transformations, nodeID - 1);
+            UpdateNodeTransformation(ref chiselLookupValues.transformations, nodeIndex);
             return true;
         }
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static bool		GetTreeToNodeSpaceMatrix(Int32 nodeID, out Matrix4x4 treeToNodeMatrix)			{ if (!AssertNodeIDValid(nodeID) || !AssertNodeTypeHasTransformation(nodeID)) { treeToNodeMatrix = Matrix4x4.identity; return false; } treeToNodeMatrix = nodeTransforms[nodeID - 1].treeToNode; return true; }
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static bool		GetNodeToTreeSpaceMatrix(Int32 nodeID, out Matrix4x4 nodeToTreeMatrix)			{ if (!AssertNodeIDValid(nodeID) || !AssertNodeTypeHasTransformation(nodeID)) { nodeToTreeMatrix = Matrix4x4.identity; return false; } nodeToTreeMatrix = nodeTransforms[nodeID - 1].nodeToTree; return true; }
 

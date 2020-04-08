@@ -28,7 +28,9 @@ namespace Chisel.Components
         
         [SerializeField,HideInInspector] CSGOperationType operation; // NOTE: name is used in CSGOperationEditor
         public CSGOperationType Operation { get { return operation; } set { if (value == operation) return; operation = value; if (Node.Valid) Node.Operation = operation; } }
-        
+
+        //[SerializeField, HideInInspector] protected Matrix4x4 localTransformation = Matrix4x4.identity;
+
         protected override void OnValidateInternal()
         {
             if (!Node.Valid)
@@ -37,8 +39,32 @@ namespace Chisel.Components
             if (Node.Operation != operation)
                 Node.Operation = operation;
 
+            //if (Node.LocalTransformation != localTransformation)
+            //    Node.LocalTransformation = localTransformation;
+
             base.OnValidateInternal();
         }
+        /*
+        internal override void UpdateTransformation()
+        {
+            // TODO: recalculate transformation based on hierarchy up to (but not including) model
+            var transform = hierarchyItem.Transform;
+            if (!transform)
+                return;
+
+            var localToWorldMatrix = transform.localToWorldMatrix;
+            var modelTransform = ChiselNodeHierarchyManager.FindModelTransformOfTransform(transform);
+            if (modelTransform)
+                localTransformation = modelTransform.worldToLocalMatrix * localToWorldMatrix;
+            else
+                localTransformation = localToWorldMatrix;
+
+            if (!Node.Valid)
+                return;
+
+            // TODO: make this work properly
+            Node.LocalTransformation = localTransformation;
+        }*/
 
         internal override void			ClearTreeNodes (bool clearCaches = false) { Node.SetInvalid(); }	
         internal override CSGTreeNode[] CreateTreeNodes()
@@ -49,6 +75,9 @@ namespace Chisel.Components
                 Debug.LogWarning("ChiselOperation already has a treeNode, but trying to create a new one", this);		
             Node = CSGTreeBranch.Create(userID: GetInstanceID());
             Node.Operation = operation;
+
+            // TODO: make this work properly (ordering issue)
+            //Node.LocalTransformation = localTransformation;
             return new CSGTreeNode[] { Node };
         }
 

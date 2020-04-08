@@ -172,7 +172,7 @@ namespace Chisel.Core
                 {
                     for (int i = 0; i < treeBrushIndices.Length; i++)
                     {
-                        UpdateBrushTransformation(ref transformations, treeBrushIndices[i]);
+                        UpdateNodeTransformation(ref transformations, treeBrushIndices[i]);
                     }
                 }
                 Profiler.EndSample();
@@ -190,6 +190,7 @@ namespace Chisel.Core
                 Profiler.EndSample();
 
                 // TODO: only rebuild this when the hierarchy changes
+                // TODO: jobify?
                 Profiler.BeginSample("CompactTree.Create");
                 var compactTree = CompactTree.Create(CSGManager.nodeHierarchies, treeNodeIndex); // Note: stored/destroyed in ChiselLookup
                 Profiler.EndSample();
@@ -597,32 +598,33 @@ namespace Chisel.Core
 
 
         #region Rebuild / Update
-        static void UpdateBrushTransformation(ref NativeHashMap<int, BlobAssetReference<NodeTransformations>> transformations, int brushNodeIndex)
+        static void UpdateNodeTransformation(ref NativeHashMap<int, BlobAssetReference<NodeTransformations>> transformations, int nodeIndex)
         {
-            var parentNodeID                 = CSGManager.nodeHierarchies[brushNodeIndex].parentNodeID;
-            var parentNodeIndex              = parentNodeID - 1;
-            var parentLocalTransformation    = (parentNodeIndex < 0) ? Matrix4x4.identity : nodeLocalTransforms[parentNodeIndex].invLocalTransformation;
-            var parentLocalInvTransformation = (parentNodeIndex < 0) ? Matrix4x4.identity : nodeLocalTransforms[parentNodeIndex].localTransformation;
+            // TODO: clean this up and make this sensible
 
+            // Note: Currently "localTransformation" is actually nodeToTree, but only for all the brushes. 
+            //       Branches do not have a transformation set at the moment.
+            
             // TODO: should be transformations the way up to the tree, not just tree vs brush
-            var brushLocalTransformation     = CSGManager.nodeLocalTransforms[brushNodeIndex].localTransformation;
-            var brushLocalInvTransformation  = CSGManager.nodeLocalTransforms[brushNodeIndex].invLocalTransformation;
+            var brushLocalTransformation     = CSGManager.nodeLocalTransforms[nodeIndex].localTransformation;
+            var brushLocalInvTransformation  = CSGManager.nodeLocalTransforms[nodeIndex].invLocalTransformation;
 
-            var nodeTransform                = CSGManager.nodeTransforms[brushNodeIndex];
-            nodeTransform.nodeToTree = brushLocalTransformation * parentLocalInvTransformation;
-            nodeTransform.treeToNode = parentLocalTransformation * brushLocalInvTransformation;
-            CSGManager.nodeTransforms[brushNodeIndex] = nodeTransform;
+            var nodeTransform                = CSGManager.nodeTransforms[nodeIndex];
+            nodeTransform.nodeToTree = brushLocalTransformation;
+            nodeTransform.treeToNode = brushLocalInvTransformation;
+            CSGManager.nodeTransforms[nodeIndex] = nodeTransform;
 
-            if (transformations.TryGetValue(brushNodeIndex, out BlobAssetReference<NodeTransformations> oldTransformations))
+            if (transformations.TryGetValue(nodeIndex, out BlobAssetReference<NodeTransformations> oldTransformations))
             {
                 if (oldTransformations.IsCreated)
                     oldTransformations.Dispose();
             }
-            transformations[brushNodeIndex] = NodeTransformations.Build(nodeTransform.nodeToTree, nodeTransform.treeToNode);
+            transformations[nodeIndex] = NodeTransformations.Build(nodeTransform.nodeToTree, nodeTransform.treeToNode);
         }
 
 
-        
+
+
         [BurstCompile(CompileSynchronously = true)]
         unsafe struct PerformCSGJob : IJob
         {
