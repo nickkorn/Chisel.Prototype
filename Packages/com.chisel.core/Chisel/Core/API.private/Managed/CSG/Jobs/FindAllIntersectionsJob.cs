@@ -102,11 +102,9 @@ namespace Chisel.Core
         const double kEpsilon = CSGManagerPerformCSG.kEpsilon;
 
         [NoAlias,ReadOnly] public NativeArray<int>  treeBrushIndices;
-        // TODO: store blobs in brushMeshInstanceIDs to avoid indirection?
-        [NoAlias,ReadOnly] public NativeArray<int>  brushMeshIDs;
-        [NoAlias,ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushMeshBlob>> brushMeshBlobs;
-        [NoAlias,ReadOnly] public NativeHashMap<int, BlobAssetReference<NodeTransformations>> transformations;
-        [NoAlias,ReadOnly] public NativeHashMap<int, BlobAssetReference<BasePolygonsBlob>> basePolygons;// only need bounds
+        [NoAlias,ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushMeshBlob>>         brushMeshLookup;
+        [NoAlias,ReadOnly] public NativeHashMap<int, BlobAssetReference<NodeTransformations>>   transformations;
+        [NoAlias,ReadOnly] public NativeHashMap<int, BlobAssetReference<BasePolygonsBlob>>      basePolygons;// only need bounds
 
         [NoAlias,WriteOnly] public NativeMultiHashMap<int, BrushPair>.ParallelWriter brushBrushIntersections;
 
@@ -220,6 +218,9 @@ namespace Chisel.Core
             var index0 = arrayIndex.x;
             var index1 = arrayIndex.y;
 
+            var brush0NodeIndex = treeBrushIndices[index0];
+            var brush1NodeIndex = treeBrushIndices[index1];
+
             /*
             var brushIndex0 = index % brushData.Length;
             var brushIndex1 = index / brushData.Length;
@@ -229,19 +230,17 @@ namespace Chisel.Core
                 return;
             */
             {
-                var brushMesh0 = brushMeshBlobs[brushMeshIDs[index0] - 1];
-                var brushMesh1 = brushMeshBlobs[brushMeshIDs[index1] - 1];
+                var brushMesh0 = brushMeshLookup[brush0NodeIndex];
+                var brushMesh1 = brushMeshLookup[brush1NodeIndex];
 
-                var bounds0 = basePolygons[treeBrushIndices[index0]].Value.bounds;
-                var bounds1 = basePolygons[treeBrushIndices[index1]].Value.bounds;
+                var bounds0 = basePolygons[brush0NodeIndex].Value.bounds;
+                var bounds1 = basePolygons[brush1NodeIndex].Value.bounds;
 
                 IntersectionType result;
                 if (brushMesh0 != BlobAssetReference<BrushMeshBlob>.Null &&
                     brushMesh1 != BlobAssetReference<BrushMeshBlob>.Null &&
                     bounds0.Intersects(bounds1, kEpsilon))
                 {
-                    var brush0NodeIndex = treeBrushIndices[index0];
-                    var brush1NodeIndex = treeBrushIndices[index1];
                     //*
 
                     ref var transformation0 = ref transformations[brush0NodeIndex].Value;

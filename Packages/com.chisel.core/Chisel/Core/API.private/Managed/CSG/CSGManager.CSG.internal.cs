@@ -61,14 +61,10 @@ namespace Chisel.Core
             public int                              treeNodeIndex;
             public int                              triangleArraySize;
             public NativeArray<int>                 treeBrushIndices;
-            public NativeArray<int>                 brushMeshInstanceIDs;
 
             public BlobAssetReference<CompactTree>  compactTree;
 
-            // TODO: why are these the same?!
             public NativeHashMap<int, BlobAssetReference<BrushMeshBlob>>            brushMeshLookup;
-            public NativeHashMap<int, BlobAssetReference<BrushMeshBlob>>            brushMeshBlobs;
-
             public NativeHashMap<int, BlobAssetReference<NodeTransformations>>      transformations;
             public NativeHashMap<int, BlobAssetReference<BasePolygonsBlob>>         basePolygons;
             public NativeHashMap<int, BlobAssetReference<BrushWorldPlanes>>         brushWorldPlanes;
@@ -136,14 +132,17 @@ namespace Chisel.Core
                 var chiselLookupValues  = ChiselTreeLookup.Value[treeNodeIndex];
                 var chiselMeshValues    = ChiselMeshLookup.Value;
                 
+                ref var brushMeshBlobs  = ref chiselMeshValues.brushMeshBlobs;
+                ref var transformations = ref chiselLookupValues.transformations;
+
                 // Clean up values we're rebuilding below
                 chiselLookupValues.RemoveByBrushID(treeBrushes);
 
-                //** REWRITE THIS **
                 // Remove all brushes that have MeshID == 0 from treeBrushesArray (BUT **AFTER** WE REMOVE ALL DATA IN PREV STEP)
                 var temp = new List<int>();
                 for (int b = 0; b < treeBrushes.Count; b++)
                 {
+                    // 
                     var brushNodeID     = treeBrushes[b];
                     var brushNodeIndex  = brushNodeID - 1;
                     var brushMeshID     = CSGManager.nodeHierarchies[brushNodeIndex].brushInfo.brushMeshInstanceID;
@@ -152,38 +151,41 @@ namespace Chisel.Core
                     temp.Add(brushNodeIndex);
                 }
                 Profiler.BeginSample("Allocations");
-                var treeBrushIndices = temp.ToNativeArray(Allocator.TempJob);
-                Profiler.EndSample();
-                //** REWRITE THIS **
-
-
-                Profiler.BeginSample("Allocations");
-                var brushMeshInstanceIDs = new NativeArray<int>(treeBrushIndices.Length, Allocator.TempJob);
-                var brushMeshLookup      = new NativeHashMap<int, BlobAssetReference<BrushMeshBlob>>(treeBrushIndices.Length, Allocator.TempJob);
+                var treeBrushIndices    = temp.ToNativeArray(Allocator.TempJob);
+                var brushMeshLookup     = new NativeHashMap<int, BlobAssetReference<BrushMeshBlob>>(treeBrushIndices.Length, Allocator.TempJob);
                 Profiler.EndSample();
 
-                // TODO: somehow just keep this up to date instead of rebuilding it from scratch every update
-                Profiler.BeginSample("FindBrushMeshInstanceIDs");
+                // NOTE: needs to contain ALL brushes in tree, EVEN IF THEY ARE NOT UPDATED!
+                Profiler.BeginSample("BuildBrushMeshLookup");
                 {
-                    FindBrushMeshInstanceIDs(treeBrushIndices, brushMeshInstanceIDs);
-                }
-                Profiler.EndSample();
-                Profiler.BeginSample("FindBrushMeshBobs");
-                {
-                    FindBrushMeshBobs(ref chiselMeshValues, treeBrushIndices, brushMeshLookup); // <-- assumes all brushes in tree
+                    for (int i = 0; i < treeBrushIndices.Length; i++)
+                    {
+                        var brushNodeIndex = treeBrushIndices[i];
+                        var brushMeshIndex = CSGManager.nodeHierarchies[brushNodeIndex].brushInfo.brushMeshInstanceID - 1;
+                        brushMeshLookup[brushNodeIndex] = brushMeshBlobs[brushMeshIndex];
+                    }
                 }
                 Profiler.EndSample();
 
-                // TODO: store this in blob / store with brush component itself & only update when transformations change
+                // TODO: optimize, only do this when necessary
                 Profiler.BeginSample("UpdateBrushTransformations");
                 {
-                    UpdateBrushTransformations(ref chiselLookupValues, treeBrushIndices);
+                    for (int i = 0; i < treeBrushIndices.Length; i++)
+                    {
+                        UpdateBrushTransformation(ref transformations, treeBrushIndices[i]);
+                    }
                 }
                 Profiler.EndSample();
 
                 Profiler.BeginSample("DirtyAllOutlines");
                 {
-                    UpdateAllOutlines(treeBrushIndices);
+                    for (int b = 0; b < treeBrushIndices.Length; b++)
+                    {
+                        var brushNodeIndex = treeBrushIndices[b];
+                        var brushInfo = CSGManager.nodeHierarchies[brushNodeIndex].brushInfo;
+                        brushInfo.brushOutlineGeneration++;
+                        brushInfo.brushOutlineDirty = true;
+                    }
                 }
                 Profiler.EndSample();
 
@@ -244,9 +246,7 @@ namespace Chisel.Core
                     treeNodeIndex           = treeNodeIndex,
                     triangleArraySize       = triangleArraySize,
                     treeBrushIndices        = treeBrushIndices,
-                    brushMeshInstanceIDs    = brushMeshInstanceIDs,
                     brushMeshLookup         = brushMeshLookup,
-                    brushMeshBlobs          = chiselMeshValues.brushMeshBlobs,
                     transformations         = chiselLookupValues.transformations,
                     basePolygons            = chiselLookupValues.basePolygons,
                     brushWorldPlanes        = chiselLookupValues.brushWorldPlanes,
@@ -277,8 +277,7 @@ namespace Chisel.Core
                     {
                         // Read
                         treeBrushIndices        = treeUpdate.treeBrushIndices,
-                        brushMeshInstanceIDs    = treeUpdate.brushMeshInstanceIDs,
-                        brushMeshBlobs          = treeUpdate.brushMeshBlobs,
+                        brushMeshLookup         = treeUpdate.brushMeshLookup,
                         transformations         = treeUpdate.transformations,
 
                         // Write
@@ -302,11 +301,10 @@ namespace Chisel.Core
                     var findAllIntersectionsJob = new FindAllIntersectionsJob
                     {
                         // Read
-                        treeBrushIndices        = treeUpdate.treeBrushIndices,
-                        transformations         = treeUpdate.transformations,
-                        brushMeshBlobs          = treeUpdate.brushMeshBlobs,
-                        basePolygons            = treeUpdate.basePolygons,
-                        brushMeshIDs            = treeUpdate.brushMeshInstanceIDs,
+                        treeBrushIndices    = treeUpdate.treeBrushIndices,
+                        transformations     = treeUpdate.transformations,
+                        brushMeshLookup     = treeUpdate.brushMeshLookup,
+                        basePolygons        = treeUpdate.basePolygons,
 
                         // Write
                         brushBrushIntersections = treeUpdate.brushBrushIntersections.AsParallelWriter()
@@ -579,7 +577,6 @@ namespace Chisel.Core
                     }
                     treeUpdate.brushOutputLoops = null;
 
-                    treeUpdate.brushMeshInstanceIDs.Dispose(treeUpdate.allGenerateSurfaceTrianglesJobHandle);
                     treeUpdate.brushMeshLookup.Dispose(treeUpdate.allGenerateSurfaceTrianglesJobHandle);
                      
                     treeUpdate.treeBrushIndices.Dispose(treeUpdate.allGenerateSurfaceTrianglesJobHandle);
@@ -624,49 +621,8 @@ namespace Chisel.Core
             transformations[brushNodeIndex] = NodeTransformations.Build(nodeTransform.nodeToTree, nodeTransform.treeToNode);
         }
 
-        static void UpdateBrushTransformations(ref ChiselTreeLookup.Data chiselLookupValues, NativeArray<int> treeBrushIndices)
-        {
-            ref var transformations = ref chiselLookupValues.transformations;
 
-            // TODO: optimize, only do this when necessary
-
-            for (int i = 0; i < treeBrushIndices.Length; i++)
-            {
-                UpdateBrushTransformation(ref transformations, treeBrushIndices[i]);
-            }
-        }
-
-        static void FindBrushMeshInstanceIDs(NativeArray<int> treeBrushIndices, NativeArray<int> brushMeshInstanceIDs)
-        {
-            for (int i = 0; i < treeBrushIndices.Length; i++)
-            {
-                var brushNodeIndex = treeBrushIndices[i];
-                brushMeshInstanceIDs[i] = CSGManager.nodeHierarchies[brushNodeIndex].brushInfo.brushMeshInstanceID;
-            }
-        }
-
-        static void FindBrushMeshBobs(ref ChiselMeshLookup.Data chiselMeshValues, NativeArray<int> treeBrushIndices, NativeHashMap<int, BlobAssetReference<BrushMeshBlob>> brushMeshLookup)
-        {
-            ref var brushMeshBlobs = ref chiselMeshValues.brushMeshBlobs;
-            for (int i = 0; i < treeBrushIndices.Length; i++)
-            {
-                var brushNodeIndex = treeBrushIndices[i];
-                brushMeshLookup[brushNodeIndex] = brushMeshBlobs[CSGManager.nodeHierarchies[brushNodeIndex].brushInfo.brushMeshInstanceID - 1];
-            }
-        }
-
-
-        static void UpdateAllOutlines(NativeArray<int> treeBrushIndices)
-        {
-            for (int b = 0; b < treeBrushIndices.Length; b++)
-            {
-                var brushNodeIndex  = treeBrushIndices[b];
-                var brushInfo       = CSGManager.nodeHierarchies[brushNodeIndex].brushInfo;
-                brushInfo.brushOutlineGeneration++;
-                brushInfo.brushOutlineDirty = true;
-            }
-        }
-
+        
         [BurstCompile(CompileSynchronously = true)]
         unsafe struct PerformCSGJob : IJob
         {

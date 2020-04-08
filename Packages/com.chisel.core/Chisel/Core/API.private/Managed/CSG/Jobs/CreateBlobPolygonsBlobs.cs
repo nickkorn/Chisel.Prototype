@@ -17,19 +17,18 @@ namespace Chisel.Core
     [BurstCompile(CompileSynchronously = true)]
     struct CreateBlobPolygonsBlobs : IJobParallelFor
     {
-        [NoAlias,ReadOnly] public NativeArray<int> treeBrushIndices;
-        [NoAlias,ReadOnly] public NativeArray<int> brushMeshInstanceIDs;
-        [NoAlias,ReadOnly] public NativeHashMap<int, BlobAssetReference<NodeTransformations>> transformations;
-        [NoAlias,ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushMeshBlob>> brushMeshBlobs;
+        [NoAlias,ReadOnly] public NativeArray<int>                                              treeBrushIndices;
+        [NoAlias,ReadOnly] public NativeHashMap<int, BlobAssetReference<NodeTransformations>>   transformations;
+        [NoAlias,ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushMeshBlob>>         brushMeshLookup;
+
         [NoAlias,WriteOnly] public NativeHashMap<int, BlobAssetReference<BasePolygonsBlob>>.ParallelWriter basePolygons;
 
         public void Execute(int b)
         {
             var brushNodeIndex  = treeBrushIndices[b];
-            var brushMeshID     = brushMeshInstanceIDs[b];
             var transform       = transformations[brushNodeIndex];
 
-            var mesh    = brushMeshBlobs[brushMeshID - 1];
+            var mesh    = brushMeshLookup[brushNodeIndex];
             var result  = BasePolygonsBlob.Create(brushNodeIndex, mesh, transform);
             basePolygons.TryAdd(brushNodeIndex, result);
         }
