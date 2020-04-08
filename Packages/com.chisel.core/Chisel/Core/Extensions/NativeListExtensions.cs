@@ -189,7 +189,15 @@ namespace Chisel.Core
         {
             var nativeList = new NativeList<T>(list.Count, allocator);
             for (int i = 0; i < list.Count; i++)
-                nativeList.Add(list[i]);
+                nativeList.AddNoResize(list[i]);
+            return nativeList;
+        }
+
+        public static NativeList<T> ToNativeList<T>(this HashSet<T> hashSet, Allocator allocator) where T : unmanaged
+        {
+            var nativeList = new NativeList<T>(hashSet.Count, allocator);
+            foreach(var item in hashSet)
+                nativeList.AddNoResize(item);
             return nativeList;
         }
     }

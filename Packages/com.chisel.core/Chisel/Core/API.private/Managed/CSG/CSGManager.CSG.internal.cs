@@ -22,23 +22,24 @@ namespace Chisel.Core
         // TODO: review flags, might not make sense any more
         enum NodeStatusFlags : UInt16
         {
-            None = 0,
-            //			NeedChildUpdate				= 1,
-            NeedPreviousSiblingsUpdate = 2,
+            None                        = 0,
+            //NeedChildUpdate		    = 1,
+            NeedPreviousSiblingsUpdate  = 2,
 
-            TreeIsDisabled = 1024,// TODO: remove, or make more useful
-            OperationNeedsUpdate = 4,
-            TreeNeedsUpdate = 8,
-            TreeMeshNeedsUpdate = 16,
+            TreeIsDisabled              = 1024,// TODO: remove, or make more useful
+            OperationNeedsUpdate        = 4,
+            TreeNeedsUpdate             = 8,
+            TreeMeshNeedsUpdate         = 16,
 
-            NeedBaseMeshUpdate = 32,	// -> leads to NeedsMeshReset
-            NeedMeshReset = 64,
-            NeedOutlineUpdate = 128,
-            NeedAllTouchingUpdated = 256,	// all brushes that touch this brush need to be updated,
-            NeedFullUpdate = NeedBaseMeshUpdate | NeedMeshReset | NeedOutlineUpdate | NeedAllTouchingUpdated,
-            NeedCSGUpdate = NeedBaseMeshUpdate | NeedMeshReset | NeedAllTouchingUpdated,
-            NeedUpdate = NeedMeshReset | NeedOutlineUpdate | NeedAllTouchingUpdated,
-            NeedUpdateDirectOnly = NeedMeshReset | NeedOutlineUpdate,
+            ShapeModified               = 32,
+            TransformationModified      = 64,
+            HierarchyModified           = 128,
+            OutlineModified             = 256,
+            NeedAllTouchingUpdated      = 512,	// all brushes that touch this brush need to be updated,
+            NeedFullUpdate              = ShapeModified | TransformationModified | OutlineModified | HierarchyModified,
+            NeedCSGUpdate               = ShapeModified | TransformationModified | HierarchyModified,
+            NeedUpdate                  = TransformationModified | OutlineModified | HierarchyModified,
+            NeedUpdateDirectOnly        = TransformationModified | OutlineModified,
         };
 
 
@@ -61,7 +62,8 @@ namespace Chisel.Core
             public int                              treeNodeIndex;
             public int                              triangleArraySize;
             public NativeArray<int>                 allTreeBrushIndices;
-            public NativeArray<int>                 modifiedTreeBrushIndices;
+            public NativeList<int>                  modifiedTreeBrushIndices;
+            public NativeArray<int>                 baseMeshUpdateIndices;
 
             public BlobAssetReference<CompactTree>  compactTree;
 
@@ -135,10 +137,11 @@ namespace Chisel.Core
                 
                 ref var brushMeshBlobs  = ref chiselMeshValues.brushMeshBlobs;
                 ref var transformations = ref chiselLookupValues.transformations;
+                ref var basePolygons    = ref chiselLookupValues.basePolygons;
 
                 // Removes all brushes that have MeshID == 0 from treeBrushesArray
-                var allBrushNodeIndices = new List<int>();
-                var modifiedBrushNodeIndices = new List<int>();
+                var allBrushNodeIndices         = new List<int>();
+                var modifiedBrushNodeIndices    = new List<int>();
                 for (int b = 0; b < treeBrushes.Count; b++)
                 {
                     // 
@@ -149,24 +152,44 @@ namespace Chisel.Core
                         continue;
 
                     allBrushNodeIndices.Add(brushNodeIndex);
-                    if ((CSGManager.nodeFlags[brushNodeIndex].status & NodeStatusFlags.NeedMeshReset) == NodeStatusFlags.None)
+                    var nodeFlags = CSGManager.nodeFlags[brushNodeIndex];
+                    if (nodeFlags.status == NodeStatusFlags.None)
                         continue;
 
-                    var nodeFlags = CSGManager.nodeFlags[brushNodeIndex];
-                    nodeFlags.status &= ~NodeStatusFlags.NeedMeshReset;
-                    CSGManager.nodeFlags[brushNodeIndex] = nodeFlags;
                     modifiedBrushNodeIndices.Add(brushNodeIndex);
                 }
 
                 if (modifiedBrushNodeIndices.Count == 0)
                     continue;
 
+                var baseMeshUpdateIndicesList = new List<int>();
+                for (int b = 0; b < modifiedBrushNodeIndices.Count; b++)
+                {
+                    var brushNodeIndex = modifiedBrushNodeIndices[b];
+                    
+                    var nodeFlags = CSGManager.nodeFlags[brushNodeIndex];
+                    if ((nodeFlags.status & NodeStatusFlags.ShapeModified) != NodeStatusFlags.None)
+                    {
+                        // Need to update the basePolygons for this node
+                        baseMeshUpdateIndicesList.Add(brushNodeIndex);
+                        if (basePolygons.TryGetValue(brushNodeIndex, out var basePolygonsBlob))
+                        {
+                            basePolygons.Remove(brushNodeIndex);
+                            if (basePolygonsBlob.IsCreated)
+                                basePolygonsBlob.Dispose();
+                        }
+                        nodeFlags.status &= ~NodeStatusFlags.ShapeModified;
+                    }
+                    CSGManager.nodeFlags[brushNodeIndex] = nodeFlags;
+                }
+
                 // Clean up values we're rebuilding below, including the ones with brushMeshID == 0
                 chiselLookupValues.RemoveByBrushID(treeBrushes);
 
                 Profiler.BeginSample("Allocations");
                 var allTreeBrushIndices         = allBrushNodeIndices.ToNativeArray(Allocator.TempJob);
-                var modifiedTreeBrushIndices    = modifiedBrushNodeIndices.ToNativeArray(Allocator.TempJob);
+                var modifiedTreeBrushIndices    = modifiedBrushNodeIndices.ToNativeList(Allocator.TempJob);
+                var baseMeshUpdateIndices       = baseMeshUpdateIndicesList.ToNativeArray(Allocator.TempJob);
                 var brushMeshLookup             = new NativeHashMap<int, BlobAssetReference<BrushMeshBlob>>(allTreeBrushIndices.Length, Allocator.TempJob);
                 Profiler.EndSample();
 
@@ -263,6 +286,7 @@ namespace Chisel.Core
                     triangleArraySize           = triangleArraySize,
                     allTreeBrushIndices         = allTreeBrushIndices,
                     modifiedTreeBrushIndices    = modifiedTreeBrushIndices,
+                    baseMeshUpdateIndices       = baseMeshUpdateIndices,
                     brushMeshLookup             = brushMeshLookup,
                     transformations             = chiselLookupValues.transformations,
                     basePolygons                = chiselLookupValues.basePolygons,
@@ -290,17 +314,21 @@ namespace Chisel.Core
                 for (int t = 0; t < treeUpdateLength; t++)
                 {
                     ref var treeUpdate  = ref treeUpdates[t];
-                    var createBlobPolygonsBlobs = new CreateBlobPolygonsBlobs
+                    if (treeUpdate.baseMeshUpdateIndices.Length > 0)
                     {
-                        // Read
-                        treeBrushIndices        = treeUpdate.allTreeBrushIndices,
-                        brushMeshLookup         = treeUpdate.brushMeshLookup,
-                        transformations         = treeUpdate.transformations,
+                        var createBlobPolygonsBlobs = new CreateBlobPolygonsBlobs
+                        {
+                            // Read
+                            treeBrushIndices    = treeUpdate.baseMeshUpdateIndices,
+                            brushMeshLookup     = treeUpdate.brushMeshLookup,
+                            transformations     = treeUpdate.transformations,
 
-                        // Write
-                        basePolygons            = treeUpdate.basePolygons.AsParallelWriter()
-                    };
-                    treeUpdate.generateBasePolygonLoopsJobHandle = createBlobPolygonsBlobs.Schedule(treeUpdate.allTreeBrushIndices.Length, 64);
+                            // Write
+                            basePolygons        = treeUpdate.basePolygons.AsParallelWriter()
+                        };
+                        treeUpdate.generateBasePolygonLoopsJobHandle = createBlobPolygonsBlobs.Schedule(treeUpdate.baseMeshUpdateIndices.Length, 64);
+                    }
+                    treeUpdate.baseMeshUpdateIndices.Dispose(treeUpdate.generateBasePolygonLoopsJobHandle);
                 }
             }
             finally { Profiler.EndSample(); }
@@ -575,6 +603,19 @@ namespace Chisel.Core
                 Profiler.EndSample();
             }
 
+            // Reset the flags before the dispose of these containers are scheduled
+            for (int t = 0; t < treeUpdateLength; t++)
+            {
+                ref var treeUpdate = ref treeUpdates[t];
+                for (int b = 0; b < treeUpdate.allTreeBrushIndices.Length; b++)
+                { 
+                    var brushNodeIndex = treeUpdate.allTreeBrushIndices[b];
+                    var nodeFlags = CSGManager.nodeFlags[brushNodeIndex];
+                    nodeFlags.status = NodeStatusFlags.None;
+                    CSGManager.nodeFlags[brushNodeIndex] = nodeFlags;
+                }
+            }
+
             Profiler.BeginSample("BrushOutputLoopsDispose");
             {
                 for (int t = 0; t < treeUpdateLength; t++)
@@ -609,6 +650,7 @@ namespace Chisel.Core
                 }
             }
             Profiler.EndSample();
+
             return finalJobHandle;
         }
 

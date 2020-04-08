@@ -471,7 +471,7 @@ namespace Chisel.Core
             }
             return false;
         }
-
+        
         internal static bool SetDirty(Int32 nodeID)
         {
             if (!AssertNodeIDValid(nodeID))
