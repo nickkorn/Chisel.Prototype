@@ -17,13 +17,13 @@ namespace Chisel.Core
     //[BurstCompile(CompileSynchronously = true)] // Fails for some reason
     unsafe struct GenerateSurfaceTrianglesJob : IJob
     {
-        [NoAlias, ReadOnly] public int                                                      brushNodeIndex;
+        [NoAlias, ReadOnly] public int                      brushNodeIndex;
+        [NoAlias, ReadOnly] public VertexSoup               brushVertices;
+        [NoAlias, ReadOnly] public NativeListArray<int>     surfaceLoopIndices;
+        [NoAlias, ReadOnly] public NativeList<SurfaceInfo>  surfaceLoopAllInfos;
+        [NoAlias, ReadOnly] public NativeListArray<Edge>    surfaceLoopAllEdges;
         [NoAlias, ReadOnly] public NativeHashMap<int, BlobAssetReference<BasePolygonsBlob>> basePolygons;
         [NoAlias, ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushWorldPlanes>> brushWorldPlanes;
-        [NoAlias, ReadOnly] public VertexSoup                               brushVertices;
-        [NoAlias, ReadOnly] public NativeListArray<int>                     surfaceLoopIndices;
-        [NoAlias, ReadOnly] public NativeList<SurfaceInfo>                  surfaceLoopAllInfos;
-        [NoAlias, ReadOnly] public NativeListArray<Edge>                    surfaceLoopAllEdges;
 
         [NoAlias, WriteOnly] public NativeList<BlobAssetReference<ChiselSurfaceRenderBuffer>>   surfaceRenderBuffers;
 

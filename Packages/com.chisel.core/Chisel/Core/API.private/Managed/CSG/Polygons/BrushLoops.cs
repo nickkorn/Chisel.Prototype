@@ -22,6 +22,5 @@ namespace Chisel.Core
         public NativeListArray<Edge>    basePolygonEdges;
         public VertexSoup               vertexSoup;
     }
-
 #endif
 }

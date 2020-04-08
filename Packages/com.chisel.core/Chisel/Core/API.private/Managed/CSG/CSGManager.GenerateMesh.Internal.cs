@@ -417,7 +417,7 @@ namespace Chisel.Core
                 UnityEngine.Profiling.Profiler.BeginSample("UpdateTreeMesh");
                 try
                 {
-                    UpdateTreeMesh(treeNodeID, out JobHandle handle);
+                    var handle = UpdateTreeMeshes(new int[] { treeNodeID });
                     handle.Complete();
                 } finally { UnityEngine.Profiling.Profiler.EndSample(); }
             }

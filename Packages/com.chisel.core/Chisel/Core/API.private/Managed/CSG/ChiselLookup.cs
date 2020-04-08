@@ -413,9 +413,9 @@ namespace Chisel.Core
 
             public BlobAssetReference<CompactTree>                                  compactTree;
 
-            internal void RemoveByBrushID(NativeArray<int> treeBrushes)
+            internal void RemoveByBrushID(List<int> treeBrushes)
             {
-                for (int b = 0; b < treeBrushes.Length; b++)
+                for (int b = 0; b < treeBrushes.Count; b++)
                 {
                     var brushNodeID = treeBrushes[b];
                     if (basePolygons.TryGetValue(brushNodeID - 1, out var basePolygonsBlob))
