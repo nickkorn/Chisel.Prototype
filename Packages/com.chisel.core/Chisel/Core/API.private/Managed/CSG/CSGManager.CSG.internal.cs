@@ -468,7 +468,7 @@ namespace Chisel.Core
                 {
                     ref var treeUpdate = ref treeUpdates[t];
                     var treeNodeIndex = treeUpdate.treeNodeIndex;
-                    var findAllIntersectionLoopsJob = new CSGManagerPerformCSG.FindAllIntersectionLoopsJob
+                    var findAllIntersectionLoopsJob = new FindAllIntersectionLoopsJob
                     {
                         // Read
                         brushWorldPlanes        = treeUpdate.brushWorldPlanes,
