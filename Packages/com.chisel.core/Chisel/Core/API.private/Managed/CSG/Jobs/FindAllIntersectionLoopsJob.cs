@@ -35,6 +35,119 @@ namespace Chisel.Core
             public float4 localVertex1;
             public float4 worldVertex;
         }
+        
+        #region Sort
+        static float3 FindPolygonCentroid(float3* vertices, NativeList<ushort> indices, int offset, int indicesCount)
+        {
+            var centroid = float3.zero;
+            for (int i = 0; i < indicesCount; i++, offset++)
+                centroid += vertices[indices[offset]];
+            return centroid / indicesCount;
+        }
+
+        // TODO: sort by using plane information instead of unreliable floating point math ..
+        unsafe void SortIndices(float3* vertices, int2* sortedStack, NativeList<ushort> indices, int offset, int indicesCount, float3 normal)
+        {
+            // There's no point in trying to sort a point or a line 
+            if (indicesCount < 3)
+                return;
+
+
+            float3 tangentX, tangentY;
+            if (normal.x > normal.y)
+            {
+                if (normal.x > normal.z)
+                {
+                    tangentX = math.cross(normal, new float3(0, 1, 0));
+                    tangentY = math.cross(normal, tangentX);
+                } else
+                {
+                    tangentX = math.cross(normal, new float3(0, 0, 1));
+                    tangentY = math.cross(normal, tangentX);
+                }
+            } else
+            {
+                if (normal.y > normal.z)
+                {
+                    tangentX = math.cross(normal, new float3(1, 0, 0));
+                    tangentY = math.cross(normal, tangentX);
+                } else
+                {
+                    tangentX = math.cross(normal, new float3(0, 1, 0));
+                    tangentY = math.cross(normal, tangentX);
+                }
+            }
+
+            var centroid = FindPolygonCentroid(vertices, indices, offset, indicesCount);
+            var center = new float2(math.dot(tangentX, centroid), // distance in direction of tangentX
+                                    math.dot(tangentY, centroid)); // distance in direction of tangentY
+
+
+            var sortedStackLength = 1;
+            sortedStack[0] = new int2(0, indicesCount - 1);
+            while (sortedStackLength > 0)
+            {
+                var top = sortedStack[sortedStackLength - 1];
+                sortedStackLength--;
+                var l = top.x;
+                var r = top.y;
+                var left = l;
+                var right = r;
+                var va = vertices[indices[offset + (left + right) / 2]];
+                while (true)
+                {
+                    var a_angle = math.atan2(math.dot(tangentX, va) - center.x, math.dot(tangentY, va) - center.y);
+
+                    {
+                        var vb = vertices[indices[offset + left]];
+                        var b_angle = math.atan2(math.dot(tangentX, vb) - center.x, math.dot(tangentY, vb) - center.y);
+                        while (b_angle > a_angle)
+                        {
+                            left++;
+                            vb = vertices[indices[offset + left]];
+                            b_angle = math.atan2(math.dot(tangentX, vb) - center.x, math.dot(tangentY, vb) - center.y);
+                        }
+                    }
+
+                    {
+                        var vb = vertices[indices[offset + right]];
+                        var b_angle = math.atan2(math.dot(tangentX, vb) - center.x, math.dot(tangentY, vb) - center.y);
+                        while (a_angle > b_angle)
+                        {
+                            right--;
+                            vb = vertices[indices[offset + right]];
+                            b_angle = math.atan2(math.dot(tangentX, vb) - center.x, math.dot(tangentY, vb) - center.y);
+                        }
+                    }
+
+                    if (left <= right)
+                    {
+                        if (left != right)
+                        {
+                            var t = indices[offset + left];
+                            indices[offset + left] = indices[offset + right];
+                            indices[offset + right] = t;
+                        }
+
+                        left++;
+                        right--;
+                    }
+                    if (left > right)
+                        break;
+                }
+                if (l < right)
+                {
+                    sortedStack[sortedStackLength] = new int2(l, right);
+                    sortedStackLength++;
+                }
+                if (left < r)
+                {
+                    sortedStack[sortedStackLength] = new int2(left, r);
+                    sortedStackLength++;
+                }
+            }
+        }
+        #endregion
 
         public void Execute(int index)
         {
@@ -163,8 +276,6 @@ namespace Chisel.Core
             if (intersection.type == IntersectionType.Intersection &&
                 brushPairIntersection1.usedPlanePairs.Length > 0)
             {
-                //var intersectionStream0 = new NativeList<VertexAndPlanePair>(intersectionStream0Capacity, Allocator.Temp);
-
                 // Find all edges of brush2 that intersect brush1, and put their intersections into the appropriate loops
                 ref var intersectingPlanes0         = ref intersectionAsset.Value.brushes[0].localSpacePlanes0;
                 ref var intersectingPlanes1         = ref intersectionAsset.Value.brushes[1].localSpacePlanes0;
@@ -256,6 +367,7 @@ namespace Chisel.Core
                                 // TODO: should be having a Loop for each plane that intersects this vertex, and add that vertex 
                                 //       to ensure they are identical
                                 var vertexIndex1 = vertexSoup0.AddNoResize(worldVertex);
+                                worldVertex = vertexSoup0[vertexIndex1];
                                 var vertexIndex2 = vertexSoup1.AddNoResize(worldVertex);
 
                                 foundIndices0.AddNoResize(new PlaneVertexIndexPair() { planeIndex = planeIndex2, vertexIndex = vertexIndex1 });
@@ -264,31 +376,12 @@ namespace Chisel.Core
                             }
                         }
                     }
-                }/*
-                for (int j = 0; j < intersectionStream0.Length; j++)
-                { 
-                    var worldVertex = intersectionStream0[j].vertex;
-                    var plane0      = intersectionStream0[j].plane0;
-                    var plane1      = intersectionStream0[j].plane1; 
-                    var plane2      = intersectionStream0[j].plane2;
-
-                    // TODO: should be having a Loop for each plane that intersects this vertex, and add that vertex 
-                    //       to ensure they are identical
-                    var vertexIndex1 = vertexSoup0.AddNoResize(worldVertex);
-                    var vertexIndex2 = vertexSoup1.AddNoResize(worldVertex);
-
-                    foundIndices0.AddNoResize(new PlaneVertexIndexPair() { planeIndex = plane2, vertexIndex = vertexIndex1 });
-                    foundIndices1.AddNoResize(new PlaneVertexIndexPair() { planeIndex = plane0, vertexIndex = vertexIndex2 });
-                    foundIndices1.AddNoResize(new PlaneVertexIndexPair() { planeIndex = plane1, vertexIndex = vertexIndex2 });
                 }
-                intersectionStream0.Dispose();*/
             }
 
             if (intersection.type == IntersectionType.Intersection &&
                 brushPairIntersection0.usedPlanePairs.Length > 0)
             {
-                //var intersectionStream1 = new NativeList<VertexAndPlanePair>(intersectionStream1Capacity, Allocator.Temp);
-
                 // Find all edges of brush2 that intersect brush1, and put their intersections into the appropriate loops
                 ref var intersectingPlanes0         = ref intersectionAsset.Value.brushes[1].localSpacePlanes0;
                 ref var intersectingPlanes1         = ref intersectionAsset.Value.brushes[0].localSpacePlanes0;
@@ -379,8 +472,9 @@ namespace Chisel.Core
 
                                 // TODO: should be having a Loop for each plane that intersects this vertex, and add that vertex 
                                 //       to ensure they are identical
-                                var vertexIndex1 = vertexSoup1.AddNoResize(worldVertex);
                                 var vertexIndex2 = vertexSoup0.AddNoResize(worldVertex);
+                                worldVertex = vertexSoup0[vertexIndex2];
+                                var vertexIndex1 = vertexSoup1.AddNoResize(worldVertex);
 
                                 foundIndices1.AddNoResize(new PlaneVertexIndexPair() { planeIndex = planeIndex2, vertexIndex = vertexIndex1 });
                                 foundIndices0.AddNoResize(new PlaneVertexIndexPair() { planeIndex = planeIndex0, vertexIndex = vertexIndex2 });
@@ -391,76 +485,267 @@ namespace Chisel.Core
                 }
             }
 
-            if (foundIndices0.Length > 0)
+            if (foundIndices0.Length >= 3)
             {
                 var planeIndexOffsets0      = new NativeList<PlaneIndexOffsetLength>(foundIndices0.Length, Allocator.Temp);
                 var uniqueIndices0          = new NativeList<ushort>(foundIndices0.Length, Allocator.Temp);
-                var combineLoopIndicesJob0  = new CombineLoopIndicesJob
+                var sortedFoundIndicesLength = foundIndices0.Length;
+
+                // Unity doesn't like it if we sort on a AsDeferredArray, 
+                // but doesn't like it if we sort the list, or it cast to an array either .. :(
+                var memorySize          = sortedFoundIndicesLength * sizeof(PlaneVertexIndexPair);
+                var sortedFoundIndices  = stackalloc PlaneVertexIndexPair[sortedFoundIndicesLength];
+                UnsafeUtility.MemCpy(sortedFoundIndices, foundIndices0.GetUnsafeReadOnlyPtr(), memorySize);
+                for (int i = 0; i < sortedFoundIndicesLength - 1; i++)
                 {
-                    foundIndices                = foundIndices0,
-                    uniqueIndices               = uniqueIndices0,
-                    planeIndexOffsets           = planeIndexOffsets0
-                };
-                combineLoopIndicesJob0.Execute();
-                var sortLoopsJob0           = new SortLoopsJob
+                    for (int j = i + 1; j < sortedFoundIndicesLength; j++)
+                    {
+                        if (sortedFoundIndices[i].planeIndex < sortedFoundIndices[j].planeIndex)
+                            continue;
+                        if (sortedFoundIndices[i].planeIndex > sortedFoundIndices[j].planeIndex ||
+                            sortedFoundIndices[i].vertexIndex > sortedFoundIndices[j].vertexIndex)
+                        {
+                            var t = sortedFoundIndices[i];
+                            sortedFoundIndices[i] = sortedFoundIndices[j];
+                            sortedFoundIndices[j] = t;
+                        }
+                    }
+                }
+
+                // Now that our indices are sorted by planeIndex, we can segment them by start/end offset
+                var previousPlaneIndex  = sortedFoundIndices[0].planeIndex;
+                var previousVertexIndex = sortedFoundIndices[0].vertexIndex;
+                var uniqueIndicesLength = 0; // Cannot 'read' from uniqueIndices.Length here while writing
+                uniqueIndices0.AddNoResize(previousVertexIndex);
+                uniqueIndicesLength++;
+                var loopStart = 0;
+                for (int i = 1; i < sortedFoundIndicesLength; i++)
                 {
-                    allBrushWorldPlanes         = brushWorldPlanes,
-                    intersection                = intersectionAsset,
-                    brushNodeIndex              = 0,
-                    soup                        = vertexSoup0,
-                    uniqueIndices               = uniqueIndices0,
-                    planeIndexOffsets           = planeIndexOffsets0
-                };
-                sortLoopsJob0.Execute();
-                var createLoopsJob0         = new CreateLoopsJob
+                    var indices     = sortedFoundIndices[i];
+
+                    var planeIndex  = indices.planeIndex;
+                    var vertexIndex = indices.vertexIndex;
+
+                    // TODO: why do we have soooo many duplicates sometimes?
+                    if (planeIndex  == previousPlaneIndex &&
+                        vertexIndex == previousVertexIndex)
+                        continue;
+
+                    if (planeIndex != previousPlaneIndex)
+                    {
+                        var currLength = (uniqueIndicesLength - loopStart);
+                        if (currLength > 2)
+                        {
+                            planeIndexOffsets0.AddNoResize(new PlaneIndexOffsetLength()
+                            {
+                                length = (ushort)currLength,
+                                offset = (ushort)loopStart,
+                                planeIndex = previousPlaneIndex
+                            });
+                        }
+                        loopStart = uniqueIndicesLength;
+                    }
+
+                    uniqueIndices0.AddNoResize(vertexIndex);
+                    uniqueIndicesLength++;
+                    previousVertexIndex = vertexIndex;
+                    previousPlaneIndex = planeIndex;
+                }
                 {
-                    brushIndex0                 = brushNodeIndex0,
-                    brushIndex1                 = brushNodeIndex1,
-                    intersection                = intersectionAsset,
-                    intersectionSurfaceIndex    = 0,
-                    vertexSoup                  = vertexSoup0,
-                    uniqueIndices               = uniqueIndices0,
-                    planeIndexOffsets           = planeIndexOffsets0,
-                    //outputSurfaces            = outputSurfaces
-                };
-                createLoopsJob0.Execute(ref outputSurfaces);
+                    var currLength = (uniqueIndicesLength - loopStart);
+                    if (currLength > 2)
+                    {
+                        planeIndexOffsets0.AddNoResize(new PlaneIndexOffsetLength()
+                        {
+                            length = (ushort)currLength,
+                            offset = (ushort)loopStart,
+                            planeIndex = previousPlaneIndex
+                        });
+                    }
+                }
+
+                var maxLength = 0;
+                for (int i = 0; i < planeIndexOffsets0.Length; i++)
+                    maxLength = math.max(maxLength, planeIndexOffsets0[i].length);
+
+                var brushWorldPlanes = this.brushWorldPlanes[intersectionAsset.Value.brushes[0].brushNodeIndex];
+
+                // For each segment, we now sort our vertices within each segment, 
+                // making the assumption that they are convex
+                var sortedStack = stackalloc int2[maxLength * 2];
+                var vertices    = vertexSoup0.GetUnsafeReadOnlyPtr();
+                for (int n = planeIndexOffsets0.Length - 1; n >= 0; n--)
+                {
+                    var planeIndexOffset    = planeIndexOffsets0[n];
+                    var length              = planeIndexOffset.length;
+                    var offset              = planeIndexOffset.offset;
+                    var planeIndex          = planeIndexOffset.planeIndex;
+                    
+                    // TODO: use plane information instead
+                    SortIndices(vertices, sortedStack, uniqueIndices0, offset, length, brushWorldPlanes.Value.worldPlanes[planeIndex].xyz);
+                }
+
+                ref var surfaceInfos = ref intersectionAsset.Value.brushes[0].surfaceInfos;
+                var planeIndexOffsetsLength = planeIndexOffsets0.Length;
+
+                for (int j = 0; j < planeIndexOffsets0.Length; j++)
+                { 
+                    var planeIndexLength    = planeIndexOffsets0[j];
+                    var offset              = planeIndexLength.offset;
+                    var loopLength          = planeIndexLength.length;
+                    var basePlaneIndex      = planeIndexLength.planeIndex;
+                    var surfaceInfo         = surfaceInfos[basePlaneIndex];
+
+                    var builder = new BlobBuilder(Allocator.Temp);
+                    ref var root = ref builder.ConstructRoot<BrushIntersectionLoop>();
+                    root.surfaceInfo = surfaceInfo;
+                    var dstVertices = builder.Allocate(ref root.loopVertices, loopLength);
+                    var srcVertices = vertexSoup0.GetUnsafeReadOnlyPtr();
+                    for (int d = 0; d < loopLength; d++)
+                        dstVertices[d] = srcVertices[uniqueIndices0[offset + d]];
+
+                    var outputSurface = builder.CreateBlobAssetReference<BrushIntersectionLoop>(Allocator.Persistent);
+                    builder.Dispose();
+
+                    outputSurfaces.TryAdd(new BrushSurfacePair()
+                    {
+                        brushNodeIndex0 = brushNodeIndex0,
+                        brushNodeIndex1 = brushNodeIndex1,
+                        basePlaneIndex = basePlaneIndex
+                    }, outputSurface);
+                }
                 planeIndexOffsets0.Dispose();
                 uniqueIndices0.Dispose();
             }
 
-            if (foundIndices1.Length > 0)
+            if (foundIndices1.Length >= 3)
             {
-                var planeIndexOffsets1      = new NativeList<PlaneIndexOffsetLength>(foundIndices1.Length, Allocator.Temp);
-                var uniqueIndices1          = new NativeList<ushort>(foundIndices1.Length, Allocator.Temp);
-                var combineLoopIndicesJob1  = new CombineLoopIndicesJob
+                var planeIndexOffsets1          = new NativeList<PlaneIndexOffsetLength>(foundIndices1.Length, Allocator.Temp);
+                var uniqueIndices1              = new NativeList<ushort>(foundIndices1.Length, Allocator.Temp);
+                var sortedFoundIndicesLength    = foundIndices1.Length;
+
+                // Unity doesn't like it if we sort on a AsDeferredArray, 
+                // but doesn't like it if we sort the list, or it cast to an array either .. :(
+                var memorySize = sortedFoundIndicesLength * sizeof(PlaneVertexIndexPair);
+                var sortedFoundIndices = stackalloc PlaneVertexIndexPair[sortedFoundIndicesLength];
+                UnsafeUtility.MemCpy(sortedFoundIndices, foundIndices1.GetUnsafeReadOnlyPtr(), memorySize);
+                for (int i = 0; i < sortedFoundIndicesLength - 1; i++)
                 {
-                    foundIndices                = foundIndices1,
-                    uniqueIndices               = uniqueIndices1,
-                    planeIndexOffsets           = planeIndexOffsets1
-                };
-                combineLoopIndicesJob1.Execute();
-                var sortLoopsJob1           = new SortLoopsJob
+                    for (int j = i + 1; j < sortedFoundIndicesLength; j++)
+                    {
+                        if (sortedFoundIndices[i].planeIndex < sortedFoundIndices[j].planeIndex)
+                            continue;
+                        if (sortedFoundIndices[i].planeIndex > sortedFoundIndices[j].planeIndex ||
+                            sortedFoundIndices[i].vertexIndex > sortedFoundIndices[j].vertexIndex)
+                        {
+                            var t = sortedFoundIndices[i];
+                            sortedFoundIndices[i] = sortedFoundIndices[j];
+                            sortedFoundIndices[j] = t;
+                        }
+                    }
+                }
+
+                // Now that our indices are sorted by planeIndex, we can segment them by start/end offset
+                var previousPlaneIndex  = sortedFoundIndices[0].planeIndex;
+                var previousVertexIndex = sortedFoundIndices[0].vertexIndex;
+                var uniqueIndicesLength = 0; // Cannot 'read' from uniqueIndices.Length here while writing
+                uniqueIndices1.AddNoResize(previousVertexIndex);
+                uniqueIndicesLength++;
+                var loopStart = 0;
+                for (int i = 1; i < sortedFoundIndicesLength; i++)
                 {
-                    allBrushWorldPlanes         = brushWorldPlanes,
-                    intersection                = intersectionAsset,
-                    brushNodeIndex              = 1,
-                    soup                        = vertexSoup1,
-                    uniqueIndices               = uniqueIndices1,
-                    planeIndexOffsets           = planeIndexOffsets1
-                };
-                sortLoopsJob1.Execute();
-                var createLoopsJob1         = new CreateLoopsJob
+                    var indices     = sortedFoundIndices[i];
+
+                    var planeIndex  = indices.planeIndex;
+                    var vertexIndex = indices.vertexIndex;
+
+                    // TODO: why do we have soooo many duplicates sometimes?
+                    if (planeIndex  == previousPlaneIndex &&
+                        vertexIndex == previousVertexIndex)
+                        continue;
+
+                    if (planeIndex != previousPlaneIndex)
+                    {
+                        var currLength = (uniqueIndicesLength - loopStart);
+                        if (currLength > 2)
+                        {
+                            planeIndexOffsets1.AddNoResize(new PlaneIndexOffsetLength()
+                            {
+                                length = (ushort)currLength,
+                                offset = (ushort)loopStart,
+                                planeIndex = previousPlaneIndex
+                            });
+                        }
+                        loopStart = uniqueIndicesLength;
+                    }
+
+                    uniqueIndices1.AddNoResize(vertexIndex);
+                    uniqueIndicesLength++;
+                    previousVertexIndex = vertexIndex;
+                    previousPlaneIndex = planeIndex;
+                }
                 {
-                    brushIndex0                 = brushNodeIndex1,
-                    brushIndex1                 = brushNodeIndex0,
-                    intersection                = intersectionAsset,
-                    intersectionSurfaceIndex    = 1,
-                    vertexSoup                  = vertexSoup1,
-                    uniqueIndices               = uniqueIndices1,
-                    planeIndexOffsets           = planeIndexOffsets1,
-                    //outputSurfaces            = outputSurfaces
-                };
-                createLoopsJob1.Execute(ref outputSurfaces);
+                    var currLength = (uniqueIndicesLength - loopStart);
+                    if (currLength > 2)
+                    {
+                        planeIndexOffsets1.AddNoResize(new PlaneIndexOffsetLength()
+                        {
+                            length = (ushort)currLength,
+                            offset = (ushort)loopStart,
+                            planeIndex = previousPlaneIndex
+                        });
+                    }
+                }
+                var maxLength = 0;
+                for (int i = 0; i < planeIndexOffsets1.Length; i++)
+                    maxLength = math.max(maxLength, planeIndexOffsets1[i].length);
+
+                var brushWorldPlanes = this.brushWorldPlanes[intersectionAsset.Value.brushes[1].brushNodeIndex];
+
+                // For each segment, we now sort our vertices within each segment, 
+                // making the assumption that they are convex
+                var sortedStack = stackalloc int2[maxLength * 2];
+                var vertices    = vertexSoup1.GetUnsafeReadOnlyPtr();
+                for (int n = planeIndexOffsets1.Length - 1; n >= 0; n--)
+                {
+                    var planeIndexOffset    = planeIndexOffsets1[n];
+                    var length              = planeIndexOffset.length;
+                    var offset              = planeIndexOffset.offset;
+                    var planeIndex          = planeIndexOffset.planeIndex;
+                    
+                    // TODO: use plane information instead
+                    SortIndices(vertices, sortedStack, uniqueIndices1, offset, length, brushWorldPlanes.Value.worldPlanes[planeIndex].xyz);
+                }
+
+                ref var surfaceInfos = ref intersectionAsset.Value.brushes[1].surfaceInfos;
+                var planeIndexOffsetsLength = planeIndexOffsets1.Length;
+
+                for (int j = 0; j < planeIndexOffsets1.Length; j++)
+                { 
+                    var planeIndexLength    = planeIndexOffsets1[j];
+                    var offset              = planeIndexLength.offset;
+                    var loopLength          = planeIndexLength.length;
+                    var basePlaneIndex      = planeIndexLength.planeIndex;
+                    var surfaceInfo         = surfaceInfos[basePlaneIndex];
+
+                    var builder = new BlobBuilder(Allocator.Temp);
+                    ref var root = ref builder.ConstructRoot<BrushIntersectionLoop>();
+                    root.surfaceInfo = surfaceInfo;
+                    var dstVertices = builder.Allocate(ref root.loopVertices, loopLength);
+                    var srcVertices = vertexSoup1.GetUnsafeReadOnlyPtr();
+                    for (int d = 0; d < loopLength; d++)
+                        dstVertices[d] = srcVertices[uniqueIndices1[offset + d]];
+
+                    var outputSurface = builder.CreateBlobAssetReference<BrushIntersectionLoop>(Allocator.Persistent);
+                    builder.Dispose();
+
+                    outputSurfaces.TryAdd(new BrushSurfacePair()
+                    {
+                        brushNodeIndex0 = brushNodeIndex1,
+                        brushNodeIndex1 = brushNodeIndex0,
+                        basePlaneIndex = basePlaneIndex
+                    }, outputSurface);
+                }
                 planeIndexOffsets1.Dispose();
                 uniqueIndices1.Dispose();
             }
