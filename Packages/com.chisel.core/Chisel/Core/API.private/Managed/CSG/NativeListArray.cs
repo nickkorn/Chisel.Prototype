@@ -46,6 +46,7 @@ namespace Chisel.Core
 
         void ResizeCapacity(int capacity)
         {
+            CheckAllocator(Allocator);
             var oldBytesToMalloc = sizeof(UnsafeList*) * Capacity;
             var newBytesToMalloc = sizeof(UnsafeList*) * capacity;
             var newPtr = (UnsafeList**)UnsafeUtility.Malloc(newBytesToMalloc, UnsafeUtility.AlignOf<long>(), Allocator);
@@ -158,6 +159,7 @@ namespace Chisel.Core
         {
             NullCheck(arrayData);
             var allocator = arrayData->Allocator;
+            CheckAllocator(allocator);
             arrayData->Dispose();
             UnsafeUtility.Free(arrayData, allocator);
         }
@@ -191,49 +193,6 @@ namespace Chisel.Core
             Ptr = null;
             Length = 0;
             Capacity = 0;
-        }
-
-        [BurstCompile]
-        internal unsafe struct UnsafeDisposeJob : IJob
-        {
-            [NativeDisableUnsafePtrRestriction]
-            public UnsafeList** Ptr;
-            public int Length;
-            public Allocator Allocator;
-
-            public void Execute()
-            {
-                for (int i = 0; i < Length; i++)
-                {
-                    if (Ptr[i]->IsCreated)
-                    {
-                        Ptr[i]->Clear();
-                        Ptr[i]->Dispose();
-                    }
-                }
-                UnsafeUtility.Free(Ptr, Allocator);
-            }
-        }
-
-        public JobHandle Dispose(JobHandle inputDeps)
-        {
-            if (ShouldDeallocate(Allocator))
-            {
-                var jobHandle = new UnsafeDisposeJob { Ptr = Ptr, Length = Length, Allocator = Allocator }.Schedule(inputDeps);
-
-                Ptr = null;
-                Length = 0;
-                Capacity = 0;
-                Allocator = Allocator.Invalid;
-
-                return jobHandle;
-            }
-
-            Ptr = null;
-            Length = 0;
-            Capacity = 0;
-
-            return inputDeps;
         }
 
         public void Clear()
@@ -336,6 +295,7 @@ namespace Chisel.Core
             AtomicSafetyHandle.SetBumpSecondaryVersionOnScheduleWrite(m_Safety, true);
 #endif
         }
+
 
         public void ResizeExact(int length)
         {
@@ -512,12 +472,34 @@ namespace Chisel.Core
             m_Array = null;
         }
 
+        [BurstCompile]
+        internal unsafe struct UnsafeDisposeJob : IJob
+        {
+            [NativeDisableUnsafePtrRestriction]
+            public UnsafeListArray* array;
+
+            public void Execute()
+            {
+                UnsafeListArray.Destroy(array);
+            }
+        }
+
         public JobHandle Dispose(JobHandle inputDeps)
         {
 #if ENABLE_UNITY_COLLECTIONS_CHECKS
-            DisposeSentinel.Dispose(ref m_Safety, ref m_DisposeSentinel);
+            // [DeallocateOnJobCompletion] is not supported, but we want the deallocation
+            // to happen in a thread. DisposeSentinel needs to be cleared on main thread.
+            // AtomicSafetyHandle can be destroyed after the job was scheduled (Job scheduling
+            // will check that no jobs are writing to the container).
+            DisposeSentinel.Clear(ref m_DisposeSentinel);
+
+            var jobHandle = new UnsafeDisposeJob { array = m_Array }.Schedule(inputDeps);
+
+            AtomicSafetyHandle.Release(m_Safety);
+#else
+            var jobHandle = new UnsafeDisposeJob { array = m_Array }.Schedule(inputDeps);
 #endif
-            return m_Array->Dispose(inputDeps);
+            return jobHandle;
         }
 
         [NativeContainer]

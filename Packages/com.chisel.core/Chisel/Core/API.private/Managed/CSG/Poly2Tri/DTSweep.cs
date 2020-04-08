@@ -50,6 +50,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using Unity.Burst;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Mathematics;
@@ -151,20 +152,18 @@ namespace Poly2Tri
                 return false;
             }
 
+            [BurstDiscard]
+            public static void MarkNeighborException()
+            {
+                throw new Exception("Error marking neighbors -- t doesn't contain edge p1-p2!");
+            }
 
-            /// <summary>
-            /// Update neighbor pointers
-            /// </summary>
-            /// <param name="p1">Point 1 of the shared edge</param>
-            /// <param name="p2">Point 2 of the shared edge</param>
-            /// <param name="t">This triangle's new neighbor</param>
+
             public void MarkNeighbor(ushort p1, ushort p2, ushort triangleIndex)
             {
                 ushort i = EdgeIndex(p1, p2);
                 if (i == ushort.MaxValue)
-                {
-                    throw new Exception("Error marking neighbors -- t doesn't contain edge p1-p2!");
-                }
+                    MarkNeighborException();
                 neighbors[i] = triangleIndex;
             }
 
@@ -194,11 +193,6 @@ namespace Poly2Tri
                 return indices[(IndexOf(point) + 2) % 3];
             }
 
-            /// <summary>
-            /// Legalize triangle by rotating clockwise around oPoint
-            /// </summary>
-            /// <param name="oPoint">The origin point to rotate around</param>
-            /// <param name="nPoint">???</param>
             public void Legalize(ushort oPoint, ushort nPoint)
             {
                 //RotateCW();
@@ -417,7 +411,7 @@ namespace Poly2Tri
 
 
 
-        public void TriangulateLoops(SurfaceInfo loopInfo, quaternion rotation, NativeListArray<Chisel.Core.Edge>.NativeList inputEdges, NativeList<int> triangleIndices)
+        public void TriangulateLoops(SurfaceInfo loopInfo, quaternion rotation, in NativeListArray<Chisel.Core.Edge>.NativeList inputEdges, NativeList<int> triangleIndices)
         {
             triangleIndices.Clear();
             this.rotation = rotation;
@@ -434,11 +428,10 @@ namespace Poly2Tri
             edgeLookups.Clear();
             foundLoops.Clear();
 
-            //if (inputEdges.Count == 5)
-            //    Debug.Log($"{loop.info.brush.brushNodeID} {loop.info.worldPlane} {inputEdges.Count}");
 
-            inputEdgesCopy.Clear();
-            inputEdgesCopy.AddRange(inputEdges.AsArray());
+            inputEdgesCopy.ResizeUninitialized(inputEdges.Length);
+            for (int i = 0; i < inputEdges.Length; i++)
+                inputEdgesCopy[i] = inputEdges[i];
             
             for (int i = 0; i < inputEdgesCopy.Length; i++)
             {
@@ -645,6 +638,11 @@ namespace Poly2Tri
             return newIndex;
         }
 
+        [BurstDiscard]
+        public static void FailedToFindNodeForGivenAfrontPointException()
+        {
+            throw new Exception("Failed to find Node for given afront point");
+        }
 
         /// <summary>
         /// This implementation will use simple node traversal algorithm to find a point on the front
@@ -659,7 +657,7 @@ namespace Poly2Tri
             {
                 if (index != advancingFrontNodes[nodeIndex].pointIndex)
                 {
-                    UnityEngine.Debug.Assert(advancingFrontNodes[nodeIndex].prevNodeIndex != ushort.MaxValue, "advancingFrontNodes[nodeIndex].prevNodeIndex != ushort.MaxValue");
+                    CheckValidIndex(advancingFrontNodes[nodeIndex].prevNodeIndex);
                     // We might have two nodes with same x value for a short time
                     if (advancingFrontNodes[nodeIndex].prevNodeIndex != ushort.MaxValue &&
                         index == advancingFrontNodes[advancingFrontNodes[nodeIndex].prevNodeIndex].pointIndex)
@@ -668,7 +666,7 @@ namespace Poly2Tri
                     }
                     else
                     {
-                        UnityEngine.Debug.Assert(advancingFrontNodes[nodeIndex].nextNodeIndex != ushort.MaxValue, "advancingFrontNodes[nodeIndex].nextNodeIndex != ushort.MaxValue");
+                        CheckValidIndex(advancingFrontNodes[nodeIndex].nextNodeIndex);
                         if (advancingFrontNodes[nodeIndex].nextNodeIndex != ushort.MaxValue &&
                         index == advancingFrontNodes[advancingFrontNodes[nodeIndex].nextNodeIndex].pointIndex)
                         {
@@ -676,7 +674,7 @@ namespace Poly2Tri
                         }
                         else
                         {
-                            throw new Exception("Failed to find Node for given afront point");
+                            FailedToFindNodeForGivenAfrontPointException();
                         }
                     }
                 }
@@ -725,10 +723,7 @@ namespace Poly2Tri
                 triangleIndices.Add(index0);
                 triangleIndices.Add(index1);
                 triangleIndices.Add(index2);
-            }/*else
-            { 
-                UnityEngine.Debug.LogWarning($"invalid triangle {index0} {index1} {index2} / {vertices.Count}");
-            }*/
+            }
 
             if (!triangle.GetConstrainedEdge(0)) MeshClean(triangle.neighbors[0]);
             if (!triangle.GetConstrainedEdge(1)) MeshClean(triangle.neighbors[1]);
@@ -1289,10 +1284,21 @@ namespace Poly2Tri
             return true;
         }
 
-        
+        [BurstDiscard]
+        public static void CheckValidIndex(int index)
+        {
+            UnityEngine.Debug.Assert(index != ushort.MaxValue, "invalid index (== ushort.MaxValue)");
+        }
+
+        [BurstDiscard]
+        public static void PointOnConstrainedEdgeNotSupportedException(int epIndex, int eqIndex, int p1Index)
+        {
+            throw new Exception($"PerformEdgeEvent - Point on constrained edge not supported yet {epIndex} {eqIndex} {p1Index}");
+        }
+
         void PerformEdgeEvent(ushort epIndex, ushort eqIndex, ushort triangleIndex, ushort pointIndex)
         {
-            UnityEngine.Debug.Assert(triangleIndex != ushort.MaxValue, "triangleIndex != ushort.MaxValue");
+            CheckValidIndex(triangleIndex);
             if (triangleIndex == ushort.MaxValue)
                 return;
 
@@ -1317,7 +1323,7 @@ namespace Poly2Tri
                     triangleIndex = triangle.NeighborAcrossFrom(pointIndex);
                     PerformEdgeEvent(epIndex, p1Index, triangleIndex, p1Index);
                 } else
-                    throw new Exception($"PerformEdgeEvent - Point on constrained edge not supported yet {epIndex} {eqIndex} {p1Index}");
+                    PointOnConstrainedEdgeNotSupportedException(epIndex, eqIndex, p1Index);
                 return;
             }
 
@@ -1336,7 +1342,7 @@ namespace Poly2Tri
                     if (triangleIndex != ushort.MaxValue)
                         PerformEdgeEvent(epIndex, p2Index, triangleIndex, p2Index);
                 } else
-                    throw new Exception($"PerformEdgeEvent - Point on constrained edge not supported yet {epIndex} {eqIndex} {p2Index}");
+                    PointOnConstrainedEdgeNotSupportedException(epIndex, eqIndex, p2Index);
                 
                 return;
             }
@@ -1357,14 +1363,22 @@ namespace Poly2Tri
             }
         }
 
-
-        /// <param name="triangleIndex2">Opposite triangle</param>
-        /// <param name="p">The point in t that isn't shared between the triangles</param>
         ushort OppositePoint(ushort triangleIndex1, ushort triangleIndex2, ushort p)
         {
             return triangles[triangleIndex1].PointCWFrom(triangles[triangleIndex2].PointCWFrom(p));
         }
 
+        [BurstDiscard]
+        public static void FLIPFailedDueToMissingTriangleException()
+        {
+            throw new Exception("[BUG:FIXME] FLIP failed due to missing triangle");
+        }
+
+        [BurstDiscard]
+        public static void CheckSelfPointer(int triangleIndex, int otIndex)
+        {
+            UnityEngine.Debug.Assert(triangleIndex != otIndex, "self-pointer error");
+        }
 
         void FlipEdgeEvent(ushort epIndex, ushort eqIndex, ushort triangleIndex, ushort pIndex)
         {
@@ -1373,17 +1387,17 @@ namespace Poly2Tri
             {
                 // If we want to integrate the fillEdgeEvent do it here
                 // With current implementation we should never get here
-                throw new InvalidOperationException("[BUG:FIXME] FLIP failed due to missing triangle");
+                FLIPFailedDueToMissingTriangleException();
             }
 
-            UnityEngine.Debug.Assert(triangleIndex != otIndex, "self-pointer error");
+            CheckSelfPointer(triangleIndex, otIndex);
             var opIndex = OppositePoint(otIndex, triangleIndex, pIndex);
 
             var opPoint = points[opIndex];
             bool inScanArea = InScanArea(points[pIndex],
-                                         points[triangles[triangleIndex].PointCCWFrom(pIndex)],
-                                         points[triangles[triangleIndex].PointCWFrom(pIndex)],
-                                         opPoint);
+                                            points[triangles[triangleIndex].PointCCWFrom(pIndex)],
+                                            points[triangles[triangleIndex].PointCWFrom(pIndex)],
+                                            opPoint);
             if (inScanArea)
             {
                 // Lets rotate shared edge one vertex CW
@@ -1427,12 +1441,12 @@ namespace Poly2Tri
             }
         }
 
+        [BurstDiscard]
+        public static void OrientationNotHandledException()
+        {
+            throw new NotImplementedException("Orientation not handled");
+        }
 
-        /// <summary>
-        /// When we need to traverse from one triangle to the next we need 
-        /// the point in current triangle that is the opposite point to the next
-        /// triangle. 
-        /// </summary>
         bool NextFlipPoint(ushort epIndex, ushort eqIndex, ushort otherTriangleIndex, ushort opIndex, out ushort newP)
         {
             newP = ushort.MaxValue;
@@ -1447,23 +1461,14 @@ namespace Poly2Tri
                     return true;
                 case Orientation.Collinear:
                     // TODO: implement support for point on constraint edge
-                    throw new NotImplementedException($"Point on constrained edge not supported yet {eqIndex} {opIndex} {epIndex}");
+                    PointOnConstrainedEdgeNotSupportedException(eqIndex, opIndex, epIndex);
+                    return false;
                 default:
-                    throw new NotImplementedException("Orientation not handled");
+                    OrientationNotHandledException();
+                    return false;
             }
         }
 
-
-        /// <summary>
-        /// After a flip we have two triangles and know that only one will still be
-        /// intersecting the edge. So decide which to contiune with and legalize the other
-        /// </summary>
-        /// <param name="o">should be the result of an orient2d( eq, op, ep )</param>
-        /// <param name="triangleIndex">triangle 1</param>
-        /// <param name="otherTriangleIndex">triangle 2</param>
-        /// <param name="p">a point shared by both triangles</param>
-        /// <param name="op">another point shared by both triangles</param>
-        /// <returns>returns the triangle still intersecting the edge</returns>
         ushort NextFlipTriangle(Orientation o, ushort triangleIndex, ushort otherTriangleIndex, ushort pIndex, ushort opIndex)
         {
             ushort edgeIndex;
@@ -1492,18 +1497,6 @@ namespace Poly2Tri
             return otherTriangleIndex;
         }
 
-
-        /// <summary>
-        /// Scan part of the FlipScan algorithm<br>
-        /// When a triangle pair isn't flippable we will scan for the next 
-        /// point that is inside the flip triangle scan area. When found 
-        /// we generate a new flipEdgeEvent
-        /// </summary>
-        /// <param name="ep">last point on the edge we are traversing</param>
-        /// <param name="eq">first point on the edge we are traversing</param>
-        /// <param name="flipTriangle">the current triangle sharing the point eq with edge</param>
-        /// <param name="triangleIndex"></param>
-        /// <param name="p"></param>
         void FlipScanEdgeEvent(ushort epIndex, ushort eqIndex, ushort flipTriangle, ushort triangleIndex, ushort pIndex)
         {
             var otIndex = triangles[triangleIndex].NeighborAcrossFrom(pIndex);
@@ -1511,10 +1504,10 @@ namespace Poly2Tri
             {
                 // If we want to integrate the fillEdgeEvent do it here
                 // With current implementation we should never get here
-                throw new Exception("[BUG:FIXME] FLIP failed due to missing triangle");
+                FLIPFailedDueToMissingTriangleException();
             }
 
-            UnityEngine.Debug.Assert(triangleIndex != otIndex, "self-pointer error");
+            CheckSelfPointer(triangleIndex, otIndex);
             var opIndex = OppositePoint(otIndex, triangleIndex, pIndex);
 
             var inScanArea = InScanArea(points[eqIndex],
@@ -1550,15 +1543,6 @@ namespace Poly2Tri
             }
         }
 
-
-        /// <summary>
-        /// Fills a basin that has formed on the Advancing Front to the right
-        /// of given node.<br>
-        /// First we decide a left,bottom and right node that forms the 
-        /// boundaries of the basin. Then we do a reqursive fill.
-        /// </summary>
-        /// <param name="this"></param>
-        /// <param name="node">starting node, this or next node will be left node</param>
         void FillBasin(ushort nodeIndex)
         {
             var node         = advancingFrontNodes[nodeIndex];
@@ -1669,16 +1653,10 @@ namespace Poly2Tri
         {
             var node    = advancingFrontNodes[nodeIndex];
             var height  = basinLeftHighest ? (advancingFrontNodes[leftNodeIndex].nodePoint.y  - node.nodePoint.y)
-                                           : (advancingFrontNodes[rightNodeIndex].nodePoint.y - node.nodePoint.y);
+                                            : (advancingFrontNodes[rightNodeIndex].nodePoint.y - node.nodePoint.y);
             return basinWidth > height;
         }
 
-
-        /// <summary>
-        /// ???
-        /// </summary>
-        /// <param name="node">middle node</param>
-        /// <returns>the angle between 3 front nodes</returns>
         double HoleAngle(ushort nodeIndex)
         {
             var node     = advancingFrontNodes[nodeIndex];
@@ -1687,13 +1665,13 @@ namespace Poly2Tri
             // XXX: do we really need a signed angle for holeAngle?
             //      could possible save some cycles here
             /* Complex plane
-             * ab = cosA +i*sinA
-             * ab = (ax + ay*i)(bx + by*i) = (ax*bx + ay*by) + i(ax*by-ay*bx)
-             * atan2(y,x) computes the principal value of the argument function
-             * applied to the complex number x+iy
-             * Where x = ax*bx + ay*by
-             *       y = ax*by - ay*bx
-             */
+                * ab = cosA +i*sinA
+                * ab = (ax + ay*i)(bx + by*i) = (ax*bx + ay*by) + i(ax*by-ay*bx)
+                * atan2(y,x) computes the principal value of the argument function
+                * applied to the complex number x+iy
+                * Where x = ax*bx + ay*by
+                *       y = ax*by - ay*bx
+                */
             var px = node.nodePoint.x;
             var py = node.nodePoint.y;
             var ax = nodeNext.nodePoint.x - px;
@@ -1717,11 +1695,6 @@ namespace Poly2Tri
             return (double)Math.Atan2(ay, ax);
         }
 
-
-        /// <summary>
-        /// Adds a triangle to the advancing front to fill a hole.
-        /// </summary>
-        /// <param name="node">middle node, that is the bottom of the hole</param>
         void Fill(ushort nodeIndex)
         {
             var node     = advancingFrontNodes[nodeIndex];
@@ -1733,7 +1706,9 @@ namespace Poly2Tri
                 nodeNextIndex == ushort.MaxValue ||
                 node.pointIndex == ushort.MaxValue)
             {
-                Debug.LogError("nodePrevIndex == ushort.MaxValue || nodeNextIndex == ushort.MaxValue || node.pointIndex == ushort.MaxValue");
+                CheckValidIndex(nodePrevIndex);
+                CheckValidIndex(nodeNextIndex);
+                CheckValidIndex(node.pointIndex);
                 return;
             }
 
@@ -1941,6 +1916,11 @@ namespace Poly2Tri
         }
 
 
+        [BurstDiscard]
+        public static void FailedToMarkNeighborException()
+        {
+            throw new Exception("Failed to mark neighbor, doesn't share an edge!");
+        }
 
         /// <summary>
         /// Exhaustive search to update neighbor pointers
@@ -1977,7 +1957,7 @@ namespace Poly2Tri
             }
             else
             {
-                throw new Exception("Failed to mark neighbor, doesn't share an edge!");
+                FailedToMarkNeighborException();
             }
 
             triangles[triangleIndex1] = triangle1;
@@ -2018,36 +1998,6 @@ namespace Poly2Tri
             return HasEdgeByPoints(p1, p2) || HasEdgeByPoints(p2, p1);
         }
 
-
-        /**
-         * @author Thomas Åhlén, thahlen@gmail.com
-         */
-
-
-        /// <summary>
-        ///   Requirements:
-        /// 1. a,b and c form a triangle.
-        /// 2. a and d is know to be on opposite side of bc
-        /// <code>
-        ///                a
-        ///                +
-        ///               / \
-        ///              /   \
-        ///            b/     \c
-        ///            +-------+ 
-        ///           /    B    \  
-        ///          /           \ 
-        /// </code>
-        ///    Facts:
-        ///  d has to be in area B to have a chance to be inside the circle formed by a,b and c
-        ///  d is outside B if orient2d(a,b,d) or orient2d(c,a,d) is CW
-        ///  This preknowledge gives us a way to optimize the incircle test
-        /// </summary>
-        /// <param name="pa">triangle point, opposite d</param>
-        /// <param name="pb">triangle point</param>
-        /// <param name="pc">triangle point</param>
-        /// <param name="pd">point opposite a</param>
-        /// <returns>true if d is inside circle, false if on circle edge</returns>
         static bool SmartIncircle(double2 pa, double2 pb, double2 pc, double2 pd)
         {
             var pdx = pd.x;
