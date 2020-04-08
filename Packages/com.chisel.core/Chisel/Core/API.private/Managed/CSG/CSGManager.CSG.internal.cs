@@ -58,7 +58,6 @@ namespace Chisel.Core
 
         internal static bool UpdateTreeMesh(int treeNodeID, out JobHandle finalJobHandle)
         {
-            Debug.Log("UpdateTreeMesh");
             finalJobHandle = default(JobHandle);
             if (!IsValidNodeID(treeNodeID) || !AssertNodeType(treeNodeID, CSGNodeType.Tree))
                 return false;
@@ -76,7 +75,6 @@ namespace Chisel.Core
             var treeBrushes = treeInfo.treeBrushes;
             if (treeInfo.treeBrushes.Count > 0)
             {
-                JobHandle allPerformAllCSGJobHandle = default(JobHandle);
                 JobHandle allGenerateSurfaceTrianglesJobHandle = default(JobHandle);
                 var treeBrushesArray = treeBrushes.ToNativeArray(Allocator.TempJob);
                 {
@@ -205,7 +203,7 @@ namespace Chisel.Core
 
                         var brushOutputLoops = new List<BrushOutputLoops>(treeBrushesArray.Length);
 
-                        JobHandle findAllIntersectionLoopsJobHandle;
+                        JobHandle allFindAllIntersectionLoopsJobHandle = default(JobHandle);
                         JobHandle findLoopOverlapIntersectionsJobHandle = default(JobHandle);
                         {
                             NativeHashMap<BrushSurfacePair, BlobAssetReference<BrushIntersectionLoop>> intersectionLoopBlobs;
@@ -242,8 +240,7 @@ namespace Chisel.Core
                                     intersectingBrushes     = intersectingBrushes.AsParallelWriter()
                                 };
                                 var prepareBrushPairIntersectionsJobHandle = prepareBrushPairIntersectionsJob.Schedule(maxPairs, 64, findBrushPairsJobHandle);
-                                var createBrushPairsJobHandle = JobHandle.CombineDependencies(prepareBrushPairIntersectionsJobHandle, findBrushPairsJobHandle);
-                                uniqueBrushPairs.Dispose(createBrushPairsJobHandle);
+                                uniqueBrushPairs.Dispose(prepareBrushPairIntersectionsJobHandle);
 
                                 var findAllIntersectionLoopsJob = new CSGManagerPerformCSG.FindAllIntersectionLoopsJob
                                 {
@@ -254,17 +251,17 @@ namespace Chisel.Core
                                     // Write
                                     outputSurfaces          = intersectionLoopBlobs.AsParallelWriter()
                                 };
-                                findAllIntersectionLoopsJobHandle = findAllIntersectionLoopsJob.Schedule(maxPairs, 64, JobHandle.CombineDependencies(updateBrushWorldPlanesJob, createBrushPairsJobHandle));
-                                findAllIntersectionLoopsJobHandle = JobHandle.CombineDependencies(findAllIntersectionLoopsJobHandle, prepareBrushPairIntersectionsJobHandle);
+                                var findAllIntersectionLoopsJobHandle = findAllIntersectionLoopsJob.Schedule(maxPairs, 64, JobHandle.CombineDependencies(updateBrushWorldPlanesJob, prepareBrushPairIntersectionsJobHandle));
+                                allFindAllIntersectionLoopsJobHandle = JobHandle.CombineDependencies(findAllIntersectionLoopsJobHandle, prepareBrushPairIntersectionsJobHandle, allFindAllIntersectionLoopsJobHandle);
 
-                                intersectingBrushes.Dispose(findAllIntersectionLoopsJobHandle); // TODO: can use handle on dispose
+                                intersectingBrushes.Dispose(findAllIntersectionLoopsJobHandle);
                             } finally { Profiler.EndSample(); }
 
 
                             Profiler.BeginSample("FindLoopOverlapIntersections");
                             try
                             {
-                                var dependencies = JobHandle.CombineDependencies(findIntersectingBrushesJob, findAllIntersectionLoopsJobHandle, updateBrushWorldPlanesJob);
+                                var dependencies = JobHandle.CombineDependencies(findIntersectingBrushesJob, allFindAllIntersectionLoopsJobHandle, updateBrushWorldPlanesJob);
 
                                 ref var brushWorldPlaneBlobs = ref chiselLookupValues.brushWorldPlanes;
                                 ref var basePolygonBlobs = ref chiselLookupValues.basePolygons;
@@ -304,9 +301,8 @@ namespace Chisel.Core
                                         intersectionSurfaceInfos    = intersectionSurfaceInfos
                                     };
                                     findLoopOverlapIntersectionsJobHandle = JobHandle.CombineDependencies(findLoopOverlapIntersectionsJob.Schedule(dependencies), findLoopOverlapIntersectionsJobHandle);
-
                                 }
-                                intersectionLoopBlobs.Dispose(JobHandle.CombineDependencies(findLoopOverlapIntersectionsJobHandle, findAllIntersectionLoopsJobHandle));
+                                intersectionLoopBlobs.Dispose(findLoopOverlapIntersectionsJobHandle);
                             }
                             finally { Profiler.EndSample(); }
                         }
@@ -333,19 +329,21 @@ namespace Chisel.Core
                                 var brushNodeIndex  = brushNodeID - 1;
                                 var brushMeshID     = brushMeshInstanceIDs[b];
 
-                                var outputLoops     = brushOutputLoops[b];
-
                                 if (brushMeshID == 0)
                                     continue;
 
+
+                                Profiler.BeginSample("Allocate");
+                                var outputLoops         = brushOutputLoops[b];
                                 var surfaceLoopIndices  = new NativeListArray<int>(Allocator.TempJob);
                                 var allInfos            = new NativeList<SurfaceInfo>(Allocator.TempJob);
                                 var allEdges            = new NativeListArray<Edge>(Allocator.TempJob);
 
                                 var surfaceRenderBuffers = new NativeList<BlobAssetReference<ChiselSurfaceRenderBuffer>>(0, Allocator.Persistent);
                                 chiselLookupValues.surfaceRenderBuffers[brushNodeIndex] = surfaceRenderBuffers;
+                                Profiler.EndSample();
 
-
+                                Profiler.BeginSample("PerformCSGJob");
                                 var performCSGJob = new PerformCSGJob
                                 {
                                     // Read
@@ -366,9 +364,10 @@ namespace Chisel.Core
                                     allEdges                    = allEdges
                                 };
                                 var performAllCSGJobHandle = performCSGJob.Schedule(dependencies);
-                                allPerformAllCSGJobHandle = JobHandle.CombineDependencies(performAllCSGJobHandle, allPerformAllCSGJobHandle);
+                                Profiler.EndSample();
 
 
+                                Profiler.BeginSample("GenerateSurfaceTrianglesJob");
                                 var generateSurfaceRenderBuffers = new GenerateSurfaceTrianglesJob
                                 {
                                     brushNodeIndex          = brushNodeIndex,
@@ -383,24 +382,26 @@ namespace Chisel.Core
                                     surfaceLoopAllEdges     = allEdges
                                 };
 
-                                var generateSurfaceTrianglesJobHandle = generateSurfaceRenderBuffers.Schedule(JobHandle.CombineDependencies(dependencies, performAllCSGJobHandle));
-                                //generateSurfaceTrianglesJobHandle.Complete();
+                                var generateSurfaceTrianglesJobHandle = generateSurfaceRenderBuffers.Schedule(performAllCSGJobHandle);
                                 allGenerateSurfaceTrianglesJobHandle = JobHandle.CombineDependencies(generateSurfaceTrianglesJobHandle, allGenerateSurfaceTrianglesJobHandle);
+                                Profiler.EndSample();
 
 
-                                var disposeDependencies = JobHandle.CombineDependencies(dependencies, generateSurfaceTrianglesJobHandle, performAllCSGJobHandle);
+                                Profiler.BeginSample("IntermediateDispose");
+                                var disposeDependencies = generateSurfaceTrianglesJobHandle;
                                 surfaceLoopIndices  .Dispose(disposeDependencies);
                                 allInfos            .Dispose(disposeDependencies);
                                 allEdges            .Dispose(disposeDependencies);
+                                Profiler.EndSample();
                             }
-                            allGenerateSurfaceTrianglesJobHandle.Complete();
 
+                            Profiler.BeginSample("BrushOutputLoopsDispose");
                             {
-                                var disposeDependencies = JobHandle.CombineDependencies(findLoopOverlapIntersectionsJobHandle, allGenerateSurfaceTrianglesJobHandle);
+                                var disposeDependencies = allGenerateSurfaceTrianglesJobHandle;
                                 for (int b = 0; b < treeBrushesArray.Length; b++)
                                 {
                                     var outputLoops = brushOutputLoops[b];
-                                    if (outputLoops == null)
+                                    if (!outputLoops.intersectionSurfaceInfos.IsCreated)
                                         continue;
                                     outputLoops.intersectionSurfaceInfos.Dispose(disposeDependencies);
                                     outputLoops.intersectionEdges.Dispose(disposeDependencies);
@@ -409,6 +410,7 @@ namespace Chisel.Core
                                     outputLoops.vertexSoup.Dispose(disposeDependencies);
                                 }
                             }
+                            Profiler.EndSample();
                             brushOutputLoops.Clear();
                         }
                         finally { Profiler.EndSample(); }
@@ -1243,4 +1245,4 @@ namespace Chisel.Core
         #endregion
     }
 #endif
-        }
+}

@@ -475,7 +475,6 @@ namespace Chisel.Core
                                               MeshQuery[] meshQueries,
                                               VertexChannelFlags vertexChannelMask)
         {
-            Debug.Log("CombineSubMeshes");
             var subMeshCounts = treeInfo.subMeshCounts;
             subMeshCounts.Clear();
 
