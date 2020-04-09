@@ -111,7 +111,7 @@ namespace Chisel.Core
 
                 // TODO: why are we doing this in tree-space? better to do this in brush-space, then we can more easily cache this
                 var surfaceIndex            = s;
-                var surfaceLayers           = basePolygonsBlob.Value.surfaces[surfaceIndex].surfaceInfo.layers;
+                var surfaceLayers           = basePolygonsBlob.Value.surfaces[surfaceIndex].layers;
                 var surfaceWorldPlane       = brushWorldPlanesBlob.Value.worldPlanes[surfaceIndex];
                 var UV0		                = basePolygonsBlob.Value.surfaces[surfaceIndex].UV0;
                 var localSpaceToPlaneSpace	= MathExtensions.GenerateLocalToPlaneSpaceMatrix(surfaceWorldPlane);

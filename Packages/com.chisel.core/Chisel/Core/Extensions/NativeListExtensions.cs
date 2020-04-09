@@ -156,7 +156,7 @@ namespace Chisel.Core
         }
 
         public static bool Contains<T>(this NativeListArray<T>.NativeList array, T item)
-            where T : struct, IEquatable<T>
+            where T : unmanaged, IEquatable<T>
         {
             for (int index = 0; index < array.Length; index++)
             {
@@ -177,7 +177,8 @@ namespace Chisel.Core
             return false;
         }
 
-        public static void* GetUnsafePtr<T>(this NativeListArray<T>.NativeList list) where T : struct
+        public static void* GetUnsafePtr<T>(this NativeListArray<T>.NativeList list) 
+            where T : unmanaged
         {
 #if ENABLE_UNITY_COLLECTIONS_CHECKS
             AtomicSafetyHandle.CheckWriteAndThrow(list.m_Safety);

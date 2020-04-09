@@ -254,15 +254,15 @@ namespace Chisel.Core
         public int                  brushNodeIndex;
         public ushort               basePlaneIndex;
         public CategoryGroupIndex   interiorCategory;
-        public SurfaceLayers        layers;
     }
 
     struct BasePolygon
     {
-        public SurfaceInfo  surfaceInfo;
-        public int          startEdgeIndex;
-        public int          endEdgeIndex;
-        public UVMatrix     UV0;
+        public SurfaceInfo      surfaceInfo;
+        public SurfaceLayers    layers;
+        public int              startEdgeIndex;
+        public int              endEdgeIndex;
+        public UVMatrix         UV0;
     }
 
     internal struct BasePolygonsBlob
@@ -333,11 +333,11 @@ namespace Chisel.Core
                 {
                     surfaceInfo = new SurfaceInfo()
                     {
-                        layers              = polygon.layerDefinition,
                         basePlaneIndex      = (ushort)p,
                         brushNodeIndex      = brushNodeIndex,
                         interiorCategory    = (CategoryGroupIndex)(int)CategoryIndex.ValidAligned,
                     },
+                    layers          = polygon.layerDefinition,
                     UV0             = polygon.UV0,
                     startEdgeIndex  = startEdgeIndex,
                     endEdgeIndex    = endEdgeIndex
@@ -374,8 +374,7 @@ namespace Chisel.Core
     public struct BrushIntersectionInfo
     {
         public int                               brushNodeIndex;
-        public BlobAssetReference<BrushMeshBlob> blobMesh;
-        public NodeTransformations               transformation;
+        public float4x4                          nodeToTreeSpace;
         public float4x4                          toOtherBrushSpace;
 
         public BlobArray<PlanePair>              usedPlanePairs;

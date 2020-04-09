@@ -18,6 +18,8 @@ namespace Chisel.Core
     [BurstCompile(CompileSynchronously = true)]
     unsafe struct PerformCSGJob : IJob
     {
+        const float kEpsilon = CSGManagerPerformCSG.kDistanceEpsilon;
+
         [NoAlias, ReadOnly] public int                                                              brushNodeIndex;
         [NoAlias, ReadOnly] public VertexSoup                                                       brushVertices;
         [NoAlias, ReadOnly] public NativeHashMap<int, BlobAssetReference<RoutingTable>>             routingTableLookup;
@@ -70,7 +72,7 @@ namespace Chisel.Core
 
             var values = uniqueEdges.GetKeyArray(Allocator.Temp);
             uniqueEdges.Dispose();
-            for (int v= 0;v<values.Length;v++)
+            for (int v = 0; v < values.Length;v++)
             {
                 var index = IndexOf(edges, values[v], out bool _);
                 if (index != -1)
@@ -99,8 +101,13 @@ namespace Chisel.Core
             inverted = false;
             return -1;
         }
-
-        public void IntersectLoopsJob(int surfaceLoopIndex, NativeListArray<Edge>.NativeList intersectionLoop, CategoryGroupIndex intersectionCategory, SurfaceInfo intersectionInfo, NativeListArray<int>.NativeList loopIndices, NativeListArray<int> holeIndices)
+        
+        public void IntersectLoopsJob(int                               surfaceLoopIndex, 
+                                      NativeListArray<Edge>.NativeList  intersectionLoop, 
+                                      CategoryGroupIndex                intersectionCategory, 
+                                      SurfaceInfo                       intersectionInfo, 
+                                      NativeListArray<int>.NativeList   loopIndices, 
+                                      NativeListArray<int>              holeIndices)
         {
             var currentLoopEdges    = allEdges[surfaceLoopIndex];
             var currentInfo         = allInfos[surfaceLoopIndex];
@@ -110,116 +117,150 @@ namespace Chisel.Core
             // but the same brush_intersection might be used by another categorized_loop and then we'd try to reroute it again, which wouldn't work
             //brush_intersection.interiorCategory = newHoleCategory;
 
-            var outEdges = new NativeList<Edge>(math.max(intersectionLoop.Length, currentLoopEdges.Length), Allocator.Temp);
+            if (intersectionLoop.Length == 0 ||
+                currentLoopEdges.Length == 0)
+                return;
 
-            var result = OperationResult.Fail;
-            var intersectEdgesJob = new IntersectEdgesJob
+            var maxLength       = math.max(intersectionLoop.Length, currentLoopEdges.Length);
+            if (maxLength < 3)
+                return;
+
+            int inside2 = 0, outside2 = 0;
+            var categories2     = stackalloc EdgeCategory[currentLoopEdges.Length];
+            var worldPlanes1    = brushWorldPlanes[intersectionInfo.brushNodeIndex];
+            for (int e = 0; e < currentLoopEdges.Length; e++)
             {
-                vertices = brushVertices,
-                edges1 = intersectionLoop,
-                edges2 = currentLoopEdges,
-                worldPlanes1 = brushWorldPlanes[intersectionInfo.brushNodeIndex],
-                worldPlanes2 = brushWorldPlanes[currentInfo.brushNodeIndex],
+                var category = BooleanEdgesUtility.CategorizeEdge(currentLoopEdges[e], ref worldPlanes1.Value.worldPlanes, intersectionLoop, brushVertices);
+                categories2[e] = category;
+                if      (category == EdgeCategory.Inside) inside2++;
+                else if (category == EdgeCategory.Outside) outside2++;
+            }
+            var aligned2 = currentLoopEdges.Length - (inside2 + outside2);
 
-                result = &result,
-                outEdges = outEdges
-            };
-            intersectEdgesJob.Execute();
-
-            // *somehow* put whats below in a job
-
-            if (result == OperationResult.Outside ||
-                result == OperationResult.Fail)
+            int inside1 = 0, outside1 = 0;
+            var categories1     = stackalloc EdgeCategory[intersectionLoop.Length];
+            var worldPlanes2    = brushWorldPlanes[currentInfo.brushNodeIndex];
+            for (int e = 0; e < intersectionLoop.Length; e++)
             {
-                outEdges.Dispose();
-            } else
-            if (result == OperationResult.Polygon2InsidePolygon1)
+                var category = BooleanEdgesUtility.CategorizeEdge(intersectionLoop[e], ref worldPlanes2.Value.worldPlanes, currentLoopEdges, brushVertices);
+                categories1[e] = category;
+                if      (category == EdgeCategory.Inside) inside1++;
+                else if (category == EdgeCategory.Outside) outside1++;
+            }
+            var aligned1 = intersectionLoop.Length - (inside1 + outside1);
+
+            // Completely outside
+            if ((inside1 + aligned1) == 0 && (aligned2 + inside2) == 0)
+                return;
+
+            if ((inside1 + (inside2 + aligned2)) < 3)
+                return;
+
+            // Completely aligned
+            if (((outside1 + inside1) == 0 && (outside2 + inside2) == 0) ||
+                // polygon1 edges Completely inside polygon2
+                (inside1 == 0 && outside2 == 0))
             {
-                // This new piece overrides the current loop
-                currentLoopEdges.Clear();
-                currentLoopEdges.AddRange(outEdges);
+                // New polygon overrides the existing polygon
                 currentInfo.interiorCategory = intersectionCategory;
                 allInfos[surfaceLoopIndex] = currentInfo;
-                outEdges.Dispose();
-            } else
-            if (result == OperationResult.Overlapping)
+                return; 
+            }
+            
+
+            var outEdges        = stackalloc Edge[maxLength];
+            var outEdgesLength  = 0;
+
+            // polygon2 edges Completely inside polygon1
+            if (outside1 == 0 && inside2 == 0)
             {
-                outEdges.Dispose();
-                currentInfo.interiorCategory = intersectionCategory;
-                allInfos[surfaceLoopIndex] = currentInfo;
-            } else
-            {
-                // FIXME: when brush_intersection and categorized_loop are grazing each other, 
-                //          technically we cut it but we shouldn't be creating it as a separate polygon + hole (bug7)
-
-                // the output of cutting operations are both holes for the original polygon (categorized_loop)
-                // and new polygons on the surface of the brush that need to be categorized
-                intersectionInfo.interiorCategory = intersectionCategory;
-                var intersectedHoleIndices = new NativeList<int>(Allocator.Temp);
-
-                // the output of cutting operations are both holes for the original polygon (categorized_loop)
-                // and new polygons on the surface of the brush that need to be categorized
-                if (currentHoleIndices.Capacity < currentHoleIndices.Length + 1)
-                    currentHoleIndices.Capacity = currentHoleIndices.Length + 1;
-
-                if (currentHoleIndices.Length > 0)
+                // polygon1 Completely inside polygon2
+                for (int n = 0; n < intersectionLoop.Length; n++)
                 {
-                    ref var brushIntersections = ref brushesTouchedByBrushes[currentInfo.brushNodeIndex].Value.brushIntersections;
-                    for (int h = 0; h < currentHoleIndices.Length; h++)
+                    outEdges[outEdgesLength] = intersectionLoop[n];
+                    outEdgesLength++;
+                }
+                //OperationResult.Polygon1InsidePolygon2;
+            } else
+            {
+                //int outEdgesLength = 0; // Can't read from outEdges.Length since it's marked as WriteOnly
+                for (int e = 0; e < intersectionLoop.Length; e++)
+                {
+                    var category = categories1[e];
+                    if (category == EdgeCategory.Inside)
                     {
-                        // Need to make a copy so we can edit it without causing side effects
-                        var holeIndex = currentHoleIndices[h];
-                        var holeEdges = allEdges[holeIndex];
-                        if (holeEdges.Length < 3)
-                            continue;
-
-                        var holeInfo        = allInfos[holeIndex];
-                        var holeBrushNodeID = holeInfo.brushNodeIndex + 1;
-
-                        // TODO: Optimize and make this a BlobAsset that's created in a pass,
-                        //       this BlobAsset must make it easy to quickly determine if two
-                        //       brushes intersect. Use this for both routing table generation 
-                        //       and loop merging.
-                        bool touches = false;
-                        for (int t = 0; t < brushIntersections.Length; t++)
-                        {
-                            if (brushIntersections[t].nodeIndex == holeBrushNodeID)
-                            {
-                                touches = true;
-                                break;
-                            }
-                        }
-
-                        // But only if they touch
-                        if (touches)
-                        {
-                            intersectedHoleIndices.Add(allEdges.Length);
-                            holeIndices.Add();
-                            allInfos.Add(holeInfo);
-                            allEdges.Add(holeEdges);
-                        }
+                        outEdges[outEdgesLength] = intersectionLoop[e];
+                        outEdgesLength++;
                     }
                 }
 
-                // TODO: Separate loop "shapes" from category/loop-hole hierarchy, 
-                //       so we can simply assign the same shape to a hole and loop without 
-                //       needing to copy data we can create a new shape when we modify it.
-
-                // this loop is a hole 
-                currentHoleIndices.Add(allEdges.Length);
-                holeIndices.Add();
-                allInfos.Add(intersectionInfo);
-                allEdges.Add(outEdges);
-
-                // but also a polygon on its own
-                loopIndices.Add(allEdges.Length);
-                holeIndices.Add(intersectedHoleIndices);
-                allInfos.Add(intersectionInfo);
-                allEdges.Add(outEdges);
-
-                intersectedHoleIndices.Dispose();
-                outEdges.Dispose();
+                for (int e = 0; e < currentLoopEdges.Length; e++)
+                {
+                    var category = categories2[e];
+                    if (category != EdgeCategory.Outside)
+                    {
+                        outEdges[outEdgesLength] = currentLoopEdges[e];
+                        outEdgesLength++;
+                    }
+                }
+                //OperationResult.Cut;
             }
+
+            // FIXME: when brush_intersection and categorized_loop are grazing each other, 
+            //          technically we cut it but we shouldn't be creating it as a separate polygon + hole (bug7)
+
+            // the output of cutting operations are both holes for the original polygon (categorized_loop)
+            // and new polygons on the surface of the brush that need to be categorized
+            intersectionInfo.interiorCategory = intersectionCategory;
+
+            var intersectedHoleIndices = stackalloc int[currentHoleIndices.Length];
+            var intersectedHoleIndicesLength = 0;
+
+            // the output of cutting operations are both holes for the original polygon (categorized_loop)
+            // and new polygons on the surface of the brush that need to be categorized
+            if (currentHoleIndices.Capacity < currentHoleIndices.Length + 1)
+                currentHoleIndices.Capacity = currentHoleIndices.Length + 1;
+
+            if (currentHoleIndices.Length > 0)
+            {
+                ref var brushesTouchedByBrush = ref brushesTouchedByBrushes[currentInfo.brushNodeIndex].Value;
+                ref var brushIntersections = ref brushesTouchedByBrushes[currentInfo.brushNodeIndex].Value.brushIntersections;
+                for (int h = 0; h < currentHoleIndices.Length; h++)
+                {
+                    // Need to make a copy so we can edit it without causing side effects
+                    var holeIndex = currentHoleIndices[h];
+                    var holeEdges = allEdges[holeIndex];
+                    if (holeEdges.Length < 3)
+                        continue;
+
+                    var holeInfo            = allInfos[holeIndex];
+                    var holeBrushNodeIndex  = holeInfo.brushNodeIndex;
+
+                    bool touches = brushesTouchedByBrush.Get(holeBrushNodeIndex) != IntersectionType.NoIntersection;
+                    
+                    // Only add if they touch
+                    if (touches)
+                    {
+                        intersectedHoleIndices[intersectedHoleIndicesLength] = allEdges.Length;
+                        intersectedHoleIndicesLength++;
+                        holeIndices.Add();
+                        allInfos.Add(holeInfo);
+                        allEdges.Add(holeEdges);
+                    }
+                }
+            }
+
+            // This loop is a hole 
+            currentHoleIndices.Add(allEdges.Length);
+            holeIndices.Add();
+            allInfos.Add(intersectionInfo);
+            allEdges.Add(outEdges, outEdgesLength);
+
+            // But also a polygon on its own
+            loopIndices.Add(allEdges.Length);
+            holeIndices.Add(intersectedHoleIndices, intersectedHoleIndicesLength);
+            allInfos.Add(intersectionInfo);
+            allEdges.Add(outEdges, outEdgesLength);
         }
 
         public void RemoveEmptyLoopsJob(NativeListArray<int>.NativeList loopIndices, NativeListArray<int> holeIndices)
@@ -248,7 +289,7 @@ namespace Chisel.Core
             }
         }
 
-        public void CleanUpJob(in NativeListArray<int>.NativeList loopIndices, NativeListArray<int> holeIndices)
+        public void CleanUp(in NativeListArray<int>.NativeList loopIndices, NativeListArray<int> holeIndices)
         {
             for (int l = loopIndices.Length - 1; l >= 0; l--)
             {
@@ -270,6 +311,7 @@ namespace Chisel.Core
                 var holeIndicesList = holeIndices[baseloopIndex];
                 if (holeIndicesList.Length == 0)
                     continue;
+
 
                 var baseLoopInfo    = allInfos[baseloopIndex];
                 
@@ -364,36 +406,66 @@ namespace Chisel.Core
                         planeOffset += planesLength;
                     }
 
-                    var destroyedEdges = new NativeArray<byte>(edgeOffset, Allocator.Temp);
+                    var destroyedEdges = stackalloc byte[edgeOffset];
                     {
                         {
-                            var subtractEdgesJob = new SubtractEdgesJob()
+                            var segment1 = allSegments[holeIndicesList.Length];
+                            for (int j = 0; j < holeIndicesList.Length; j++)
                             {
-                                vertices            = brushVertices,
-                                segmentIndex        = holeIndicesList.Length,
-                                destroyedEdges      = destroyedEdges,
-                                allWorldPlanes      = allWorldPlanes,
-                                allSegments         = allSegments,
-                                allEdges            = allCombinedEdges
-                            };
-                            for (int j=0;j< holeIndicesList.Length;j++)
-                                subtractEdgesJob.Execute(j);
+                                var segment2 = allSegments[j];
+
+                                if (segment1.edgeLength == 0 ||
+                                    segment2.edgeLength == 0)
+                                    continue;
+
+                                for (int e = 0; e < segment1.edgeLength; e++)
+                                {
+                                    var category = BooleanEdgesUtility.CategorizeEdge(allCombinedEdges[segment1.edgeOffset + e], allWorldPlanes, allCombinedEdges, segment2, brushVertices);
+                                    if (category == EdgeCategory.Outside || category == EdgeCategory.Aligned)
+                                        continue;
+                                    destroyedEdges[segment1.edgeOffset + e] = 1;
+                                }
+
+                                for (int e = 0; e < segment2.edgeLength; e++)
+                                {
+                                    var category = BooleanEdgesUtility.CategorizeEdge(allCombinedEdges[segment2.edgeOffset + e], allWorldPlanes, allCombinedEdges, segment1, brushVertices);
+                                    if (category == EdgeCategory.Inside)
+                                        continue;
+                                    destroyedEdges[segment2.edgeOffset + e] = 1;
+                                }
+                            }
                         }
 
                         // TODO: optimize, keep track which holes (potentially) intersect
                         // TODO: create our own bounds data structure that doesn't use stupid slow properties for everything
                         {
-                            var mergeEdgesJob = new MergeEdgesJob()
-                            {
-                                vertices            = brushVertices,
-                                segmentCount        = holeIndicesList.Length,
-                                destroyedEdges      = destroyedEdges,
-                                allWorldPlanes      = allWorldPlanes,
-                                allSegments         = allSegments,
-                                allEdges            = allCombinedEdges
-                            };
                             for (int j = 0, length = GeometryMath.GetTriangleArraySize(holeIndicesList.Length); j < length; j++)
-                                mergeEdgesJob.Execute(j);
+                            {
+                                var arrayIndex = GeometryMath.GetTriangleArrayIndex(j, holeIndicesList.Length);
+                                var segmentIndex1 = arrayIndex.x;
+                                var segmentIndex2 = arrayIndex.y;
+                                var segment1 = allSegments[segmentIndex1];
+                                var segment2 = allSegments[segmentIndex2];
+                                if (segment1.edgeLength > 0 && segment2.edgeLength > 0)
+                                {
+                                    for (int e = 0; e < segment1.edgeLength; e++)
+                                    {
+                                        var category = BooleanEdgesUtility.CategorizeEdge(allCombinedEdges[segment1.edgeOffset + e], allWorldPlanes, allCombinedEdges, segment2, brushVertices);
+                                        if (category == EdgeCategory.Outside ||
+                                            category == EdgeCategory.Aligned)
+                                            continue;
+                                        destroyedEdges[segment1.edgeOffset + e] = 1;
+                                    }
+
+                                    for (int e = 0; e < segment2.edgeLength; e++)
+                                    {
+                                        var category = BooleanEdgesUtility.CategorizeEdge(allCombinedEdges[segment2.edgeOffset + e], allWorldPlanes, allCombinedEdges, segment1, brushVertices);
+                                        if (category == EdgeCategory.Outside)
+                                            continue;
+                                        destroyedEdges[segment2.edgeOffset + e] = 1;
+                                    }
+                                }
+                            }
                         }
 
                         {
@@ -419,7 +491,6 @@ namespace Chisel.Core
                             }
                         }
                     }
-                    destroyedEdges.Dispose();
                 }
                 allWorldPlanes  .Dispose();
                 allSegments     .Dispose();
@@ -462,16 +533,17 @@ namespace Chisel.Core
                 return;
             }
 
-            ref var nodes                   = ref routingTable.Value.nodes;
-            ref var routingLookups          = ref routingTable.Value.routingLookups;
-                
-            var surfaceCount                = basePolygonEdges.Length;
+            ref var nodes               = ref routingTable.Value.nodes;
+            ref var routingLookups      = ref routingTable.Value.routingLookups;
+            ref var routingTableNodes   = ref routingTable.Value.nodes;
 
-            NativeListArray<Edge>       intersectionLoops;
-            NativeArray<SurfaceInfo>    intersectionSurfaceInfo;
+            var surfaceCount            = basePolygonEdges.Length;
+
+            var intersectionSurfaceInfo = stackalloc SurfaceInfo[routingTableNodes.Length * surfaceCount]; ;
+            var intersectionLoops       = new NativeListArray<Edge>(16, Allocator.Temp);
+            intersectionLoops.ResizeExact(routingTableNodes.Length * surfaceCount);
+
             {
-                ref var routingTableNodes = ref routingTable.Value.nodes;
-
                 var nodeIDtoIndex = new NativeHashMap<int, int>(routingTableNodes.Length, Allocator.Temp);
                 for (int i = 0; i < routingTableNodes.Length; i++)
                     nodeIDtoIndex[routingTableNodes[i]] = i;
@@ -481,9 +553,6 @@ namespace Chisel.Core
                 //       Have segment list to determine which part of array belong to which brushNodeID
                 //       Don't need bottom part, can determine this in Job
 
-                intersectionLoops           = new NativeListArray<Edge>(16, Allocator.Temp);
-                intersectionSurfaceInfo     = new NativeArray<SurfaceInfo>(routingTableNodes.Length * surfaceCount, Allocator.Temp);
-                intersectionLoops.ResizeExact(routingTableNodes.Length * surfaceCount);
                 for (int i = 0; i < intersectionSurfaceInfos.Length; i++)
                 {
                     var surfaceInfo = intersectionSurfaceInfos[i];
@@ -575,12 +644,11 @@ namespace Chisel.Core
             }
 
             intersectionLoops.Dispose();
-            intersectionSurfaceInfo.Dispose();
 
             for (int surfaceIndex = 0; surfaceIndex < surfaceLoopIndices.Length; surfaceIndex++)
             {
                 var loopIndices = surfaceLoopIndices[surfaceIndex];
-                CleanUpJob(in loopIndices, holeIndices);
+                CleanUp(in loopIndices, holeIndices);
             }
 
             holeIndices.Dispose();

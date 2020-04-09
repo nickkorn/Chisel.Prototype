@@ -46,9 +46,9 @@ namespace Chisel.Core
     [BurstCompile(CompileSynchronously = true)]
     public unsafe struct FindAllIntersectionLoopsJob : IJobParallelFor
     {
-        const float kPlaneDistanceEpsilon = CSGManagerPerformCSG.kPlaneDistanceEpsilon;
-        const float kDistanceEpsilon = CSGManagerPerformCSG.kDistanceEpsilon;
-        const float kNormalEpsilon = CSGManagerPerformCSG.kNormalEpsilon;
+        const float kPlaneDistanceEpsilon   = CSGManagerPerformCSG.kPlaneDistanceEpsilon;
+        const float kDistanceEpsilon        = CSGManagerPerformCSG.kDistanceEpsilon;
+        const float kNormalEpsilon          = CSGManagerPerformCSG.kNormalEpsilon;
 
         [NoAlias, ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushWorldPlanes>> brushWorldPlanes;
         [NoAlias, ReadOnly] public NativeArray<BlobAssetReference<BrushPairIntersection>> intersectingBrushes;
@@ -244,16 +244,17 @@ namespace Chisel.Core
                                              NativeList<PlaneVertexIndexPair> foundIndices0,
                                              NativeList<PlaneVertexIndexPair> foundIndices1)
         {
-            for (int j = 0; j < intersectingPlanes0.Length; j++)
+            for (int i = 0; i < usedPlanePairs1.Length; i++)
             {
-                var plane2 = intersectingPlanes0[j];
-                for (int i = 0; i < usedPlanePairs1.Length; i++)
+                var planePair   = usedPlanePairs1[i];
+                var edgeVertex0 = planePair.edgeVertex0;
+                var edgeVertex1 = planePair.edgeVertex1;
+                var plane0      = planePair.plane0;
+                var plane1      = planePair.plane1;
+
+                for (int j = 0; j < intersectingPlanes0.Length; j++)
                 {
-                    var planePair = usedPlanePairs1[i];
-
-                    var edgeVertex0 = planePair.edgeVertex0;
-                    var edgeVertex1 = planePair.edgeVertex1;
-
+                    var plane2 = intersectingPlanes0[j];
                     if (math.abs(math.dot(plane2, edgeVertex0)) < kDistanceEpsilon &&
                         math.abs(math.dot(plane2, edgeVertex1)) < kDistanceEpsilon)
                     {
@@ -261,8 +262,6 @@ namespace Chisel.Core
                         continue;
                     }
 
-                    var plane0 = planePair.plane0;
-                    var plane1 = planePair.plane1;
                     var localVertex = new float4(PlaneExtensions.Intersection(plane2, plane0, plane1), 1);
 
                     // TODO: since we're using a pair in the outer loop, we could also determine which 
@@ -456,7 +455,7 @@ namespace Chisel.Core
                                              ref intersectionAsset.Value.brushes[1].localSpacePlanes0,
                                              ref intersectionAsset.Value.brushes[1].usedPlanePairs,
                                              ref intersectionAsset.Value.brushes[0].localSpacePlaneIndices0,
-                                             intersectionAsset.Value.brushes[0].transformation.nodeToTree,
+                                             intersectionAsset.Value.brushes[0].nodeToTreeSpace,
                                              vertexSoup0,
                                              vertexSoup1,
                                              foundIndices0,
@@ -469,7 +468,7 @@ namespace Chisel.Core
                                              ref intersectionAsset.Value.brushes[0].localSpacePlanes0,
                                              ref intersectionAsset.Value.brushes[0].usedPlanePairs,
                                              ref intersectionAsset.Value.brushes[1].localSpacePlaneIndices0,
-                                             intersectionAsset.Value.brushes[0].transformation.nodeToTree,
+                                             intersectionAsset.Value.brushes[0].nodeToTreeSpace,
                                              vertexSoup1,
                                              vertexSoup0,
                                              foundIndices1,
@@ -485,7 +484,7 @@ namespace Chisel.Core
                                    ref intersectionAsset.Value.brushes[0].localSpacePlaneIndices0,
                                    ref intersectionAsset.Value.brushes[0].localSpacePlanes0,
                                    ref intersectionAsset.Value.brushes[1].localSpacePlanes0,
-                                   intersectionAsset.Value.brushes[0].transformation.nodeToTree,
+                                   intersectionAsset.Value.brushes[0].nodeToTreeSpace,
                                    float4x4.identity,
                                    vertexSoup0,
                                    foundIndices0);
@@ -499,7 +498,7 @@ namespace Chisel.Core
                                    ref intersectionAsset.Value.brushes[1].localSpacePlaneIndices0,
                                    ref intersectionAsset.Value.brushes[1].localSpacePlanes0,
                                    ref intersectionAsset.Value.brushes[0].localSpacePlanes0,
-                                   intersectionAsset.Value.brushes[1].transformation.nodeToTree,
+                                   intersectionAsset.Value.brushes[1].nodeToTreeSpace,
                                    intersectionAsset.Value.brushes[1].toOtherBrushSpace,
                                    vertexSoup1,
                                    foundIndices1);

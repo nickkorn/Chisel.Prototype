@@ -273,15 +273,13 @@ namespace Chisel.Core
             brushIntersections[0] = new BrushIntersectionInfo()
             {
                 brushNodeIndex      = brushNodeIndex0,
-                blobMesh            = blobMesh0,
-                transformation      = transformations0.Value,
+                nodeToTreeSpace    = transformations0.Value.nodeToTree,
                 toOtherBrushSpace   = node0ToNode1
             };
             brushIntersections[1] = new BrushIntersectionInfo()
             {
                 brushNodeIndex      = brushNodeIndex1,
-                blobMesh            = blobMesh1,
-                transformation      = transformations1.Value,
+                nodeToTreeSpace    = transformations1.Value.nodeToTree,
                 toOtherBrushSpace   = node1ToNode0
             };
 
@@ -325,8 +323,7 @@ namespace Chisel.Core
                 {
                     interiorCategory    = (CategoryGroupIndex)CategoryIndex.Inside,
                     basePlaneIndex      = (ushort)i,
-                    brushNodeIndex      = brushNodeIndex1,
-                    layers              = mesh0.polygons[i].layerDefinition
+                    brushNodeIndex      = brushNodeIndex1
                 };
             }
             for (int i = 0; i < surfaceInfos1.Length; i++)
@@ -335,8 +332,7 @@ namespace Chisel.Core
                 {
                     interiorCategory    = (CategoryGroupIndex)CategoryIndex.Inside,
                     basePlaneIndex      = (ushort)i,
-                    brushNodeIndex      = brushNodeIndex0,
-                    layers              = mesh1.polygons[i].layerDefinition
+                    brushNodeIndex      = brushNodeIndex0
                 };
             }
 

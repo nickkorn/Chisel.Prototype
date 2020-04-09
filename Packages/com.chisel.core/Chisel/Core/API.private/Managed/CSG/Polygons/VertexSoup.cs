@@ -96,7 +96,7 @@ namespace Chisel.Core
     // TODO: make this safely writable in parallel / maybe check out NativeMultiHashMap? 
     //       write multiple vertices -> combine? but what about indices? seperate vertex generation from getting indices?
     [NativeContainer]
-    public unsafe struct VertexSoup : IDisposable
+    public unsafe struct VertexSoup : IDisposable, IDisposableJob
     {
         public const ushort     kMaxVertexCount = 65000;
         internal const uint     kHashTableSize  = 509u;

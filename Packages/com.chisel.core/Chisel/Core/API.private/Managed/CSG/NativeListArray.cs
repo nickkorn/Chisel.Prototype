@@ -238,12 +238,16 @@ namespace Chisel.Core
             return prevLength;
         }
     }
+    interface IDisposableJob
+    {
+        JobHandle Dispose(JobHandle handle);
+    }
     
     [NativeContainer]
     [StructLayout(LayoutKind.Sequential)]
     [DebuggerDisplay("Length = {Length}")]
-    public unsafe struct NativeListArray<T> : IDisposable
-        where T : struct
+    public unsafe struct NativeListArray<T> : IDisposable, IDisposableJob
+        where T : unmanaged
     {
 #if ENABLE_UNITY_COLLECTIONS_CHECKS
         internal AtomicSafetyHandle m_Safety;
@@ -340,6 +344,28 @@ namespace Chisel.Core
             {
                 var dstList = new NativeList(m_Array->Ptr[index], ref m_Safety);
                 dstList.AddRange(other);
+            }
+            return index;
+        }
+
+        public unsafe int Add(T* otherPtr, int otherLength)
+        {
+#if ENABLE_UNITY_COLLECTIONS_CHECKS
+            AtomicSafetyHandle.CheckWriteAndBumpSecondaryVersion(m_Safety);
+#endif
+            var index = m_Array->AllocateItem();
+            var ptr = m_Array->Ptr[index];
+            if (ptr == null ||
+                !ptr->IsCreated)
+            {
+                ptr = m_Array->InitializeIndex(index, UnsafeUtility.SizeOf<T>(), UnsafeUtility.AlignOf<T>(), otherLength);
+                var dstList = new NativeList(m_Array->Ptr[index], ref m_Safety);
+                dstList.AddRangeNoResize(otherPtr, otherLength);
+            }
+            else
+            {
+                var dstList = new NativeList(m_Array->Ptr[index], ref m_Safety);
+                dstList.AddRange(otherPtr, otherLength);
             }
             return index;
         }
@@ -733,7 +759,7 @@ namespace Chisel.Core.LowLevel.Unsafe
 {
     public unsafe static class NativeArrayListUnsafeUtility
     {
-        public static void* GetUnsafePtr<T>(this NativeListArray<T>.NativeList list) where T : struct
+        public static void* GetUnsafePtr<T>(this NativeListArray<T>.NativeList list) where T : unmanaged
         {
 #if ENABLE_UNITY_COLLECTIONS_CHECKS
             AtomicSafetyHandle.CheckWriteAndThrow(list.m_Safety);
@@ -741,7 +767,7 @@ namespace Chisel.Core.LowLevel.Unsafe
             return list.m_ListData->Ptr;
         }
 
-        public static unsafe void* GetUnsafeReadOnlyPtr<T>(this NativeListArray<T>.NativeList list) where T : struct
+        public static unsafe void* GetUnsafeReadOnlyPtr<T>(this NativeListArray<T>.NativeList list) where T : unmanaged
         {
 #if ENABLE_UNITY_COLLECTIONS_CHECKS
             AtomicSafetyHandle.CheckReadAndThrow(list.m_Safety);
@@ -750,19 +776,19 @@ namespace Chisel.Core.LowLevel.Unsafe
         }
 
 #if ENABLE_UNITY_COLLECTIONS_CHECKS
-        public static AtomicSafetyHandle GetAtomicSafetyHandle<T>(ref NativeListArray<T>.NativeList list) where T : struct
+        public static AtomicSafetyHandle GetAtomicSafetyHandle<T>(ref NativeListArray<T>.NativeList list) where T : unmanaged
         {
             return list.m_Safety;
         }
 #endif
 
-        public static void* GetInternalListDataPtrUnchecked<T>(ref NativeListArray<T>.NativeList list) where T : struct
+        public static void* GetInternalListDataPtrUnchecked<T>(ref NativeListArray<T>.NativeList list) where T : unmanaged
         {
             return list.m_ListData;
         }
 
 
-        public static void AddRange<T>(this NativeList<T> dst, in NativeListArray<T>.NativeList list) where T : struct
+        public static void AddRange<T>(this NativeList<T> dst, in NativeListArray<T>.NativeList list) where T : unmanaged
         {
             var offset = dst.Length;
             dst.ResizeUninitialized(offset + list.Length);
