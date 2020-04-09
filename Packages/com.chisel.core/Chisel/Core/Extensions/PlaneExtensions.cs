@@ -10,7 +10,7 @@ namespace Chisel.Core
         public static readonly float3 NanFloat3 = new float3(float.NaN, float.NaN, float.NaN);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static float3 Intersection(double4 inPlane1, double4 inPlane2, double4 inPlane3)
+        public static float3 Intersection(float4 inPlane1, float4 inPlane2, float4 inPlane3)
         {
 #if false
             var N0 = inPlane2.wzyx * inPlane3.yxwz - inPlane2.yxwz * inPlane3.wzyx;

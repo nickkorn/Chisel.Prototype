@@ -14,6 +14,16 @@ using Unity.Entities;
 
 namespace Chisel.Core
 {
+    public struct PlanePair
+    {
+        public float4 plane0;
+        public float4 plane1;
+        public float4 edgeVertex0;
+        public float4 edgeVertex1;
+        public int planeIndex0;
+        public int planeIndex1;
+    }
+
     [BurstCompile(CompileSynchronously = true)]
     struct FindBrushPairsJob : IJob
     {
@@ -311,33 +321,21 @@ namespace Chisel.Core
             var surfaceInfos1 = builder.Allocate(ref brushIntersections[1].surfaceInfos, mesh1.localPlanes.Length);
             for (int i = 0; i < surfaceInfos0.Length; i++)
             {
-                var localPlaneVector = mesh0.localPlanes[i];
-                var worldPlaneVector = math.mul(inverseNodeToTreeSpaceMatrix0, localPlaneVector);
-                var length = math.length(worldPlaneVector.xyz);
-                worldPlaneVector /= length;
-
                 surfaceInfos0[i] = new SurfaceInfo()
                 {
                     interiorCategory    = (CategoryGroupIndex)CategoryIndex.Inside,
-                    basePlaneIndex      = i,
+                    basePlaneIndex      = (ushort)i,
                     brushNodeIndex      = brushNodeIndex1,
-                    worldPlane          = worldPlaneVector,
                     layers              = mesh0.polygons[i].layerDefinition
                 };
             }
             for (int i = 0; i < surfaceInfos1.Length; i++)
             {
-                var localPlaneVector = mesh1.localPlanes[i];
-                var worldPlaneVector = math.mul(inverseNodeToTreeSpaceMatrix1, localPlaneVector);
-                var length = math.length(worldPlaneVector.xyz);
-                worldPlaneVector /= length;
-
                 surfaceInfos1[i] = new SurfaceInfo()
                 {
                     interiorCategory    = (CategoryGroupIndex)CategoryIndex.Inside,
-                    basePlaneIndex      = i,
+                    basePlaneIndex      = (ushort)i,
                     brushNodeIndex      = brushNodeIndex0,
-                    worldPlane          = worldPlaneVector,
                     layers              = mesh1.polygons[i].layerDefinition
                 };
             }
@@ -395,7 +393,7 @@ namespace Chisel.Core
                         {
                             if (vertexUsedPtr[i] == 0)
                                 continue;
-                            usedVertices[n] = vertexUsedPtr[i] - 1;
+                            usedVertices[n] = mesh0.vertices[vertexUsedPtr[i] - 1];
                             n++;
                         }
                     }
@@ -415,7 +413,7 @@ namespace Chisel.Core
                         {
                             if (vertexUsedPtr[i] == 0)
                                 continue;
-                            usedVertices[n] = vertexUsedPtr[i] - 1;
+                            usedVertices[n] = mesh1.vertices[vertexUsedPtr[i] - 1];
                             n++;
                         }
                     }

@@ -73,9 +73,7 @@ namespace Chisel.Core
         [NoAlias] public VertexSoup           vertexSoup; // <-- TODO: we're reading AND writing to the same NativeList!?!?!
         [NoAlias] public NativeList<Edge>     edges;
 
-        // TODO: do this in separate loop so we don't need to rely on pointers to make this work
-        [NativeDisableUnsafePtrRestriction] public AABB* aabb;
-        [WriteOnly] [NativeDisableUnsafePtrRestriction] public float4* worldPlane;
+        public AABB aabb;
 
         public void Execute()
         {
@@ -91,8 +89,8 @@ namespace Chisel.Core
 
             vertexSoup.Reserve(indexCount); // ensure we have at least this many extra vertices in capacity
 
-            var min = aabb->min;
-            var max = aabb->max;
+            var min = aabb.min;
+            var max = aabb.max;
 
             // TODO: put in job so we can burstify this, maybe join with RemoveIdenticalIndicesJob & IsDegenerate?
             for (int e = firstEdge; e < lastEdge; e++)
@@ -131,14 +129,8 @@ namespace Chisel.Core
 
             if (edges.Length > 0)
             {
-                aabb->min = min;
-                aabb->max = max;
-
-                localPlane = math.mul(nodeToTreeSpaceInvertedTransposedMatrix, localPlane);
-                var length = math.length(localPlane.xyz);
-                if (length > 0)
-                    localPlane /= length;
-                *worldPlane = localPlane;
+                aabb.min = min;
+                aabb.max = max;
             }
         }
     }

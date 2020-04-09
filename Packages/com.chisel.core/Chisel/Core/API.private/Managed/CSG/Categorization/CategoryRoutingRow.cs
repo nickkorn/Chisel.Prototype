@@ -14,7 +14,7 @@ using UnityEngine;
 namespace Chisel.Core
 {
 #if USE_MANAGED_CSG_IMPLEMENTATION
-    public enum CategoryGroupIndex : int
+    public enum CategoryGroupIndex : short
     {
         First = 0,
         Invalid = -1

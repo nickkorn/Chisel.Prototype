@@ -411,7 +411,7 @@ namespace Poly2Tri
 
 
 
-        public void TriangulateLoops(SurfaceInfo loopInfo, quaternion rotation, in NativeListArray<Chisel.Core.Edge>.NativeList inputEdges, NativeList<int> triangleIndices)
+        public void TriangulateLoops(quaternion rotation, float3 right, float3 forward, in NativeListArray<Chisel.Core.Edge>.NativeList inputEdges, NativeList<int> triangleIndices)
         {
             triangleIndices.Clear();
             this.rotation = rotation;
@@ -507,7 +507,6 @@ namespace Poly2Tri
             children.ResizeExact(foundLoops.Count);
 
 
-            MathExtensions.CalculateTangents(loopInfo.worldPlane.xyz, out float3 right, out float3 forward);
             for (int l1 = foundLoops.Count - 1; l1 >= 0; l1--)
             {
                 if (foundLoops[l1].Count == 0)

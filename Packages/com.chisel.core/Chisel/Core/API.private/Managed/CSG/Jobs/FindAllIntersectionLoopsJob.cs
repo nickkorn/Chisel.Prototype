@@ -15,7 +15,34 @@ using ReadOnlyAttribute = Unity.Collections.ReadOnlyAttribute;
 
 namespace Chisel.Core
 {
-#if USE_MANAGED_CSG_IMPLEMENTATION
+#if USE_MANAGED_CSG_IMPLEMENTATION    
+    public struct BrushSurfacePair : IEquatable<BrushSurfacePair>
+    {
+        public int brushNodeIndex0;
+        public int brushNodeIndex1;
+        public int basePlaneIndex;
+
+        #region Equals
+        public bool Equals(BrushSurfacePair other)
+        {
+            return (brushNodeIndex0 == other.brushNodeIndex0 && brushNodeIndex1 == other.brushNodeIndex1 && basePlaneIndex == other.basePlaneIndex);
+        }
+
+        public override bool Equals(object obj)
+        {
+            if (!(obj is BrushSurfacePair))
+                return false;
+            return base.Equals((BrushSurfacePair)obj);
+        }
+        #endregion
+
+        public override int GetHashCode()
+        {
+            return (int)math.hash(new int3(brushNodeIndex0, brushNodeIndex1, basePlaneIndex));
+        }
+    }
+
+
     [BurstCompile(CompileSynchronously = true)]
     public unsafe struct FindAllIntersectionLoopsJob : IJobParallelFor
     {
@@ -33,17 +60,32 @@ namespace Chisel.Core
         {
             public int Compare(PlaneVertexIndexPair x, PlaneVertexIndexPair y)
             {
-                if (x.planeIndex < y.planeIndex)
-                    return -1;
-                if (x.planeIndex > y.planeIndex ||
-                    x.vertexIndex > y.vertexIndex)
+                if (x.planeIndex > y.planeIndex)
                     return 1;
-                if (x.vertexIndex < y.vertexIndex)
-                    return -1;
-                return 0;
+                if (x.planeIndex == y.planeIndex)
+                {
+                    if (x.vertexIndex == y.vertexIndex)
+                        return 0;
+                    if (x.vertexIndex < y.vertexIndex)
+                        return 1;
+                }
+                return -1;
             }
         }
-        
+
+        struct PlaneVertexIndexPair
+        {
+            public ushort planeIndex;
+            public ushort vertexIndex;
+        }
+
+        struct PlaneIndexOffsetLength
+        {
+            public ushort length;
+            public ushort offset;
+            public ushort planeIndex;
+        }
+
         #region Sort
         static float3 FindPolygonCentroid(float3* vertices, ushort* indices, int offset, int indicesCount)
         {
@@ -157,8 +199,7 @@ namespace Chisel.Core
         }
         #endregion
 
-        static void FindInsideVertices(ref BlobArray<int>       usedVertices0, 
-                                       ref BlobArray<float3>    allVertices0, 
+        static void FindInsideVertices(ref BlobArray<float3>    usedVertices0,  
                                        ref BlobArray<int>       intersectingPlaneIndices0, 
                                        ref BlobArray<float4>    intersectingPlanes0, 
                                        ref BlobArray<float4>    intersectingPlanes1,
@@ -169,13 +210,12 @@ namespace Chisel.Core
         {
             for (int j = 0; j < usedVertices0.Length; j++)
             {
-                var vertexIndex1 = usedVertices0[j];
-                var brushVertex1 = new float4(allVertices0[vertexIndex1], 1);
-                var localVertex1 = math.mul(vertexToLocal0, brushVertex1);
+                var brushVertex1 = usedVertices0[j];
+                var localVertex1 = math.mul(vertexToLocal0, new float4(brushVertex1, 1));
                 if (CSGManagerPerformCSG.IsOutsidePlanes(ref intersectingPlanes1, localVertex1))
                     continue;
                     
-                var worldVertex = math.mul(nodeToTreeSpaceMatrix0, brushVertex1);
+                var worldVertex = math.mul(nodeToTreeSpaceMatrix0, new float4(brushVertex1, 1));
                 var worldVertexIndex = -1;
 
                 // TODO: optimize this, we already know these vertices are ON the planes of this brush, just not which: this can be precalculated
@@ -211,90 +251,45 @@ namespace Chisel.Core
                 {
                     var planePair = usedPlanePairs1[i];
 
+                    var edgeVertex0 = planePair.edgeVertex0;
+                    var edgeVertex1 = planePair.edgeVertex1;
+
+                    if (math.abs(math.dot(plane2, edgeVertex0)) < kDistanceEpsilon &&
+                        math.abs(math.dot(plane2, edgeVertex1)) < kDistanceEpsilon)
+                    {
+                        // plane2 is aligned with edge, so we skip it
+                        continue;
+                    }
+
                     var plane0 = planePair.plane0;
                     var plane1 = planePair.plane1;
+                    var localVertex = new float4(PlaneExtensions.Intersection(plane2, plane0, plane1), 1);
 
-                    // FIXME: Fix situation when plane intersects edge but is not identical to either planes of the edge ...
-                    if (!(math.abs(plane0.w - plane2.w) < kPlaneDistanceEpsilon && math.dot(plane0.xyz, plane2.xyz) > kNormalEpsilon) &&
-                        !(math.abs(plane1.w - plane2.w) < kPlaneDistanceEpsilon && math.dot(plane1.xyz, plane2.xyz) > kNormalEpsilon) &&
+                    // TODO: since we're using a pair in the outer loop, we could also determine which 
+                    //       2 planes it intersects at both ends and just check those two planes ..
 
-                        !(math.abs(plane0.w + plane2.w) < kPlaneDistanceEpsilon && math.dot(plane0.xyz, plane2.xyz) < -kNormalEpsilon) &&
-                        !(math.abs(plane1.w + plane2.w) < kPlaneDistanceEpsilon && math.dot(plane1.xyz, plane2.xyz) < -kNormalEpsilon))
+                    // NOTE: for brush2, the intersection will always be only on two planes
+                    //       UNLESS it's a corner vertex along that edge (we can compare to the two vertices)
+                    //       in which case we could use a pre-calculated list of planes ..
+                    //       OR when the intersection is outside of the edge ..
+
+
+                    if (!CSGManagerPerformCSG.IsOutsidePlanes(ref intersectingPlanes0, localVertex) &&
+                        !CSGManagerPerformCSG.IsOutsidePlanes(ref intersectingPlanes1, localVertex))
                     {
-#if true
-                        var edgeVertex0 = planePair.edgeVertex0;
-                        var edgeVertex1 = planePair.edgeVertex1;
+                        var planeIndex0 = (ushort)planePair.planeIndex0;
+                        var planeIndex1 = (ushort)planePair.planeIndex1;
+                        var planeIndex2 = (ushort)intersectingPlaneIndices0[j];
 
-                        // Fixes situation when plane intersects edge but is not identical to either planes of the edge ...
-                        if (math.abs(math.dot(plane2, edgeVertex0)) < kDistanceEpsilon)
-                        {
-                            if (math.abs(math.dot(plane2, edgeVertex1)) < kDistanceEpsilon)
-                            {
-                                // plane2 is aligned with edge, so we ignore this
-                                continue;
-                            }
-                            // FAILS
-                            /*
-                            // plane2 goes straight through vertex0, don't need to calculate intersection
-                            // but actually make sure it's not outside the brush that plane2 belongs to
-                            if (!CSGManagerPerformCSG.IsOutsidePlanes(intersectingPlanes0, edgeVertex0))
-                            {
-                                var worldVertex = math.mul(nodeToTreeSpaceMatrix0, edgeVertex0).xyz;
-                                foundVertices.Write(new VertexAndPlanePair()
-                                {
-                                    vertex = worldVertex,
-                                    plane0 = (ushort)planePair.planeIndex0,
-                                    plane1 = (ushort)planePair.planeIndex1
-                                });
-                            }*/
-                        }
-                        // FAILS
-                        /* else
-                        if (math.abs(math.dot(plane2, edgeVertex1)) < kPlaneDistanceEpsilon)
-                        {
-                            // plane2 goes straight through vertex1, don't need to calculate intersection
-                            // but actually make sure it's not outside the brush that plane2 belongs to
-                            if (!CSGManagerPerformCSG.IsOutsidePlanes(intersectingPlanes0, edgeVertex1))
-                            {
-                                var worldVertex = math.mul(nodeToTreeSpaceMatrix0, edgeVertex1).xyz;
-                                foundVertices.Write(new VertexAndPlanePair()
-                                {
-                                    vertex = worldVertex,
-                                    plane0 = (ushort)planePair.planeIndex0,
-                                    plane1 = (ushort)planePair.planeIndex1
-                                });
-                            }
-                        }*/
-#endif
-
-                        var localVertex = new float4(PlaneExtensions.Intersection(plane2, plane0, plane1), 1);
-
-                        // TODO: since we're using a pair in the outer loop, we could also determine which 
-                        //       2 planes it intersects at both ends and just check those two planes ..
-
-                        // NOTE: for brush2, the intersection will always be only on two planes
-                        //       UNLESS it's a corner vertex along that edge (we can compare to the two vertices)
-                        //       in which case we could use a pre-calculated list of planes ..
-                        //       OR when the intersection is outside of the edge ..
-
+                        // TODO: should be having a Loop for each plane that intersects this vertex, and add that vertex 
+                        //       to ensure they are identical
                         var worldVertex = math.mul(nodeToTreeSpaceMatrix0, localVertex).xyz;
+                        var vertexIndex1 = vertexSoup0.AddNoResize(worldVertex);
+                        var vertexIndex2 = vertexSoup1.AddNoResize(worldVertex);
 
-                        if (!CSGManagerPerformCSG.IsOutsidePlanes(ref intersectingPlanes1, localVertex) &&
-                            !CSGManagerPerformCSG.IsOutsidePlanes(ref intersectingPlanes0, localVertex))
-                        {
-                            var planeIndex0 = (ushort)planePair.planeIndex0;
-                            var planeIndex1 = (ushort)planePair.planeIndex1;
-                            var planeIndex2 = (ushort)intersectingPlaneIndices0[j];
-
-                            // TODO: should be having a Loop for each plane that intersects this vertex, and add that vertex 
-                            //       to ensure they are identical
-                            var vertexIndex1 = vertexSoup0.AddNoResize(worldVertex);
-                            var vertexIndex2 = vertexSoup1.AddNoResize(worldVertex);
-
-                            foundIndices0.AddNoResize(new PlaneVertexIndexPair() { planeIndex = planeIndex2, vertexIndex = vertexIndex1 });
-                            foundIndices1.AddNoResize(new PlaneVertexIndexPair() { planeIndex = planeIndex0, vertexIndex = vertexIndex2 });
-                            foundIndices1.AddNoResize(new PlaneVertexIndexPair() { planeIndex = planeIndex1, vertexIndex = vertexIndex2 });
-                        }
+                        foundIndices0.AddNoResize(new PlaneVertexIndexPair() { planeIndex = planeIndex2, vertexIndex = vertexIndex1 });
+                        foundIndices1.AddNoResize(new PlaneVertexIndexPair() { planeIndex = planeIndex0, vertexIndex = vertexIndex2 });
+                        foundIndices1.AddNoResize(new PlaneVertexIndexPair() { planeIndex = planeIndex1, vertexIndex = vertexIndex2 });
                     }
                 }
             }
@@ -311,7 +306,7 @@ namespace Chisel.Core
         {
             var planeIndexOffsetsLength = 0;
             var planeIndexOffsets       = stackalloc PlaneIndexOffsetLength[foundIndices0.Length];
-            var uniqueIndicesLength     = 0; // Cannot 'read' from uniqueIndices.Length here while writing
+            var uniqueIndicesLength     = 0;
             var uniqueIndices           = stackalloc ushort[foundIndices0.Length];
                 
                 
@@ -453,54 +448,54 @@ namespace Chisel.Core
             //       same when two planes overlap each other ...
 
             // Now find all the intersection vertices
-            if (intersection.type == IntersectionType.Intersection &&
-                brushPairIntersection1.usedPlanePairs.Length > 0)
-            {
-                FindIntersectionVertices(ref intersectionAsset.Value.brushes[0].localSpacePlanes0,
-                                         ref intersectionAsset.Value.brushes[1].localSpacePlanes0,
-                                         ref intersectionAsset.Value.brushes[1].usedPlanePairs,
-                                         ref intersectionAsset.Value.brushes[0].localSpacePlaneIndices0,
-                                         intersectionAsset.Value.brushes[0].transformation.nodeToTree,
-                                         vertexSoup0,
-                                         vertexSoup1,
-                                         foundIndices0,
-                                         foundIndices1);
+            if (intersection.type == IntersectionType.Intersection)
+            { 
+                if (brushPairIntersection1.usedPlanePairs.Length > 0)
+                {
+                    FindIntersectionVertices(ref intersectionAsset.Value.brushes[0].localSpacePlanes0,
+                                             ref intersectionAsset.Value.brushes[1].localSpacePlanes0,
+                                             ref intersectionAsset.Value.brushes[1].usedPlanePairs,
+                                             ref intersectionAsset.Value.brushes[0].localSpacePlaneIndices0,
+                                             intersectionAsset.Value.brushes[0].transformation.nodeToTree,
+                                             vertexSoup0,
+                                             vertexSoup1,
+                                             foundIndices0,
+                                             foundIndices1);
+                }
+
+                if (brushPairIntersection0.usedPlanePairs.Length > 0)
+                {
+                    FindIntersectionVertices(ref intersectionAsset.Value.brushes[1].localSpacePlanes0,
+                                             ref intersectionAsset.Value.brushes[0].localSpacePlanes0,
+                                             ref intersectionAsset.Value.brushes[0].usedPlanePairs,
+                                             ref intersectionAsset.Value.brushes[1].localSpacePlaneIndices0,
+                                             intersectionAsset.Value.brushes[0].transformation.nodeToTree,
+                                             vertexSoup1,
+                                             vertexSoup0,
+                                             foundIndices1,
+                                             foundIndices0);
+                }
             }
 
-            if (intersection.type == IntersectionType.Intersection &&
-                brushPairIntersection0.usedPlanePairs.Length > 0)
-            {
-                FindIntersectionVertices(ref intersectionAsset.Value.brushes[1].localSpacePlanes0,
-                                         ref intersectionAsset.Value.brushes[0].localSpacePlanes0,
-                                         ref intersectionAsset.Value.brushes[0].usedPlanePairs,
-                                         ref intersectionAsset.Value.brushes[1].localSpacePlaneIndices0,
-                                         intersectionAsset.Value.brushes[0].transformation.nodeToTree,
-                                         vertexSoup1,
-                                         vertexSoup0,
-                                         foundIndices1,
-                                         foundIndices0);
-            }
-
-            // Find all vertices of brush1 that are inside brush2, and put their intersections into the appropriate loops
+            // Find all vertices of brush0 that are inside brush1, and put their intersections into the appropriate loops
             if (foundIndices0.Length > 0 &&
                 brushPairIntersection0.usedVertices.Length > 0)
             {
                 FindInsideVertices(ref intersectionAsset.Value.brushes[0].usedVertices,
-                                    ref intersectionAsset.Value.brushes[0].blobMesh.Value.vertices,
-                                    ref intersectionAsset.Value.brushes[0].localSpacePlaneIndices0,
-                                    ref intersectionAsset.Value.brushes[0].localSpacePlanes0,
-                                    ref intersectionAsset.Value.brushes[1].localSpacePlanes0,
-                                    intersectionAsset.Value.brushes[0].transformation.nodeToTree,
-                                    float4x4.identity,
-                                    vertexSoup0,
-                                    foundIndices0);
+                                   ref intersectionAsset.Value.brushes[0].localSpacePlaneIndices0,
+                                   ref intersectionAsset.Value.brushes[0].localSpacePlanes0,
+                                   ref intersectionAsset.Value.brushes[1].localSpacePlanes0,
+                                   intersectionAsset.Value.brushes[0].transformation.nodeToTree,
+                                   float4x4.identity,
+                                   vertexSoup0,
+                                   foundIndices0);
             }
 
+            // Find all vertices of brush1 that are inside brush0, and put their intersections into the appropriate loops
             if (foundIndices1.Length > 0 && 
                 brushPairIntersection1.usedVertices.Length > 0)
             {
                 FindInsideVertices(ref intersectionAsset.Value.brushes[1].usedVertices,
-                                   ref intersectionAsset.Value.brushes[1].blobMesh.Value.vertices,
                                    ref intersectionAsset.Value.brushes[1].localSpacePlaneIndices0,
                                    ref intersectionAsset.Value.brushes[1].localSpacePlanes0,
                                    ref intersectionAsset.Value.brushes[0].localSpacePlanes0,

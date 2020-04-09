@@ -119,11 +119,13 @@ namespace Chisel.Core
 
                 // Ensure we have the rotation properly calculated, and have a valid normal
                 quaternion rotation;
-                if (((Vector3)surfaceWorldPlane.xyz) == Vector3.forward)
+                float3 normal = surfaceWorldPlane.xyz;
+                if (((Vector3)normal) == Vector3.forward)
                     rotation = quaternion.identity;
                 else
-                    rotation = (quaternion)Quaternion.FromToRotation(surfaceWorldPlane.xyz, Vector3.forward);
+                    rotation = (quaternion)Quaternion.FromToRotation(normal, Vector3.forward);
 
+                MathExtensions.CalculateTangents(normal, out float3 right, out float3 forward);
 
                 surfaceIndexList.Clear();
 
@@ -140,8 +142,9 @@ namespace Chisel.Core
 
 
 
+
                     var surfaceIndicesArray = new NativeList<int>(Allocator.Temp);
-                    context.TriangulateLoops(loopInfo, rotation, loopEdges, surfaceIndicesArray);
+                    context.TriangulateLoops(rotation, right, forward, loopEdges, surfaceIndicesArray);
 
 
 
@@ -196,7 +199,8 @@ namespace Chisel.Core
 
                 var surfaceNormals = stackalloc float3[surfaceVerticesCount];
                 {
-                    var normal = (interiorCategory == CategoryIndex.ValidReverseAligned || interiorCategory == CategoryIndex.ReverseAligned) ? -surfaceWorldPlane.xyz : surfaceWorldPlane.xyz;
+                    if (interiorCategory == CategoryIndex.ValidReverseAligned || interiorCategory == CategoryIndex.ReverseAligned)
+                        normal = -normal;
                     for (int i = 0; i < surfaceVerticesCount; i++)
                         surfaceNormals[i] = normal;
                 }

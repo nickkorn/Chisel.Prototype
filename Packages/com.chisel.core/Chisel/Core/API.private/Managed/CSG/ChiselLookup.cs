@@ -249,6 +249,13 @@ namespace Chisel.Core
         }
     };
 
+    public struct SurfaceInfo
+    {
+        public int                  brushNodeIndex;
+        public ushort               basePlaneIndex;
+        public CategoryGroupIndex   interiorCategory;
+        public SurfaceLayers        layers;
+    }
 
     struct BasePolygon
     {
@@ -276,8 +283,6 @@ namespace Chisel.Core
             var min = new float3(float.PositiveInfinity, float.PositiveInfinity, float.PositiveInfinity);
             var max = new float3(float.NegativeInfinity, float.NegativeInfinity, float.NegativeInfinity);
 
-            var aabb = new AABB();
-
             var edges           = new NativeList<Edge>(Allocator.Temp);
             var surfaces        = new NativeList<BasePolygon>(Allocator.Temp);
             var vertexSoup      = new VertexSoup(vertices.Length, Allocator.Temp);
@@ -298,7 +303,6 @@ namespace Chisel.Core
                 if (polygonEdges.Capacity < indexCount)
                     polygonEdges.Capacity = indexCount;
                 
-                float4 worldPlane = float4.zero;
                 // THEORY: can end up with duplicate vertices when close enough vertices are snapped together
                 var copyPolygonToIndicesJob = new CopyPolygonToIndicesJob // TODO: we're reading AND writing to the same NativeList!?!?!
                 {
@@ -307,15 +311,12 @@ namespace Chisel.Core
                     nodeToTreeSpaceMatrix                   = nodeToTreeSpaceMatrix,
                     nodeToTreeSpaceInvertedTransposedMatrix = nodeToTreeSpaceInvertedTransposedMatrix,
                     vertexSoup                              = vertexSoup,
-                    edges                                   = polygonEdges,
-
-                    aabb                                    = &aabb,
-
-                    worldPlane                              = &worldPlane
+                    edges                                   = polygonEdges
                 };
 
                 // TODO: inline this into this job
-                copyPolygonToIndicesJob.Execute(); 
+                copyPolygonToIndicesJob.Execute();
+                var aabb = copyPolygonToIndicesJob.aabb;
 
                 if (polygonEdges.Length == 0)
                     continue;
@@ -332,9 +333,8 @@ namespace Chisel.Core
                 {
                     surfaceInfo = new SurfaceInfo()
                     {
-                        worldPlane          = worldPlane,
                         layers              = polygon.layerDefinition,
-                        basePlaneIndex      = p,
+                        basePlaneIndex      = (ushort)p,
                         brushNodeIndex      = brushNodeIndex,
                         interiorCategory    = (CategoryGroupIndex)(int)CategoryIndex.ValidAligned,
                     },
@@ -378,11 +378,11 @@ namespace Chisel.Core
         public NodeTransformations               transformation;
         public float4x4                          toOtherBrushSpace;
 
-        public BlobArray<int>                    localSpacePlaneIndices0;   // planes in local space of >brush0<
-        public BlobArray<float4>                 localSpacePlanes0;         // planes in local space of >brush0<
-
         public BlobArray<PlanePair>              usedPlanePairs;
-        public BlobArray<int>                    usedVertices;
+        public BlobArray<float4>                 localSpacePlanes0;         // planes in local space of >brush0<
+        public BlobArray<int>                    localSpacePlaneIndices0;   // planes indices of >brush0<
+
+        public BlobArray<float3>                 usedVertices;
         public BlobArray<SurfaceInfo>            surfaceInfos;
     }
     
