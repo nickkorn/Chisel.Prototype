@@ -113,6 +113,26 @@ namespace Chisel.Core
             public JobHandle generateSurfaceTrianglesJobHandle;
         }
 
+        struct TreeSorter : IComparer<TreeUpdate>
+        {
+            public int Compare(TreeUpdate x, TreeUpdate y)
+            {
+                var xBrushBrushIntersectionsCount = x.brushBrushIntersections.Count();
+                var yBrushBrushIntersectionsCount = y.brushBrushIntersections.Count();
+                if (xBrushBrushIntersectionsCount < yBrushBrushIntersectionsCount)
+                    return 1;
+                if (xBrushBrushIntersectionsCount > yBrushBrushIntersectionsCount)
+                    return -1;
+
+                if (x.modifiedTreeBrushIndices.Length < y.modifiedTreeBrushIndices.Length)
+                    return 1;
+                if (x.modifiedTreeBrushIndices.Length > y.modifiedTreeBrushIndices.Length)
+                    return -1;
+
+                return x.treeNodeIndex - y.treeNodeIndex;
+            }
+        }
+
         internal static JobHandle UpdateTreeMeshes(int[] treeNodeIDs)
         {
             var finalJobHandle = default(JobHandle);
@@ -308,6 +328,14 @@ namespace Chisel.Core
             }
             Profiler.EndSample();
 
+
+            // Sort trees from largest to smallest
+            var treeSorter = new TreeSorter();
+            Array.Sort(treeUpdates, treeSorter);
+
+            Profiler.BeginSample("Jobified");
+
+
             // TODO: should only do this once at creation time, part of brushMeshBlob? store with brush component itself
             Profiler.BeginSample("GenerateBasePolygonLoops");
             try
@@ -317,7 +345,7 @@ namespace Chisel.Core
                     ref var treeUpdate  = ref treeUpdates[t];
                     if (treeUpdate.baseMeshUpdateIndices.Length > 0)
                     {
-                        var createBlobPolygonsBlobs = new CreateBlobPolygonsBlobs
+                        var createBlobPolygonsBlobs = new CreateBlobPolygonsBlobs //time=32.26ms
                         {
                             // Read
                             treeBrushIndices    = treeUpdate.baseMeshUpdateIndices,
@@ -327,7 +355,7 @@ namespace Chisel.Core
                             // Write
                             basePolygons        = treeUpdate.basePolygons.AsParallelWriter()
                         };
-                        treeUpdate.generateBasePolygonLoopsJobHandle = createBlobPolygonsBlobs.Schedule(treeUpdate.baseMeshUpdateIndices.Length, 64);
+                        treeUpdate.generateBasePolygonLoopsJobHandle = createBlobPolygonsBlobs.Schedule(treeUpdate.baseMeshUpdateIndices.Length, 16);
                     }
                 }
             }
@@ -343,7 +371,7 @@ namespace Chisel.Core
                 {
                     ref var treeUpdate = ref treeUpdates[t];
                     var treeNodeIndex = treeUpdate.treeNodeIndex;
-                    var findAllIntersectionsJob = new FindAllIntersectionsJob
+                    var findAllIntersectionsJob = new FindAllIntersectionsJob//time=3.20ms
                     {
                         // Read
                         treeBrushIndices    = treeUpdate.allTreeBrushIndices,
@@ -362,7 +390,7 @@ namespace Chisel.Core
                 {
                     ref var treeUpdate = ref treeUpdates[t];
                     var treeNodeIndex = treeUpdate.treeNodeIndex;
-                    var storeBrushIntersectionsJob = new StoreBrushIntersectionsJob
+                    var storeBrushIntersectionsJob = new StoreBrushIntersectionsJob//time=88.79ms
                     {
                         // Read
                         treeNodeIndex           = treeNodeIndex,
@@ -373,7 +401,7 @@ namespace Chisel.Core
                         // Write
                         brushesTouchedByBrushes = treeUpdate.brushesTouchedByBrushes.AsParallelWriter()
                     };
-                    treeUpdate.findIntersectingBrushesJobHandle = storeBrushIntersectionsJob.Schedule(treeUpdate.allTreeBrushIndices.Length, 64, treeUpdate.findAllIntersectionsJobHandle);
+                    treeUpdate.findIntersectingBrushesJobHandle = storeBrushIntersectionsJob.Schedule(treeUpdate.allTreeBrushIndices.Length, 16, treeUpdate.findAllIntersectionsJobHandle);
                 }
             } finally { Profiler.EndSample(); }
 
@@ -387,7 +415,7 @@ namespace Chisel.Core
                     ref var treeUpdate = ref treeUpdates[t];
                     var treeNodeIndex = treeUpdate.treeNodeIndex;
                     // TODO: optimize, only do this when necessary
-                    var createBrushWorldPlanesJob = new CreateBrushWorldPlanesJob
+                    var createBrushWorldPlanesJob = new CreateBrushWorldPlanesJob//time=82.51ms
                     {
                         // Read
                         treeBrushIndices        = treeUpdate.allTreeBrushIndices,
@@ -397,7 +425,7 @@ namespace Chisel.Core
                         // Write
                         brushWorldPlanes        = treeUpdate.brushWorldPlanes.AsParallelWriter()
                     };
-                    treeUpdate.updateBrushWorldPlanesJobHandle   = createBrushWorldPlanesJob.Schedule(treeUpdate.allTreeBrushIndices.Length, 64);
+                    treeUpdate.updateBrushWorldPlanesJobHandle   = createBrushWorldPlanesJob.Schedule(treeUpdate.allTreeBrushIndices.Length, 16);
                 }
             } finally { Profiler.EndSample(); }
 
@@ -410,7 +438,7 @@ namespace Chisel.Core
                     ref var treeUpdate = ref treeUpdates[t];
                     var treeNodeIndex = treeUpdate.treeNodeIndex;
                     // Build categorization trees for brushes
-                    var createRoutingTableJob = new CreateRoutingTableJob
+                    var createRoutingTableJob = new CreateRoutingTableJob//time=608.59ms
                     {
                         // Read
                         treeBrushIndices        = treeUpdate.allTreeBrushIndices,
@@ -420,7 +448,7 @@ namespace Chisel.Core
                         // Write
                         routingTableLookup      = treeUpdate.routingTableLookup.AsParallelWriter()
                     };
-                    treeUpdate.updateBrushCategorizationTablesJobHandle = createRoutingTableJob.Schedule(treeUpdate.allTreeBrushIndices.Length, 64, treeUpdate.findIntersectingBrushesJobHandle);
+                    treeUpdate.updateBrushCategorizationTablesJobHandle = createRoutingTableJob.Schedule(treeUpdate.allTreeBrushIndices.Length, 16, treeUpdate.findIntersectingBrushesJobHandle);
                 }
             } finally { Profiler.EndSample(); }
                                 
@@ -432,7 +460,7 @@ namespace Chisel.Core
                 {
                     ref var treeUpdate = ref treeUpdates[t];
                     var treeNodeIndex = treeUpdate.treeNodeIndex;
-                    var findBrushPairsJob = new FindBrushPairsJob
+                    var findBrushPairsJob = new FindBrushPairsJob//?
                     {
                         // Read
                         maxPairs                = treeUpdate.triangleArraySize,
@@ -449,7 +477,7 @@ namespace Chisel.Core
                 {
                     ref var treeUpdate = ref treeUpdates[t];
                     var treeNodeIndex = treeUpdate.treeNodeIndex;
-                    var prepareBrushPairIntersectionsJob = new PrepareBrushPairIntersectionsJob
+                    var prepareBrushPairIntersectionsJob = new PrepareBrushPairIntersectionsJob//time=244.06ms
                     {
                         // Read
                         uniqueBrushPairs        = treeUpdate.uniqueBrushPairs.AsDeferredJobArray(),
@@ -459,14 +487,14 @@ namespace Chisel.Core
                         // Write
                         intersectingBrushes     = treeUpdate.intersectingBrushes.AsParallelWriter()
                     };
-                    treeUpdate.prepareBrushPairIntersectionsJobHandle = prepareBrushPairIntersectionsJob.Schedule(treeUpdate.triangleArraySize, 64, treeUpdate.findBrushPairsJobHandle);
+                    treeUpdate.prepareBrushPairIntersectionsJobHandle = prepareBrushPairIntersectionsJob.Schedule(treeUpdate.triangleArraySize, 16, treeUpdate.findBrushPairsJobHandle);
                 }
 
                 for (int t = 0; t < treeUpdateLength; t++)
                 {
                     ref var treeUpdate = ref treeUpdates[t];
                     var treeNodeIndex = treeUpdate.treeNodeIndex;
-                    var findAllIntersectionLoopsJob = new FindAllIntersectionLoopsJob
+                    var findAllIntersectionLoopsJob = new FindAllIntersectionLoopsJob//time=1569ms
                     {
                         // Read
                         brushWorldPlanes        = treeUpdate.brushWorldPlanes,
@@ -492,7 +520,7 @@ namespace Chisel.Core
                     for (int index = 0; index < treeUpdate.allTreeBrushIndices.Length; index++)
                     {
                         var outputLoops = treeUpdate.brushOutputLoops[index];
-                        var findLoopOverlapIntersectionsJob = new FindLoopOverlapIntersectionsJob
+                        var findLoopOverlapIntersectionsJob = new FindLoopOverlapIntersectionsJob//time=312.02ms
                         {
                             // Read
                             index                       = index,
@@ -516,6 +544,7 @@ namespace Chisel.Core
             }
             finally { Profiler.EndSample(); }
 
+            Profiler.BeginSample("PerformCSGJob");
             for (int t = 0; t < treeUpdateLength; t++)
             {
                 ref var treeUpdate = ref treeUpdates[t];
@@ -525,7 +554,6 @@ namespace Chisel.Core
                 // TODO: determine when a brush is completely inside another brush
                 //		 (might not have any intersection loops)
 
-                Profiler.BeginSample("PerformCSGJob");
                 for (int b = 0; b < treeUpdate.allTreeBrushIndices.Length; b++)
                 {
                     var brushNodeIndex  = treeUpdate.allTreeBrushIndices[b];
@@ -533,7 +561,7 @@ namespace Chisel.Core
                     ref var outputLoops     = ref treeUpdate.brushOutputLoops[b];
                     ref var outputLoops2    = ref treeUpdate.brushOutputLoops2[b];
                         
-                    var performCSGJob = new PerformCSGJob
+                    var performCSGJob = new PerformCSGJob//time=1753.ms
                     {
                         // Read
                         brushNodeIndex              = brushNodeIndex,
@@ -554,10 +582,16 @@ namespace Chisel.Core
                     };
                     outputLoops2.performAllCSGJobHandle = performCSGJob.Schedule(treeUpdate.performCSGJobDependenciesJobHandle);
                 }
-                Profiler.EndSample();
+            }
+            Profiler.EndSample();
+
+            Profiler.BeginSample("GenerateSurfaceTrianglesJob");
+            for (int t = 0; t < treeUpdateLength; t++)
+            {
+                ref var treeUpdate = ref treeUpdates[t];
+
 
                 // TODO: Cache the output surface meshes, only update when necessary
-                Profiler.BeginSample("GenerateSurfaceTrianglesJob");
                 for (int b = 0; b < treeUpdate.allTreeBrushIndices.Length; b++)
                 {
                     var brushNodeIndex  = treeUpdate.allTreeBrushIndices[b];
@@ -566,7 +600,7 @@ namespace Chisel.Core
                     ref var outputLoops2        = ref treeUpdate.brushOutputLoops2[b];
                     var surfaceRenderBuffers    = treeUpdate.surfaceRenderBuffers[brushNodeIndex];
 
-                    var generateSurfaceRenderBuffers = new GenerateSurfaceTrianglesJob
+                    var generateSurfaceRenderBuffers = new GenerateSurfaceTrianglesJob//time=1615.84ms
                     {
                         // Read
                         brushNodeIndex          = brushNodeIndex,
@@ -584,8 +618,8 @@ namespace Chisel.Core
                     outputLoops2.generateSurfaceTrianglesJobHandle = generateSurfaceRenderBuffers.Schedule(outputLoops2.performAllCSGJobHandle);
                     treeUpdate.allGenerateSurfaceTrianglesJobHandle = JobHandle.CombineDependencies(outputLoops2.generateSurfaceTrianglesJobHandle, treeUpdate.allGenerateSurfaceTrianglesJobHandle);
                 }
-                Profiler.EndSample();
             }
+            Profiler.EndSample();
 
             // Reset the flags before the dispose of these containers are scheduled
             for (int t = 0; t < treeUpdateLength; t++)
@@ -615,7 +649,11 @@ namespace Chisel.Core
                 }
             }
 
+            Profiler.EndSample();
+
+            Profiler.BeginSample("Complete");
             finalJobHandle.Complete();
+            Profiler.EndSample();
 
             Profiler.BeginSample("BrushOutputLoopsDispose");
             {
@@ -628,11 +666,11 @@ namespace Chisel.Core
                         var outputLoops = treeUpdate.brushOutputLoops[b];
                         if (!outputLoops.intersectionSurfaceInfos.IsCreated)
                             continue;
-                        outputLoops.intersectionSurfaceInfos.Dispose(disposeJobHandle);
-                        outputLoops.intersectionEdges       .Dispose(disposeJobHandle);
-                        outputLoops.basePolygonSurfaceInfos .Dispose(disposeJobHandle);
-                        outputLoops.basePolygonEdges        .Dispose(disposeJobHandle);
-                        outputLoops.vertexSoup              .Dispose(disposeJobHandle);
+                        outputLoops.intersectionSurfaceInfos.Dispose();//disposeJobHandle);
+                        outputLoops.intersectionEdges       .Dispose();//disposeJobHandle);
+                        outputLoops.basePolygonSurfaceInfos .Dispose();//disposeJobHandle);
+                        outputLoops.basePolygonEdges        .Dispose();//disposeJobHandle);
+                        outputLoops.vertexSoup              .Dispose();//disposeJobHandle);
                     } 
                     treeUpdate.brushOutputLoops = null;
                     
@@ -640,20 +678,20 @@ namespace Chisel.Core
                     {
                         ref var outputLoops2 = ref treeUpdate.brushOutputLoops2[b];
 
-                        outputLoops2.surfaceLoopIndices  .Dispose(disposeJobHandle);
-                        outputLoops2.allInfos            .Dispose(disposeJobHandle);
-                        outputLoops2.allEdges            .Dispose(disposeJobHandle);
+                        outputLoops2.surfaceLoopIndices  .Dispose();//disposeJobHandle);
+                        outputLoops2.allInfos            .Dispose();//disposeJobHandle);
+                        outputLoops2.allEdges            .Dispose();//disposeJobHandle);
                     }
                     treeUpdate.brushOutputLoops2 = null;
 
-                    treeUpdate.brushMeshLookup          .Dispose(disposeJobHandle);                     
-                    treeUpdate.allTreeBrushIndices      .Dispose(disposeJobHandle);
-                    treeUpdate.modifiedTreeBrushIndices .Dispose(disposeJobHandle);                    
-                    treeUpdate.baseMeshUpdateIndices    .Dispose(disposeJobHandle);
-                    treeUpdate.brushBrushIntersections  .Dispose(disposeJobHandle);
-                    treeUpdate.uniqueBrushPairs         .Dispose(disposeJobHandle);
-                    treeUpdate.intersectionLoopBlobs    .Dispose(disposeJobHandle);
-                    treeUpdate.intersectingBrushes      .Dispose(disposeJobHandle);
+                    treeUpdate.brushMeshLookup          .Dispose();//disposeJobHandle);                     
+                    treeUpdate.allTreeBrushIndices      .Dispose();//disposeJobHandle);
+                    treeUpdate.modifiedTreeBrushIndices .Dispose();//disposeJobHandle);                    
+                    treeUpdate.baseMeshUpdateIndices    .Dispose();//disposeJobHandle);
+                    treeUpdate.brushBrushIntersections  .Dispose();//disposeJobHandle);
+                    treeUpdate.uniqueBrushPairs         .Dispose();//disposeJobHandle);
+                    treeUpdate.intersectionLoopBlobs    .Dispose();//disposeJobHandle);
+                    treeUpdate.intersectingBrushes      .Dispose();//disposeJobHandle);
                 }
             }
             Profiler.EndSample();
