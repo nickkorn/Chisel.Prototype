@@ -18,10 +18,10 @@ namespace Chisel.Core
     [BurstCompile(CompileSynchronously = true)]
     unsafe struct PerformCSGJob : IJob
     {
-        const float kEpsilon = CSGManagerPerformCSG.kDistanceEpsilon;
+        //const float kEpsilon = CSGManagerPerformCSG.kDistanceEpsilon;
 
-        [NoAlias, ReadOnly] public int                                                              index;
-        [NoAlias, ReadOnly] public NativeArray<int>                                                 treeBrushNodeIndices;
+        [NoAlias, ReadOnly] public int                                                              brushNodeIndex;
+        //[NoAlias, ReadOnly] public NativeArray<int>                                               treeBrushNodeIndices;
         [NoAlias, ReadOnly] public NativeHashMap<int, BlobAssetReference<RoutingTable>>             routingTableLookup;
         [NoAlias, ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushWorldPlanes>>         brushWorldPlanes;
         [NoAlias, ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushesTouchedByBrush>>    brushesTouchedByBrushes;
@@ -30,8 +30,9 @@ namespace Chisel.Core
         [NoAlias, ReadOnly] public NativeList<SurfaceInfo>  intersectionSurfaceInfos;
         [NoAlias, ReadOnly] public NativeListArray<Edge>    intersectionEdges;
 
-        [NoAlias] public NativeList<SurfaceInfo>            basePolygonSurfaceInfos;    // <-- should be readonly?
-        [NoAlias] public NativeListArray<Edge>              basePolygonEdges;           // <-- should be readonly?
+        [NoAlias, ReadOnly] public int                      surfaceCount;
+        [NoAlias, ReadOnly] public NativeList<SurfaceInfo>  basePolygonSurfaceInfos;
+        [NoAlias, ReadOnly] public NativeListArray<Edge>    basePolygonEdges;
 
         [NoAlias] public NativeListArray<int>               surfaceLoopIndices;
         [NoAlias] public NativeList<SurfaceInfo>            allInfos;
@@ -527,9 +528,9 @@ namespace Chisel.Core
 
         public void Execute()
         {
-            int brushNodeIndex = treeBrushNodeIndices[index];
+            //int brushNodeIndex = treeBrushNodeIndices[index];
 
-            if (basePolygonSurfaceInfos.Length == 0)
+            if (surfaceCount == 0)
                 return;
 
 
@@ -542,8 +543,6 @@ namespace Chisel.Core
             ref var nodes               = ref routingTableRef.Value.nodes;
             ref var routingLookups      = ref routingTableRef.Value.routingLookups;
             ref var routingTableNodes   = ref routingTableRef.Value.nodes;
-
-            var surfaceCount            = basePolygonEdges.Length;
 
             var intersectionSurfaceInfo = stackalloc SurfaceInfo[routingTableNodes.Length * surfaceCount]; ;
             var intersectionLoops       = new NativeListArray<Edge>(0, Allocator.Temp);

@@ -655,7 +655,7 @@ namespace Chisel.Core
 
             public void AddRangeNoResize(NativeListArray<T>.NativeList list)
             {
-                AddRangeNoResize(list.GetUnsafePtr(), list.Length);
+                AddRangeNoResize(list.GetUnsafeReadOnlyPtr(), list.Length);
             }
 
             public void Add(T value)

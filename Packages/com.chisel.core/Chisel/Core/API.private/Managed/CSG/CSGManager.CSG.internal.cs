@@ -111,6 +111,7 @@ namespace Chisel.Core
             [NoAlias] public NativeList<SurfaceInfo>  basePolygonSurfaceInfos;
             [NoAlias] public NativeListArray<Edge>    basePolygonEdges;
             [NoAlias] public VertexSoup               vertexSoup;
+            [NoAlias] public int surfaceCount;
         }
 
         public struct BrushOutputLoops2
@@ -239,15 +240,6 @@ namespace Chisel.Core
                 }
                 Profiler.EndSample();
 
-                // TODO: optimize, only do this when necessary
-                Profiler.BeginSample("Tag_UpdateBrushTransformations");//time=2.69ms
-                {
-                    for (int i = 0; i < allTreeBrushIndices.Length; i++)
-                    {
-                        UpdateNodeTransformation(ref transformations, allTreeBrushIndices[i]);
-                    }
-                }
-                Profiler.EndSample();
 
                 Profiler.BeginSample("Tag_DirtyAllOutlines");
                 {
@@ -257,6 +249,15 @@ namespace Chisel.Core
                         var brushInfo = CSGManager.nodeHierarchies[brushNodeIndex].brushInfo;
                         brushInfo.brushOutlineGeneration++;
                         brushInfo.brushOutlineDirty = true;
+                    }
+                }
+                Profiler.EndSample();
+                // TODO: optimize, only do this when necessary
+                Profiler.BeginSample("Tag_UpdateBrushTransformations");//time=2.69ms
+                {
+                    for (int i = 0; i < allTreeBrushIndices.Length; i++)
+                    {
+                        UpdateNodeTransformation(ref transformations, allTreeBrushIndices[i]);
                     }
                 }
                 Profiler.EndSample();
@@ -278,13 +279,14 @@ namespace Chisel.Core
                     var brushNodeIndex  = allTreeBrushIndices[index];
 
                     var basePolygonSurfaceInfos     = new NativeList<SurfaceInfo>(0, Allocator.TempJob);
-                    var basePolygonEdges            = new NativeListArray<Edge>(16, Allocator.TempJob);
+                    var basePolygonEdges            = new NativeListArray<Edge>(0, Allocator.TempJob);
                     var intersectionSurfaceInfos    = new NativeList<SurfaceInfo>(0, Allocator.TempJob);
-                    var intersectionEdges           = new NativeListArray<Edge>(16, Allocator.TempJob);
+                    var intersectionEdges           = new NativeListArray<Edge>(0, Allocator.TempJob);
                     var vertexSoup                  = new VertexSoup(2048, Allocator.TempJob);
 
                     brushOutputLoops[index] = new BrushOutputLoops
                     { 
+                        surfaceCount                = brushMeshLookup[brushNodeIndex].Value.polygons.Length,
                         basePolygonSurfaceInfos     = basePolygonSurfaceInfos,
                         basePolygonEdges            = basePolygonEdges,
                         intersectionSurfaceInfos    = intersectionSurfaceInfos,
@@ -579,8 +581,8 @@ namespace Chisel.Core
                     var performCSGJob = new PerformCSGJob//time=1171.83ms
                     {
                         // Read
-                        index                       = b,
-                        treeBrushNodeIndices        = treeUpdate.allTreeBrushIndices,
+                        brushNodeIndex              = treeUpdate.allTreeBrushIndices[b],
+                        //treeBrushNodeIndices        = treeUpdate.allTreeBrushIndices,
                         routingTableLookup          = treeUpdate.routingTableLookup,
                         brushWorldPlanes            = treeUpdate.brushWorldPlanes,
                         brushesTouchedByBrushes     = treeUpdate.brushesTouchedByBrushes,
@@ -588,6 +590,8 @@ namespace Chisel.Core
                         brushVertices               = outputLoops.vertexSoup,
                         intersectionEdges           = outputLoops.intersectionEdges,
                         intersectionSurfaceInfos    = outputLoops.intersectionSurfaceInfos,
+
+                        surfaceCount                = outputLoops.surfaceCount,
 
                         // Read / Write
                         basePolygonSurfaceInfos     = outputLoops.basePolygonSurfaceInfos,
@@ -597,7 +601,8 @@ namespace Chisel.Core
                         allInfos                    = outputLoops2.allInfos,
                         allEdges                    = outputLoops2.allEdges
                     };
-                    brushHandles.performAllCSGJobHandle = performCSGJob.Schedule(treeUpdate.performCSGJobDependenciesJobHandle);
+                    brushHandles.performAllCSGJobHandle = performCSGJob.Schedule(//brushOutputLoops[index].surfaceCount,64,
+                        treeUpdate.performCSGJobDependenciesJobHandle);
                 }
             }
             Profiler.EndSample();
