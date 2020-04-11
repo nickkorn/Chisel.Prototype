@@ -14,6 +14,7 @@ using Unity.Entities;
 using Unity.Jobs;
 using Unity.Mathematics;
 using UnityEngine;
+using Debug = UnityEngine.Debug;
 using ReadOnlyAttribute = Unity.Collections.ReadOnlyAttribute;
 
 namespace Chisel.Core
@@ -25,7 +26,6 @@ namespace Chisel.Core
         // TODO: measure the hash function and see how well it works
         const long kHashMagicValue = (long)1099511628211ul;
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static int GetHash(int3 index)
         {
             var hashCode = (uint)((index.y ^ ((index.x ^ index.z) * kHashMagicValue)) * kHashMagicValue);
@@ -34,7 +34,6 @@ namespace Chisel.Core
         }
         
         // Add but make the assumption we're not growing any list
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public unsafe static ushort AddNoResize(ushort* hashTable, UnsafeList* chainedIndices, UnsafeList* vertices, float3 vertex)
         {
             var centerIndex = new int3((int)(vertex.x / VertexSoup.kCellSize), (int)(vertex.y / VertexSoup.kCellSize), (int)(vertex.z / VertexSoup.kCellSize));
@@ -90,6 +89,123 @@ namespace Chisel.Core
                 return (ushort)newChainIndex;
             }
         }
+
+        // Add but make the assumption we're not growing any list
+        public unsafe static ushort AddNoResize(ushort* hashTable, ushort* chainedIndicesPtr, float3* verticesPtr, ref int verticesLength, float3 vertex)
+        {
+            var centerIndex = new int3((int)(vertex.x / VertexSoup.kCellSize), (int)(vertex.y / VertexSoup.kCellSize), (int)(vertex.z / VertexSoup.kCellSize));
+            var offsets = stackalloc int3[]
+            {
+                new int3(-1, -1, -1), new int3(-1, -1,  0), new int3(-1, -1, +1),
+                new int3(-1,  0, -1), new int3(-1,  0,  0), new int3(-1,  0, +1),                
+                new int3(-1, +1, -1), new int3(-1, +1,  0), new int3(-1, +1, +1),
+
+                new int3( 0, -1, -1), new int3( 0, -1,  0), new int3( 0, -1, +1),
+                new int3( 0,  0, -1), new int3( 0,  0,  0), new int3( 0,  0, +1),                
+                new int3( 0, +1, -1), new int3( 0, +1,  0), new int3( 0, +1, +1),
+
+                new int3(+1, -1, -1), new int3(+1, -1,  0), new int3(+1, -1, +1),
+                new int3(+1,  0, -1), new int3(+1,  0,  0), new int3(+1,  0, +1),                
+                new int3(+1, +1, -1), new int3(+1, +1,  0), new int3(+1, +1, +1)
+            };
+
+            for (int i = 0; i < 3 * 3 * 3; i++)
+            {
+                var index = centerIndex + offsets[i];
+                var chainIndex = ((int)hashTable[GetHash(index)]) - 1;
+                {
+                    ushort closestVertexIndex = ushort.MaxValue;
+                    float closestDistance = CSGManagerPerformCSG.kSqrMergeEpsilon;
+                    while (chainIndex != -1)
+                    {
+                        var nextChainIndex  = chainedIndicesPtr[chainIndex] - 1;
+                        var sqrDistance     = math.lengthsq(verticesPtr[chainIndex] - vertex);
+                        if (sqrDistance < closestDistance)
+                        {
+                            closestVertexIndex = (ushort)chainIndex;
+                            closestDistance = sqrDistance;
+                        }
+                        chainIndex = nextChainIndex;
+                    }
+                    if (closestVertexIndex != ushort.MaxValue)
+                        return closestVertexIndex;
+                }
+            }
+
+            // Add Unique vertex
+            {
+                var newChainIndex = verticesLength;
+                verticesLength++;
+
+                var hashCode = GetHash(centerIndex);
+                var prevChainIndex = hashTable[hashCode];
+                hashTable[(int)hashCode] = (ushort)(newChainIndex + 1);
+
+                verticesPtr[newChainIndex] = vertex;
+                chainedIndicesPtr[newChainIndex] = (ushort)prevChainIndex;
+                                
+                return (ushort)newChainIndex;
+            }
+        }
+    }
+
+    public unsafe struct StackAllocVertexSoup
+    {
+        internal const int kHashTableSize   = (int)VertexSoup.kHashTableSize;
+        public const int Capacity           = (int)VertexSoup.kMaxVertexCount;
+
+        [NativeDisableUnsafePtrRestriction] internal fixed float    m_Vertices[Capacity * 3];
+        [NativeDisableUnsafePtrRestriction] internal fixed ushort   m_ChainedIndices[Capacity];
+        [NativeDisableUnsafePtrRestriction] internal fixed ushort   m_HashTable[kHashTableSize + 1];
+        internal int vertexLength;
+
+        public float3 this[int index]
+        {
+            get
+            {
+#if ENABLE_UNITY_COLLECTIONS_CHECKS
+                VertexSoup.CheckIndexInRange(index, vertexLength);
+#endif
+                return GetUnsafeReadOnlyPtr()[index];
+            }
+        }
+
+        public float3* GetUnsafeReadOnlyPtr()
+        {
+            fixed (float* verticesPtr = m_Vertices)
+            {
+                return (float3*)verticesPtr;
+            }
+        }
+
+        /// <summary>
+        /// The current number of items in the list.
+        /// </summary>
+        /// <value>The item count.</value>
+        public int Length
+        {
+            [return: AssumeRange(0, Capacity)]
+            get
+            {
+                return vertexLength;
+            }
+        }
+
+        public unsafe ushort AddNoResize(float3 vertex)
+        {
+#if ENABLE_UNITY_COLLECTIONS_CHECKS
+            VertexSoup.CheckIndexInRange(vertexLength + 1, Capacity);
+#endif
+            if (vertexLength + 1 >= Capacity)
+                return 0;
+
+            fixed (ushort* hashTablePr = m_HashTable)
+            fixed (float* verticesPr = m_Vertices)
+            fixed (ushort* indicesPr = m_ChainedIndices)
+            {
+                return VertexSoupUtility.AddNoResize(hashTablePr, indicesPr, (float3*)verticesPr, ref vertexLength, vertex);
+            }
+        }
     }
 
 
@@ -119,13 +235,11 @@ namespace Chisel.Core
 
         #region Constructors
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public VertexSoup(int minCapacity, Allocator allocator = Allocator.Persistent)
             : this(minCapacity, minCapacity, allocator)
         {
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         VertexSoup(int vertexCapacity, int chainedIndicesCapacity, Allocator allocator = Allocator.Persistent)
         {
 #if ENABLE_UNITY_COLLECTIONS_CHECKS
@@ -140,7 +254,6 @@ namespace Chisel.Core
             m_ChainedIndices    = UnsafeList.Create(UnsafeUtility.SizeOf<ushort>(), UnsafeUtility.AlignOf<ushort>(), chainedIndicesCapacity, allocator);
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public VertexSoup(VertexSoup otherSoup, Allocator allocator = Allocator.Persistent)
             : this((otherSoup.m_Vertices != null) ? otherSoup.m_Vertices->Length : 1, (otherSoup.m_ChainedIndices != null) ? otherSoup.m_ChainedIndices->Length : 1, allocator)
         {
@@ -149,7 +262,6 @@ namespace Chisel.Core
             m_Vertices->AddRangeNoResize<float3>(*otherSoup.m_Vertices);
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public VertexSoup(ref BlobArray<float3> uniqueVertices, Allocator allocator = Allocator.Persistent)
             : this(uniqueVertices.Length, allocator)
         {
@@ -170,7 +282,6 @@ namespace Chisel.Core
         #endregion
 
         #region Dispose
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Dispose()
         {
 #if ENABLE_UNITY_COLLECTIONS_CHECKS
@@ -230,17 +341,17 @@ namespace Chisel.Core
 
         #region Checks
         [Conditional("ENABLE_UNITY_COLLECTIONS_CHECKS")]
-        private static void CheckIndexInRange(int value, int length)
+        internal static void CheckIndexInRange(int value, int length)
         {
             if (value < 0)
                 throw new IndexOutOfRangeException($"Value {value} must be positive.");
 
             if ((uint)value >= (uint)length)
-                throw new IndexOutOfRangeException($"Value {value} is out of range in NativeList of '{length}' Length.");
+                throw new IndexOutOfRangeException($"Value {value} is out of range of '{length}' Length.");
         }
 
         [Conditional("ENABLE_UNITY_COLLECTIONS_CHECKS")]
-        private static void CheckAllocated(VertexSoup otherSoup)
+        internal static void CheckAllocated(VertexSoup otherSoup)
         {
             if (otherSoup.IsCreated)
                 throw new ArgumentException($"Value {otherSoup} is not allocated.");
@@ -307,7 +418,6 @@ namespace Chisel.Core
             }
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public unsafe ushort AddNoResize(float3 vertex) 
         {
 #if ENABLE_UNITY_COLLECTIONS_CHECKS
@@ -317,7 +427,6 @@ namespace Chisel.Core
         }
 
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public unsafe void AddUniqueVertices(ref BlobArray<float3> uniqueVertices)
         {
 #if ENABLE_UNITY_COLLECTIONS_CHECKS
