@@ -533,26 +533,30 @@ namespace Chisel.Core
                 return;
 
 
-            if (!routingTableLookup.TryGetValue(brushNodeIndex, out BlobAssetReference<RoutingTable> routingTable))
+            if (!routingTableLookup.TryGetValue(brushNodeIndex, out BlobAssetReference<RoutingTable> routingTableRef))
             {
                 //Debug.LogError("No routing table found");
                 return;
             }
 
-            ref var nodes               = ref routingTable.Value.nodes;
-            ref var routingLookups      = ref routingTable.Value.routingLookups;
-            ref var routingTableNodes   = ref routingTable.Value.nodes;
+            ref var nodes               = ref routingTableRef.Value.nodes;
+            ref var routingLookups      = ref routingTableRef.Value.routingLookups;
+            ref var routingTableNodes   = ref routingTableRef.Value.nodes;
 
             var surfaceCount            = basePolygonEdges.Length;
 
             var intersectionSurfaceInfo = stackalloc SurfaceInfo[routingTableNodes.Length * surfaceCount]; ;
-            var intersectionLoops       = new NativeListArray<Edge>(16, Allocator.Temp);
+            var intersectionLoops       = new NativeListArray<Edge>(0, Allocator.Temp);
             intersectionLoops.ResizeExact(routingTableNodes.Length * surfaceCount);
 
             {
-                var nodeIDtoIndex = new NativeHashMap<int, int>(routingTableNodes.Length, Allocator.Temp);
+                int maxIndex = 0;
                 for (int i = 0; i < routingTableNodes.Length; i++)
-                    nodeIDtoIndex[routingTableNodes[i]] = i;
+                    maxIndex = math.max(maxIndex, routingTableNodes[i] - 1);
+
+                var nodeIDtoIndex = stackalloc int[maxIndex+1];
+                for (int i = 0; i < routingTableNodes.Length; i++)
+                    nodeIDtoIndex[routingTableNodes[i] - 1] = (i * surfaceCount) + 1;
 
                 // TODO: Sort the brushSurfaceInfos/intersectionEdges based on nodeIDtoIndex[surfaceInfo.brushNodeID], 
                 //       have a sequential list of all data. 
@@ -563,17 +567,16 @@ namespace Chisel.Core
                 {
                     var surfaceInfo = intersectionSurfaceInfos[i];
                     var brushNodeIndex1 = surfaceInfo.brushNodeIndex;
-                    var brushNodeID1 = brushNodeIndex1 + 1;
 
-                    if (!nodeIDtoIndex.TryGetValue(brushNodeID1, out int brushIndex))
+                    var brushOffset = nodeIDtoIndex[brushNodeIndex1];
+                    if (brushOffset == 0)
                         continue;
+                    brushOffset--;
 
-                    int offset = (brushIndex * surfaceCount) + surfaceInfo.basePlaneIndex;
+                    int offset = brushOffset + surfaceInfo.basePlaneIndex;
                     intersectionLoops[offset].AddRange(intersectionEdges[i]);
                     intersectionSurfaceInfo[offset] = surfaceInfo;
                 }
-
-                nodeIDtoIndex.Dispose();
             }
 
 
@@ -590,6 +593,8 @@ namespace Chisel.Core
                 allInfos.Add(info);
                 allEdges.Add(basePolygonEdges[s]);
             }
+
+            ref var routingTable = ref routingTableRef.Value;
 
             for (int i = 0, offset = 0; i < routingLookups.Length; i++)
             {
@@ -608,7 +613,7 @@ namespace Chisel.Core
 
                         var surfaceLoopInfo = allInfos[surfaceLoopIndex];
 
-                        if (!routingLookup.TryGetRoute(routingTable, surfaceLoopInfo.interiorCategory, out CategoryRoutingRow routingRow))
+                        if (!routingLookup.TryGetRoute(ref routingTable, surfaceLoopInfo.interiorCategory, out CategoryRoutingRow routingRow))
                         {
                             Debug.Assert(false, "Could not find route");
                             continue;

@@ -97,7 +97,7 @@ namespace Chisel.Core
     }
 
     [BurstCompile(CompileSynchronously = true)]
-    unsafe struct FindAllIntersectionsJob : IJob// IJobParallelFor
+    unsafe struct FindAllBrushIntersectionsJob : IJob// IJobParallelFor
     {
         const double kEpsilon = CSGManagerPerformCSG.kEpsilon;
 

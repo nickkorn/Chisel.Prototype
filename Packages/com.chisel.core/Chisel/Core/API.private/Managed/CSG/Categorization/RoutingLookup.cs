@@ -22,7 +22,7 @@ namespace Chisel.Core
         //public const int kRoutingOffset = 1 + (int)CategoryIndex.LastCategory;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool TryGetRoute(BlobAssetReference<RoutingTable> table, CategoryGroupIndex inputIndex, out CategoryRoutingRow routingRow)
+        public bool TryGetRoute(ref RoutingTable table, CategoryGroupIndex inputIndex, out CategoryRoutingRow routingRow)
         {
             var tableIndex = startIndex + (int)inputIndex;// (inputIndex == CategoryGroupIndex.First) ? (int)CategoryGroupIndex.First : ((int)inputIndex - kRoutingOffset);
 
@@ -32,9 +32,8 @@ namespace Chisel.Core
                 return false;
             }
 
-            //Debug.LogWarning($"{tableIndex} {inputIndex}");
-            Debug.Assert(inputIndex == table.Value.inputs[tableIndex]);
-            routingRow = table.Value.routingRows[tableIndex];
+            //Debug.Assert(inputIndex == table.Value.inputs[tableIndex]);
+            routingRow = table.routingRows[tableIndex];
             return true;
         }
     }

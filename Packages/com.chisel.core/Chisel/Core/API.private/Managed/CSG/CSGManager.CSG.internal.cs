@@ -152,13 +152,13 @@ namespace Chisel.Core
             
             var treeUpdates = new TreeUpdate[treeNodeIDs.Length];
             var treeUpdateLength = 0;
-            Profiler.BeginSample("Tag_Setup");
+            Profiler.BeginSample("Tag_Setup");//time=12.17ms
             for (int t = 0; t < treeNodeIDs.Length; t++)
             {
                 var treeNodeIndex       = treeNodeIDs[t] - 1;
                 var treeInfo            = CSGManager.nodeHierarchies[treeNodeIndex].treeInfo;
 
-                Profiler.BeginSample("Tag_Reset");
+                Profiler.BeginSample("Tag_Reset");//time=0.617ms
                 Reset(treeInfo);
                 Profiler.EndSample();
 
@@ -220,7 +220,7 @@ namespace Chisel.Core
                 // Clean up values we're rebuilding below, including the ones with brushMeshID == 0
                 chiselLookupValues.RemoveByBrushID(treeBrushes);
 
-                Profiler.BeginSample("Tag_Allocations");
+                Profiler.BeginSample("Tag_Allocations");//time=2.45ms
                 var allTreeBrushIndices         = allBrushNodeIndices.ToNativeArray(Allocator.TempJob);
                 var modifiedTreeBrushIndices    = modifiedBrushNodeIndices.ToNativeList(Allocator.TempJob);
                 var baseMeshUpdateIndices       = baseMeshUpdateIndicesList.ToNativeArray(Allocator.TempJob);
@@ -228,7 +228,7 @@ namespace Chisel.Core
                 Profiler.EndSample();
 
                 // NOTE: needs to contain ALL brushes in tree, EVEN IF THEY ARE NOT UPDATED!
-                Profiler.BeginSample("Tag_BuildBrushMeshLookup");
+                Profiler.BeginSample("Tag_BuildBrushMeshLookup");//time=2.69ms
                 {
                     for (int i = 0; i < allTreeBrushIndices.Length; i++)
                     {
@@ -240,7 +240,7 @@ namespace Chisel.Core
                 Profiler.EndSample();
 
                 // TODO: optimize, only do this when necessary
-                Profiler.BeginSample("Tag_UpdateBrushTransformations");
+                Profiler.BeginSample("Tag_UpdateBrushTransformations");//time=2.69ms
                 {
                     for (int i = 0; i < allTreeBrushIndices.Length; i++)
                     {
@@ -263,13 +263,13 @@ namespace Chisel.Core
 
                 // TODO: only rebuild this when the hierarchy changes
                 // TODO: jobify?
-                Profiler.BeginSample("Tag_CompactTree.Create");
+                Profiler.BeginSample("Tag_CompactTree.Create");//time=0.254ms
                 var compactTree = CompactTree.Create(CSGManager.nodeHierarchies, treeNodeIndex); // Note: stored/destroyed in ChiselLookup
                 Profiler.EndSample();
 
 
-                Profiler.BeginSample("Tag_Allocations");
-                Profiler.BeginSample("Tag_BrushOutputLoops");
+                Profiler.BeginSample("Tag_Allocations");//time=6.12ms
+                Profiler.BeginSample("Tag_BrushOutputLoops");//time=5.44ms
                 var brushOutputLoops    = new BrushOutputLoops[allTreeBrushIndices.Length];
                 var brushOutputLoops2   = new BrushOutputLoops2[allTreeBrushIndices.Length];
                 var brushHandles        = new BrushHandles[allTreeBrushIndices.Length];
@@ -360,7 +360,7 @@ namespace Chisel.Core
                     ref var treeUpdate  = ref treeUpdates[t];
                     if (treeUpdate.baseMeshUpdateIndices.Length > 0)
                     {
-                        var createBlobPolygonsBlobs = new CreateBlobPolygonsBlobs //time=32.26ms
+                        var createBlobPolygonsBlobs = new CreateBlobPolygonsBlobs //time=210.11ms
                         {
                             // Read
                             treeBrushIndices    = treeUpdate.baseMeshUpdateIndices,
@@ -386,7 +386,7 @@ namespace Chisel.Core
                 {
                     ref var treeUpdate = ref treeUpdates[t];
                     var treeNodeIndex = treeUpdate.treeNodeIndex;
-                    var findAllIntersectionsJob = new FindAllIntersectionsJob//time=3.20ms
+                    var findAllIntersectionsJob = new FindAllBrushIntersectionsJob//time=5.16ms
                     {
                         // Read
                         treeBrushIndices    = treeUpdate.allTreeBrushIndices,
@@ -405,7 +405,7 @@ namespace Chisel.Core
                 {
                     ref var treeUpdate = ref treeUpdates[t];
                     var treeNodeIndex = treeUpdate.treeNodeIndex;
-                    var storeBrushIntersectionsJob = new StoreBrushIntersectionsJob//time=88.79ms
+                    var storeBrushIntersectionsJob = new StoreBrushIntersectionsJob//time=62.62ms
                     {
                         // Read
                         treeNodeIndex           = treeNodeIndex,
@@ -430,7 +430,7 @@ namespace Chisel.Core
                     ref var treeUpdate = ref treeUpdates[t];
                     var treeNodeIndex = treeUpdate.treeNodeIndex;
                     // TODO: optimize, only do this when necessary
-                    var createBrushWorldPlanesJob = new CreateBrushWorldPlanesJob//time=82.51ms
+                    var createBrushWorldPlanesJob = new CreateBrushWorldPlanesJob//time=47.15ms
                     {
                         // Read
                         treeBrushIndices        = treeUpdate.allTreeBrushIndices,
@@ -453,7 +453,7 @@ namespace Chisel.Core
                     ref var treeUpdate = ref treeUpdates[t];
                     var treeNodeIndex = treeUpdate.treeNodeIndex;
                     // Build categorization trees for brushes
-                    var createRoutingTableJob = new CreateRoutingTableJob//time=608.59ms
+                    var createRoutingTableJob = new CreateRoutingTableJob//time=236.35ms
                     {
                         // Read
                         treeBrushIndices        = treeUpdate.allTreeBrushIndices,
@@ -471,11 +471,12 @@ namespace Chisel.Core
             Profiler.BeginSample("Tag_FindAllIntersectionLoops");
             try
             {
+                // TODO: merge this with another job, there's not enough work 
                 for (int t = 0; t < treeUpdateLength; t++)
                 {
                     ref var treeUpdate = ref treeUpdates[t];
                     var treeNodeIndex = treeUpdate.treeNodeIndex;
-                    var findBrushPairsJob = new FindBrushPairsJob//?
+                    var findBrushPairsJob = new FindBrushPairsJob//0.685ms
                     {
                         // Read
                         maxPairs                = treeUpdate.triangleArraySize,
@@ -492,7 +493,7 @@ namespace Chisel.Core
                 {
                     ref var treeUpdate = ref treeUpdates[t];
                     var treeNodeIndex = treeUpdate.treeNodeIndex;
-                    var prepareBrushPairIntersectionsJob = new PrepareBrushPairIntersectionsJob//time=244.06ms
+                    var prepareBrushPairIntersectionsJob = new PrepareBrushPairIntersectionsJob//time=232.83ms
                     {
                         // Read
                         uniqueBrushPairs        = treeUpdate.uniqueBrushPairs.AsDeferredJobArray(),
@@ -509,7 +510,7 @@ namespace Chisel.Core
                 {
                     ref var treeUpdate = ref treeUpdates[t];
                     var treeNodeIndex = treeUpdate.treeNodeIndex;
-                    var findAllIntersectionLoopsJob = new FindAllIntersectionLoopsJob//time=1569ms
+                    var findAllIntersectionLoopsJob = new CreateIntersectionLoopsJob//time=812.09ms
                     {
                         // Read
                         brushWorldPlanes        = treeUpdate.brushWorldPlanes,
@@ -535,7 +536,7 @@ namespace Chisel.Core
                     for (int index = 0; index < treeUpdate.allTreeBrushIndices.Length; index++)
                     {
                         var outputLoops = treeUpdate.brushOutputLoops[index];
-                        var findLoopOverlapIntersectionsJob = new FindLoopOverlapIntersectionsJob//time=312.02ms
+                        var findLoopOverlapIntersectionsJob = new FindLoopOverlapIntersectionsJob//time=206.81ms
                         {
                             // Read
                             index                       = index,
@@ -575,7 +576,7 @@ namespace Chisel.Core
                     ref var outputLoops2    = ref treeUpdate.brushOutputLoops2[b];
                     ref var brushHandles    = ref treeUpdate.brushHandles[b];
 
-                    var performCSGJob = new PerformCSGJob//time=1753.ms
+                    var performCSGJob = new PerformCSGJob//time=1171.83ms
                     {
                         // Read
                         index                       = b,
@@ -617,7 +618,7 @@ namespace Chisel.Core
                     ref var brushHandles        = ref treeUpdate.brushHandles[b];
                     var surfaceRenderBuffers    = treeUpdate.surfaceRenderBuffers[brushNodeIndex];  
 
-                    var generateSurfaceRenderBuffers = new GenerateSurfaceTrianglesJob//time=1615.84ms
+                    var generateSurfaceRenderBuffers = new GenerateSurfaceTrianglesJob//time=786.62ms
                     {
                         // Read
                         brushNodeIndex          = brushNodeIndex,
@@ -674,7 +675,7 @@ namespace Chisel.Core
 
             // Note: Seems that scheduling a Dispose will cause previous jobs to be completed?
             //       Actually faster to just call them on main thread?
-            Profiler.BeginSample("Tag_BrushOutputLoopsDispose");
+            Profiler.BeginSample("Tag_BrushOutputLoopsDispose");//time=14.72ms
             {
                 var disposeJobHandle = finalJobHandle;
                 for (int t = 0; t < treeUpdateLength; t++)
