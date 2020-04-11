@@ -22,7 +22,7 @@ namespace Chisel.Core
     { 
         [NoAlias, ReadOnly] public int                                                          index;
         [NoAlias, ReadOnly] public NativeArray<int>                                             treeBrushIndices;
-        [NoAlias, ReadOnly] public NativeHashMap<BrushSurfacePair, BlobAssetReference<BrushIntersectionLoop>> intersectionLoopBlobs;
+        [NoAlias, ReadOnly] public NativeArray<BlobAssetReference<BrushIntersectionLoop>>       intersectionLoopBlobs;
         [NoAlias, ReadOnly] public NativeHashMap<int, BlobAssetReference<BasePolygonsBlob>>     basePolygonBlobs;
         [NoAlias, ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushWorldPlanes>>     brushWorldPlanes;
         
@@ -90,22 +90,20 @@ namespace Chisel.Core
 
             // ***********************
             // TODO: get rid of this somehow
-            var intersectionLoopBlobsKeys   = intersectionLoopBlobs.GetKeyArray(Allocator.Temp);
-            var brushIntersectionLoops      = new NativeList<BlobAssetReference<BrushIntersectionLoop>>(intersectionLoopBlobsKeys.Length, Allocator.Temp);
-            var uniqueBrushIndicesHashMap   = new NativeHashMap<int, Empty>(intersectionLoopBlobsKeys.Length, Allocator.Temp);
-            for (int k = 0; k < intersectionLoopBlobsKeys.Length; k++)
+            var brushIntersectionLoops      = new NativeList<BlobAssetReference<BrushIntersectionLoop>>(intersectionLoopBlobs.Length, Allocator.Temp);
+            var uniqueBrushIndicesHashMap   = new NativeHashMap<int, Empty>(intersectionLoopBlobs.Length, Allocator.Temp);
+            for (int k = 0; k < intersectionLoopBlobs.Length; k++)
             {
-                var item = intersectionLoopBlobsKeys[k];
+                var outputSurface = intersectionLoopBlobs[k];
+                ref var pair = ref outputSurface.Value.pair;
 
                 // TODO: get rid of this somehow
-                if (item.brushNodeIndex0 != brushNodeIndex)
+                if (pair.brushNodeIndex0 != brushNodeIndex)
                     continue;
 
-                var outputSurface = intersectionLoopBlobs[item];
-                uniqueBrushIndicesHashMap.TryAdd(item.brushNodeIndex1, new Empty());
+                uniqueBrushIndicesHashMap.TryAdd(pair.brushNodeIndex1, new Empty());
                 brushIntersectionLoops.AddNoResize(outputSurface); /*OUTPUT*/
             }
-            intersectionLoopBlobsKeys.Dispose();
             // ***********************
 
 

@@ -12,6 +12,8 @@ using Profiler = UnityEngine.Profiling.Profiler;
 using System.Runtime.CompilerServices;
 using Unity.Burst;
 using ReadOnlyAttribute = Unity.Collections.ReadOnlyAttribute;
+using Unity.Jobs.LowLevel.Unsafe;
+using System.Reflection;
 
 namespace Chisel.Core
 {
@@ -75,7 +77,7 @@ namespace Chisel.Core
             public NativeHashMap<int, BlobAssetReference<BrushesTouchedByBrush>>    brushesTouchedByBrushes;
 
             public Dictionary<int, NativeList<BlobAssetReference<ChiselSurfaceRenderBuffer>>> surfaceRenderBuffers;
-            public NativeHashMap<BrushSurfacePair, BlobAssetReference<BrushIntersectionLoop>> intersectionLoopBlobs;
+            public NativeList<BlobAssetReference<BrushIntersectionLoop>> intersectionLoopBlobs;
             public NativeMultiHashMap<int, BrushPair>                       brushBrushIntersections;
             public NativeList<BrushPair>                                    uniqueBrushPairs;
             public NativeList<BlobAssetReference<BrushPairIntersection>>    intersectingBrushes;
@@ -146,6 +148,7 @@ namespace Chisel.Core
                 return x.treeNodeIndex - y.treeNodeIndex;
             }
         }
+
 
         internal static JobHandle UpdateTreeMeshes(int[] treeNodeIDs)
         {
@@ -310,7 +313,7 @@ namespace Chisel.Core
                 Profiler.EndSample();
 
                 var triangleArraySize       = GeometryMath.GetTriangleArraySize(allTreeBrushIndices.Length);
-                var intersectionLoopBlobs   = new NativeHashMap<BrushSurfacePair, BlobAssetReference<BrushIntersectionLoop>>(65500, Allocator.TempJob);
+                var intersectionLoopBlobs   = new NativeList<BlobAssetReference<BrushIntersectionLoop>>(65500, Allocator.TempJob);
                 var brushBrushIntersections = new NativeMultiHashMap<int, BrushPair>(triangleArraySize * 2, Allocator.TempJob);
                 var uniqueBrushPairs        = new NativeList<BrushPair>(triangleArraySize, Allocator.TempJob);
                 var intersectingBrushes     = new NativeList<BlobAssetReference<BrushPairIntersection>>(triangleArraySize, Allocator.TempJob);
@@ -505,7 +508,9 @@ namespace Chisel.Core
                         // Write
                         intersectingBrushes     = treeUpdate.intersectingBrushes.AsParallelWriter()
                     };
-                    treeUpdate.prepareBrushPairIntersectionsJobHandle = prepareBrushPairIntersectionsJob.Schedule(treeUpdate.triangleArraySize, 16, treeUpdate.findBrushPairsJobHandle);
+                    treeUpdate.prepareBrushPairIntersectionsJobHandle = prepareBrushPairIntersectionsJob
+                        .Schedule(treeUpdate.uniqueBrushPairs, 4, treeUpdate.findBrushPairsJobHandle);
+                        //.Schedule(treeUpdate.triangleArraySize, 16, treeUpdate.findBrushPairsJobHandle);
                 }
 
                 for (int t = 0; t < treeUpdateLength; t++)
@@ -521,11 +526,15 @@ namespace Chisel.Core
                         // Write
                         outputSurfaces          = treeUpdate.intersectionLoopBlobs.AsParallelWriter()
                     };
-                    treeUpdate.findAllIntersectionLoopsJobHandle = findAllIntersectionLoopsJob.Schedule(treeUpdate.triangleArraySize, 64, JobHandle.CombineDependencies(treeUpdate.updateBrushWorldPlanesJobHandle, treeUpdate.prepareBrushPairIntersectionsJobHandle));
+                    treeUpdate.findAllIntersectionLoopsJobHandle = findAllIntersectionLoopsJob                        
+                        .Schedule(treeUpdate.intersectingBrushes, 4, JobHandle.CombineDependencies(treeUpdate.updateBrushWorldPlanesJobHandle, treeUpdate.prepareBrushPairIntersectionsJobHandle));
+                        //.Schedule(treeUpdate.triangleArraySize, 32, JobHandle.CombineDependencies(treeUpdate.updateBrushWorldPlanesJobHandle, treeUpdate.prepareBrushPairIntersectionsJobHandle));
                     treeUpdate.allFindAllIntersectionLoopsJobHandle = JobHandle.CombineDependencies(treeUpdate.findAllIntersectionLoopsJobHandle, treeUpdate.prepareBrushPairIntersectionsJobHandle, treeUpdate.allFindAllIntersectionLoopsJobHandle);
                 }
             } finally { Profiler.EndSample(); }
-                
+
+            //JobHandle.ScheduleBatchedJobs();
+
             Profiler.BeginSample("Tag_FindLoopOverlapIntersections");
             try
             {
@@ -543,7 +552,7 @@ namespace Chisel.Core
                             // Read
                             index                       = index,
                             treeBrushIndices            = treeUpdate.allTreeBrushIndices,
-                            intersectionLoopBlobs       = treeUpdate.intersectionLoopBlobs,
+                            intersectionLoopBlobs       = treeUpdate.intersectionLoopBlobs.AsDeferredJobArray(),
                             brushWorldPlanes            = treeUpdate.brushWorldPlanes,
                             basePolygonBlobs            = treeUpdate.basePolygons,
 
@@ -673,7 +682,8 @@ namespace Chisel.Core
             }
 
             Profiler.EndSample();
-
+            
+            //JobHandle.ScheduleBatchedJobs();
             Profiler.BeginSample("Tag_Complete");
             finalJobHandle.Complete();
             Profiler.EndSample();
@@ -821,6 +831,43 @@ namespace Chisel.Core
             return true;
         }
         #endregion
+    }
+
+
+    public static class IJobParallelForDeferExtensions
+    {
+        internal struct ParallelForJobStruct<T> where T : struct, IJobParallelFor
+        {
+            public static IntPtr                            jobReflectionData;
+
+            public static IntPtr Initialize()
+            {
+                if (jobReflectionData == IntPtr.Zero)
+                {
+                    var attribute = (JobProducerTypeAttribute)typeof(IJobParallelFor).GetCustomAttribute(typeof(JobProducerTypeAttribute));
+                    var jobStruct = attribute.ProducerType.MakeGenericType(typeof(T));
+                    var method = jobStruct.GetMethod("Initialize", BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public);
+                    var res = method.Invoke(null, new object[0]);
+                    jobReflectionData = (IntPtr) res;
+                }
+                    
+                return jobReflectionData;
+            }
+        }
+
+        unsafe public static JobHandle Schedule<T, U>(this T jobData, NativeList<U> list, int innerloopBatchCount, JobHandle dependsOn = new JobHandle()) 
+            where T : struct, IJobParallelFor 
+            where U : struct
+        {
+            var scheduleParams = new JobsUtility.JobScheduleParameters(UnsafeUtility.AddressOf(ref jobData), ParallelForJobStruct<T>.Initialize(), dependsOn, ScheduleMode.Batched);
+            void* atomicSafetyHandlePtr = null;
+#if ENABLE_UNITY_COLLECTIONS_CHECKS
+            var safety = NativeListUnsafeUtility.GetAtomicSafetyHandle(ref list);
+            atomicSafetyHandlePtr = UnsafeUtility.AddressOf(ref safety);
+#endif
+            return JobsUtility.ScheduleParallelForDeferArraySize(ref scheduleParams, innerloopBatchCount, NativeListUnsafeUtility.GetInternalListDataPtrUnchecked(ref list), atomicSafetyHandlePtr);
+        }
+
     }
 #endif
 }

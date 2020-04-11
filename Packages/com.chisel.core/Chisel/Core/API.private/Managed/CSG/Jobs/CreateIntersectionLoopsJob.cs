@@ -53,7 +53,7 @@ namespace Chisel.Core
         [NoAlias, ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushWorldPlanes>> brushWorldPlanes;
         [NoAlias, ReadOnly] public NativeArray<BlobAssetReference<BrushPairIntersection>> intersectingBrushes;
 
-        [NoAlias, WriteOnly] public NativeHashMap<BrushSurfacePair, BlobAssetReference<BrushIntersectionLoop>>.ParallelWriter outputSurfaces;
+        [NoAlias, WriteOnly] public NativeList<BlobAssetReference<BrushIntersectionLoop>>.ParallelWriter outputSurfaces;
 
         /*
         struct PlaneIndexPairSort : IComparer<PlaneVertexIndexPair>
@@ -205,7 +205,7 @@ namespace Chisel.Core
                                        ref BlobArray<float4>    intersectingPlanes1,
                                        float4x4                 nodeToTreeSpaceMatrix0,
                                        float4x4                 vertexToLocal0,
-                                       VertexSoup               vertexSoup,
+                                       ref VertexSoup           vertexSoup,
                                        PlaneVertexIndexPair*    foundIndices0,
                                        ref int                  foundIndices0Length)
         {
@@ -241,7 +241,7 @@ namespace Chisel.Core
                                              ref BlobArray<PlanePair>   usedPlanePairs1,
                                              ref BlobArray<int>         intersectingPlaneIndices0,
                                              float4x4                   nodeToTreeSpaceMatrix0,
-                                             VertexSoup                 vertexSoup,
+                                             ref VertexSoup             vertexSoup,
                                              PlaneVertexIndexPair*      foundIndices0,
                                              ref int                    foundIndices0Length,
                                              PlaneVertexIndexPair*      foundIndices1,
@@ -305,11 +305,11 @@ namespace Chisel.Core
         static void GenerateLoop(int                                    brushNodeIndex0,
                                  int                                    brushNodeIndex1,
                                  ref BlobArray<SurfaceInfo>             surfaceInfos,
-                                 BlobAssetReference<BrushWorldPlanes>   brushWorldPlanes,
+                                 ref BrushWorldPlanes                   brushWorldPlanes,
                                  PlaneVertexIndexPair*                  foundIndices0,
                                  ref int                                foundIndices0Length,
-                                 VertexSoup                             vertexSoup,
-                                 NativeHashMap<BrushSurfacePair, BlobAssetReference<BrushIntersectionLoop>>.ParallelWriter outputSurfaces)
+                                 in VertexSoup                          vertexSoup,
+                                 NativeList<BlobAssetReference<BrushIntersectionLoop>>.ParallelWriter outputSurfaces)
         {
             // Why is the unity NativeSort slower than bubble sort?
             //var sorter = new PlaneIndexPairSort();
@@ -410,7 +410,7 @@ namespace Chisel.Core
                 var planeIndex          = planeIndexOffset.planeIndex;
                     
                 // TODO: use plane information instead
-                SortIndices(vertices, sortedStack, uniqueIndices, offset, length, brushWorldPlanes.Value.worldPlanes[planeIndex].xyz);
+                SortIndices(vertices, sortedStack, uniqueIndices, offset, length, brushWorldPlanes.worldPlanes[planeIndex].xyz);
             }
 
             for (int j = 0; j < planeIndexOffsetsLength; j++)
@@ -428,16 +428,17 @@ namespace Chisel.Core
                 var srcVertices = vertexSoup.GetUnsafeReadOnlyPtr();
                 for (int d = 0; d < loopLength; d++)
                     dstVertices[d] = srcVertices[uniqueIndices[offset + d]];
-
-                var outputSurface = builder.CreateBlobAssetReference<BrushIntersectionLoop>(Allocator.Persistent);
-                builder.Dispose();
-
-                outputSurfaces.TryAdd(new BrushSurfacePair()
+                root.pair = new BrushSurfacePair()
                 {
                     brushNodeIndex0 = brushNodeIndex0,
                     brushNodeIndex1 = brushNodeIndex1,
                     basePlaneIndex = basePlaneIndex
-                }, outputSurface);
+                };
+
+                var outputSurface = builder.CreateBlobAssetReference<BrushIntersectionLoop>(Allocator.Persistent);
+                builder.Dispose();
+
+                outputSurfaces.AddNoResize(outputSurface);
             }
         }
 
@@ -481,24 +482,24 @@ namespace Chisel.Core
             { 
                 if (brushPairIntersection1.usedPlanePairs.Length > 0)
                 {
-                    FindIntersectionVertices(ref intersectionAsset.Value.brushes[0].localSpacePlanes0,
-                                             ref intersectionAsset.Value.brushes[1].localSpacePlanes0,
-                                             ref intersectionAsset.Value.brushes[1].usedPlanePairs,
-                                             ref intersectionAsset.Value.brushes[0].localSpacePlaneIndices0,
-                                             intersectionAsset.Value.brushes[0].nodeToTreeSpace,
-                                             vertexSoup,
+                    FindIntersectionVertices(ref intersection.brushes[0].localSpacePlanes0,
+                                             ref intersection.brushes[1].localSpacePlanes0,
+                                             ref intersection.brushes[1].usedPlanePairs,
+                                             ref intersection.brushes[0].localSpacePlaneIndices0,
+                                             intersection.brushes[0].nodeToTreeSpace,
+                                             ref vertexSoup,
                                              foundIndices0, ref foundIndices0Length,
                                              foundIndices1, ref foundIndices1Length);
                 }
 
                 if (brushPairIntersection0.usedPlanePairs.Length > 0)
                 {
-                    FindIntersectionVertices(ref intersectionAsset.Value.brushes[1].localSpacePlanes0,
-                                             ref intersectionAsset.Value.brushes[0].localSpacePlanes0,
-                                             ref intersectionAsset.Value.brushes[0].usedPlanePairs,
-                                             ref intersectionAsset.Value.brushes[1].localSpacePlaneIndices0,
-                                             intersectionAsset.Value.brushes[0].nodeToTreeSpace,
-                                             vertexSoup,
+                    FindIntersectionVertices(ref intersection.brushes[1].localSpacePlanes0,
+                                             ref intersection.brushes[0].localSpacePlanes0,
+                                             ref intersection.brushes[0].usedPlanePairs,
+                                             ref intersection.brushes[1].localSpacePlaneIndices0,
+                                             intersection.brushes[0].nodeToTreeSpace,
+                                             ref vertexSoup,
                                              foundIndices1, ref foundIndices1Length,
                                              foundIndices0, ref foundIndices0Length);
                 }
@@ -508,13 +509,13 @@ namespace Chisel.Core
             if (foundIndices0Length > 0 &&
                 brushPairIntersection0.usedVertices.Length > 0)
             {
-                FindInsideVertices(ref intersectionAsset.Value.brushes[0].usedVertices,
-                                   ref intersectionAsset.Value.brushes[0].localSpacePlaneIndices0,
-                                   ref intersectionAsset.Value.brushes[0].localSpacePlanes0,
-                                   ref intersectionAsset.Value.brushes[1].localSpacePlanes0,
-                                   intersectionAsset.Value.brushes[0].nodeToTreeSpace,
+                FindInsideVertices(ref intersection.brushes[0].usedVertices,
+                                   ref intersection.brushes[0].localSpacePlaneIndices0,
+                                   ref intersection.brushes[0].localSpacePlanes0,
+                                   ref intersection.brushes[1].localSpacePlanes0,
+                                   intersection.brushes[0].nodeToTreeSpace,
                                    float4x4.identity,
-                                   vertexSoup,
+                                   ref vertexSoup,
                                    foundIndices0, ref foundIndices0Length);
             }
 
@@ -522,13 +523,13 @@ namespace Chisel.Core
             if (foundIndices1Length > 0 && 
                 brushPairIntersection1.usedVertices.Length > 0)
             {
-                FindInsideVertices(ref intersectionAsset.Value.brushes[1].usedVertices,
-                                   ref intersectionAsset.Value.brushes[1].localSpacePlaneIndices0,
-                                   ref intersectionAsset.Value.brushes[1].localSpacePlanes0,
-                                   ref intersectionAsset.Value.brushes[0].localSpacePlanes0,
-                                   intersectionAsset.Value.brushes[1].nodeToTreeSpace,
-                                   intersectionAsset.Value.brushes[1].toOtherBrushSpace,
-                                   vertexSoup,
+                FindInsideVertices(ref intersection.brushes[1].usedVertices,
+                                   ref intersection.brushes[1].localSpacePlaneIndices0,
+                                   ref intersection.brushes[1].localSpacePlanes0,
+                                   ref intersection.brushes[0].localSpacePlanes0,
+                                   intersection.brushes[1].nodeToTreeSpace,
+                                   intersection.brushes[1].toOtherBrushSpace,
+                                   ref vertexSoup,
                                    foundIndices1, ref foundIndices1Length);
             }
 
@@ -537,10 +538,10 @@ namespace Chisel.Core
             {
                 GenerateLoop(brushNodeIndex0,
                              brushNodeIndex1,
-                             ref intersectionAsset.Value.brushes[0].surfaceInfos,
-                             brushWorldPlanes[brushNodeIndex0],
+                             ref intersection.brushes[0].surfaceInfos,
+                             ref brushWorldPlanes[brushNodeIndex0].Value,
                              foundIndices0, ref foundIndices0Length,
-                             vertexSoup,
+                             in vertexSoup,
                              outputSurfaces);
             }
 
@@ -548,10 +549,10 @@ namespace Chisel.Core
             {
                 GenerateLoop(brushNodeIndex1,
                              brushNodeIndex0,
-                             ref intersectionAsset.Value.brushes[1].surfaceInfos,
-                             brushWorldPlanes[brushNodeIndex1],
+                             ref intersection.brushes[1].surfaceInfos,
+                             ref brushWorldPlanes[brushNodeIndex1].Value,
                              foundIndices1, ref foundIndices1Length,
-                             vertexSoup,
+                             in vertexSoup,
                              outputSurfaces);
             }
 

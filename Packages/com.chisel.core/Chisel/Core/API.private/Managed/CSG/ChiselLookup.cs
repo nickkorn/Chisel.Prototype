@@ -387,6 +387,7 @@ namespace Chisel.Core
     
     public struct BrushIntersectionLoop
     {
+        public BrushSurfacePair     pair;
         public SurfaceInfo          surfaceInfo;
         public BlobArray<float3>    loopVertices;
     }

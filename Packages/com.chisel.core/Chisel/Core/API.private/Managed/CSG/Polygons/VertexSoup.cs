@@ -79,12 +79,69 @@ namespace Chisel.Core
 
             // Add Unique vertex
             {
-                vertices->AddNoResize(vertex);
 
                 var hashCode        = GetHash(centerIndex);
                 var prevChainIndex  = hashTable[hashCode];
                 var newChainIndex   = chainedIndices->Length;
+                vertices      ->AddNoResize(vertex);
                 chainedIndices->AddNoResize((ushort)prevChainIndex);
+                hashTable[(int)hashCode] = (ushort)(newChainIndex + 1);
+                return (ushort)newChainIndex;
+            }
+        }
+
+        // Add but make the assumption we're not growing any list
+        public unsafe static ushort Add(ushort* hashTable, UnsafeList* chainedIndices, UnsafeList* vertices, float3 vertex)
+        {
+            var centerIndex = new int3((int)(vertex.x / VertexSoup.kCellSize), (int)(vertex.y / VertexSoup.kCellSize), (int)(vertex.z / VertexSoup.kCellSize));
+            var offsets = stackalloc int3[]
+            {
+                new int3(-1, -1, -1), new int3(-1, -1,  0), new int3(-1, -1, +1),
+                new int3(-1,  0, -1), new int3(-1,  0,  0), new int3(-1,  0, +1),                
+                new int3(-1, +1, -1), new int3(-1, +1,  0), new int3(-1, +1, +1),
+
+                new int3( 0, -1, -1), new int3( 0, -1,  0), new int3( 0, -1, +1),
+                new int3( 0,  0, -1), new int3( 0,  0,  0), new int3( 0,  0, +1),                
+                new int3( 0, +1, -1), new int3( 0, +1,  0), new int3( 0, +1, +1),
+
+                new int3(+1, -1, -1), new int3(+1, -1,  0), new int3(+1, -1, +1),
+                new int3(+1,  0, -1), new int3(+1,  0,  0), new int3(+1,  0, +1),                
+                new int3(+1, +1, -1), new int3(+1, +1,  0), new int3(+1, +1, +1)
+            };
+
+            float3* verticesPtr = (float3*)vertices->Ptr;
+
+            for (int i = 0; i < 3 * 3 * 3; i++)
+            {
+                var index = centerIndex + offsets[i];
+                var chainIndex = ((int)hashTable[GetHash(index)]) - 1;
+                {
+                    ushort closestVertexIndex = ushort.MaxValue;
+                    float closestDistance = CSGManagerPerformCSG.kSqrMergeEpsilon;
+                    while (chainIndex != -1)
+                    {
+                        var nextChainIndex  = ((int)UnsafeUtility.ReadArrayElement<ushort> (chainedIndices->Ptr, chainIndex)) - 1;
+                        var sqrDistance     = math.lengthsq(verticesPtr[chainIndex] - vertex);
+                        if (sqrDistance < closestDistance)
+                        {
+                            closestVertexIndex = (ushort)chainIndex;
+                            closestDistance = sqrDistance;
+                        }
+                        chainIndex = nextChainIndex;
+                    }
+                    if (closestVertexIndex != ushort.MaxValue)
+                        return closestVertexIndex;
+                }
+            }
+
+            // Add Unique vertex
+            {
+
+                var hashCode        = GetHash(centerIndex);
+                var prevChainIndex  = hashTable[hashCode];
+                var newChainIndex   = chainedIndices->Length;
+                vertices      ->Add(vertex);
+                chainedIndices->Add((ushort)prevChainIndex);
                 hashTable[(int)hashCode] = (ushort)(newChainIndex + 1);
                 return (ushort)newChainIndex;
             }
@@ -269,12 +326,12 @@ namespace Chisel.Core
             for (int i = 0; i < uniqueVertices.Length; i++)
             {
                 var vertex = uniqueVertices[i];
-                m_Vertices->AddNoResize(vertex);
 
                 var centerIndex     = new int3((int)(vertex.x / kCellSize), (int)(vertex.y / kCellSize), (int)(vertex.z / kCellSize));
                 var hashCode        = VertexSoupUtility.GetHash(centerIndex);
                 var prevChainIndex  = ((ushort*)m_HashTable)[hashCode];
                 var newChainIndex   = m_ChainedIndices->Length;
+                m_Vertices      ->AddNoResize(vertex);
                 m_ChainedIndices->AddNoResize((ushort)prevChainIndex);
                 ((ushort*)m_HashTable)[(int)hashCode] = (ushort)(newChainIndex + 1);
             }
@@ -436,12 +493,11 @@ namespace Chisel.Core
             for (int i = 0; i < uniqueVertices.Length; i++)
             {
                 var vertex = uniqueVertices[i];
-                m_Vertices->AddNoResize(vertex);
-
                 var centerIndex = new int3((int)(vertex.x / kCellSize), (int)(vertex.y / kCellSize), (int)(vertex.z / kCellSize));
                 var hashCode = VertexSoupUtility.GetHash(centerIndex);
                 var prevChainIndex = ((ushort*)m_HashTable)[hashCode];
                 var newChainIndex = m_ChainedIndices->Length;
+                m_Vertices      ->AddNoResize(vertex);
                 m_ChainedIndices->AddNoResize((ushort)prevChainIndex);
                 ((ushort*)m_HashTable)[(int)hashCode] = (ushort)(newChainIndex + 1);
             }
