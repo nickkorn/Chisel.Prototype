@@ -273,13 +273,13 @@ namespace Chisel.Core
             brushIntersections[0] = new BrushIntersectionInfo()
             {
                 brushNodeIndex      = brushNodeIndex0,
-                nodeToTreeSpace    = transformations0.Value.nodeToTree,
+                nodeToTreeSpace     = transformations0.Value.nodeToTree,
                 toOtherBrushSpace   = node0ToNode1
             };
             brushIntersections[1] = new BrushIntersectionInfo()
             {
                 brushNodeIndex      = brushNodeIndex1,
-                nodeToTreeSpace    = transformations1.Value.nodeToTree,
+                nodeToTreeSpace     = transformations1.Value.nodeToTree,
                 toOtherBrushSpace   = node1ToNode0
             };
 
@@ -309,7 +309,8 @@ namespace Chisel.Core
                 for (int i = 0; i < intersectingPlaneIndices0.Length; i++) intersectingPlaneIndices0[i] = i;
                 for (int i = 0; i < intersectingPlaneIndices1.Length; i++) intersectingPlaneIndices1[i] = i;
             }
-            
+
+
 
             var inverseNodeToTreeSpaceMatrix0 = math.transpose(transformations0.Value.treeToNode);
             var inverseNodeToTreeSpaceMatrix1 = math.transpose(transformations1.Value.treeToNode);
@@ -353,6 +354,8 @@ namespace Chisel.Core
             }
 
 
+            BlobBuilderArray<float3> usedVertices0;
+            BlobBuilderArray<float3> usedVertices1;
             if (type != IntersectionType.Intersection)
             {
                 var intersectingPlanes0 = builder.Construct(ref brushIntersections[0].localSpacePlanes0, localSpacePlanes0, localSpacePlanes0Length);
@@ -361,10 +364,10 @@ namespace Chisel.Core
                 builder.Allocate(ref brushIntersections[0].usedPlanePairs, 0);
                 builder.Allocate(ref brushIntersections[1].usedPlanePairs, 0);
 
-                var usedVertices0 = builder.Allocate(ref brushIntersections[0].usedVertices, mesh0.vertices.Length);
-                var usedVertices1 = builder.Allocate(ref brushIntersections[1].usedVertices, mesh1.vertices.Length);
-                for (int i = 0; i < usedVertices0.Length; i++) usedVertices0[i] = i;
-                for (int i = 0; i < usedVertices1.Length; i++) usedVertices1[i] = i;
+                usedVertices0 = builder.Allocate(ref brushIntersections[0].usedVertices, mesh0.vertices.Length);
+                usedVertices1 = builder.Allocate(ref brushIntersections[1].usedVertices, mesh1.vertices.Length);
+                for (int i = 0; i < usedVertices0.Length; i++) usedVertices0[i] = mesh0.vertices[i];
+                for (int i = 0; i < usedVertices1.Length; i++) usedVertices1[i] = mesh1.vertices[i];
             } else
             {
                 var intersectingPlanes0 = builder.Allocate(ref brushIntersections[0].localSpacePlanes0, intersectingPlaneIndices0.Length);
@@ -382,14 +385,14 @@ namespace Chisel.Core
                         FindPlanePairs(ref mesh0, ref intersectingPlaneIndices0, localSpacePlanes0, vertexUsedPtr, float4x4.identity, usedPlanePairsPtr, out int usedPlanePairsLength, out usedVerticesLength);
                         builder.Construct(ref brushIntersections[0].usedPlanePairs, usedPlanePairsPtr, usedPlanePairsLength);
                     }
-                    var usedVertices = builder.Allocate(ref brushIntersections[0].usedVertices, usedVerticesLength);
+                    usedVertices0 = builder.Allocate(ref brushIntersections[0].usedVertices, usedVerticesLength);
                     if (usedVerticesLength > 0)
                     {
                         for (int i = 0, n = 0; i < mesh0.vertices.Length; i++)
                         {
                             if (vertexUsedPtr[i] == 0)
                                 continue;
-                            usedVertices[n] = mesh0.vertices[vertexUsedPtr[i] - 1];
+                            usedVertices0[n] = mesh0.vertices[vertexUsedPtr[i] - 1];
                             n++;
                         }
                     }
@@ -402,14 +405,14 @@ namespace Chisel.Core
                         FindPlanePairs(ref mesh1, ref intersectingPlaneIndices1, localSpacePlanes1, vertexUsedPtr, node1ToNode0, usedPlanePairsPtr, out int usedPlanePairsLength, out usedVerticesLength);
                         builder.Construct(ref brushIntersections[1].usedPlanePairs, usedPlanePairsPtr, usedPlanePairsLength);
                     }
-                    var usedVertices = builder.Allocate(ref brushIntersections[1].usedVertices, usedVerticesLength);
+                    usedVertices1 = builder.Allocate(ref brushIntersections[1].usedVertices, usedVerticesLength);
                     if (usedVerticesLength > 0)
                     {
                         for (int i = 0, n = 0; i < mesh1.vertices.Length; i++)
                         {
                             if (vertexUsedPtr[i] == 0)
                                 continue;
-                            usedVertices[n] = mesh1.vertices[vertexUsedPtr[i] - 1];
+                            usedVertices1[n] = mesh1.vertices[vertexUsedPtr[i] - 1];
                             n++;
                         }
                     }
@@ -455,6 +458,81 @@ namespace Chisel.Core
                     }
                 }
             }
+
+
+            {
+                var vertexIntersectionPlanes0       = stackalloc ushort[usedVertices0.Length * localSpacePlanes0Length];
+                var vertexIntersectionSegments0     = stackalloc int2[usedVertices0.Length];
+                var vertexIntersectionPlaneCount    = 0;
+                const float kPlaneDistanceEpsilon = CSGManagerPerformCSG.kPlaneDistanceEpsilon;
+
+                for (int i = 0; i < usedVertices0.Length; i++)
+                {
+                    var segment = new int2(vertexIntersectionPlaneCount, 0);
+                    for (int j = 0; j < intersectingPlaneIndices0.Length; j++)
+                    {
+                        var planeIndex = intersectingPlaneIndices0[j];
+                        var distance = math.dot(mesh0.localPlanes[planeIndex], new float4(usedVertices0[i], 1));
+                        if (distance >= -kPlaneDistanceEpsilon && distance <= kPlaneDistanceEpsilon) // Note: this is false on NaN/Infinity, so don't invert
+                        {
+                            vertexIntersectionPlanes0[vertexIntersectionPlaneCount] = (ushort)planeIndex;
+                            vertexIntersectionPlaneCount++;
+                        }
+                    }
+                    segment.y = vertexIntersectionPlaneCount - segment.x;
+                    vertexIntersectionSegments0[i] = segment;
+                }
+                if (vertexIntersectionPlaneCount > 0)
+                {
+                    builder.Construct(ref brushIntersections[0].vertexIntersectionPlanes, vertexIntersectionPlanes0, vertexIntersectionPlaneCount);
+                    builder.Construct(ref brushIntersections[0].vertexIntersectionSegments, vertexIntersectionSegments0, usedVertices0.Length);
+                } else
+                {
+                    var vertexIntersectionPlanes = builder.Allocate(ref brushIntersections[0].vertexIntersectionPlanes, 1);
+                    vertexIntersectionPlanes[0] = 0;
+                    var vertexIntersectionSegments = builder.Allocate(ref brushIntersections[0].vertexIntersectionSegments, usedVertices0.Length);
+                    for (int i = 0; i < vertexIntersectionSegments.Length;i++)
+                        vertexIntersectionSegments[i] = int2.zero;
+                }
+            }
+
+
+            {
+                var vertexIntersectionPlanes1       = stackalloc ushort[usedVertices1.Length * localSpacePlanes1Length];
+                var vertexIntersectionSegments1     = stackalloc int2[usedVertices1.Length];
+                var vertexIntersectionPlaneCount    = 0;
+                const float kPlaneDistanceEpsilon = CSGManagerPerformCSG.kPlaneDistanceEpsilon;
+
+                for (int i = 0; i < usedVertices1.Length; i++)
+                {
+                    var segment = new int2(vertexIntersectionPlaneCount, 0);
+                    for (int j = 0; j < intersectingPlaneIndices1.Length; j++)
+                    {
+                        var planeIndex = intersectingPlaneIndices1[j];
+                        var distance = math.dot(mesh1.localPlanes[planeIndex], new float4(usedVertices1[i], 1));
+                        if (distance >= -kPlaneDistanceEpsilon && distance <= kPlaneDistanceEpsilon) // Note: this is false on NaN/Infinity, so don't invert
+                        {
+                            vertexIntersectionPlanes1[vertexIntersectionPlaneCount] = (ushort)planeIndex;
+                            vertexIntersectionPlaneCount++;
+                        }
+                    }
+                    segment.y = vertexIntersectionPlaneCount - segment.x;
+                    vertexIntersectionSegments1[i] = segment;
+                }
+                if (vertexIntersectionPlaneCount > 0)
+                {
+                    builder.Construct(ref brushIntersections[1].vertexIntersectionPlanes, vertexIntersectionPlanes1, vertexIntersectionPlaneCount);
+                    builder.Construct(ref brushIntersections[1].vertexIntersectionSegments, vertexIntersectionSegments1, usedVertices1.Length);
+                } else
+                {
+                    var vertexIntersectionPlanes = builder.Allocate(ref brushIntersections[1].vertexIntersectionPlanes, 1);
+                    vertexIntersectionPlanes[0] = 0;
+                    var vertexIntersectionSegments = builder.Allocate(ref brushIntersections[1].vertexIntersectionSegments, usedVertices1.Length);
+                    for (int i = 0; i < vertexIntersectionSegments.Length; i++)
+                        vertexIntersectionSegments[i] = int2.zero;
+                }
+            }
+
 
             var result = builder.CreateBlobAssetReference<BrushPairIntersection>(Allocator.Persistent);
             builder.Dispose();

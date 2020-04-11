@@ -373,16 +373,19 @@ namespace Chisel.Core
 
     public struct BrushIntersectionInfo
     {
-        public int                               brushNodeIndex;
-        public float4x4                          nodeToTreeSpace;
-        public float4x4                          toOtherBrushSpace;
+        public int                      brushNodeIndex;
+        public float4x4                 nodeToTreeSpace;
+        public float4x4                 toOtherBrushSpace;
 
-        public BlobArray<PlanePair>              usedPlanePairs;
-        public BlobArray<float4>                 localSpacePlanes0;         // planes in local space of >brush0<
-        public BlobArray<int>                    localSpacePlaneIndices0;   // planes indices of >brush0<
+        public BlobArray<PlanePair>     usedPlanePairs;
+        public BlobArray<float4>        localSpacePlanes0;         // planes in local space of >brush0<
+        public BlobArray<int>           localSpacePlaneIndices0;   // planes indices of >brush0<
+        
+        public BlobArray<ushort>        vertexIntersectionPlanes;
+        public BlobArray<int2>          vertexIntersectionSegments;
 
-        public BlobArray<float3>                 usedVertices;
-        public BlobArray<SurfaceInfo>            surfaceInfos;
+        public BlobArray<float3>        usedVertices;
+        public BlobArray<SurfaceInfo>   surfaceInfos;
     }
     
     public struct BrushIntersectionLoop
@@ -390,6 +393,10 @@ namespace Chisel.Core
         public BrushSurfacePair     pair;
         public SurfaceInfo          surfaceInfo;
         public BlobArray<float3>    loopVertices;
+    }
+    public struct BrushIntersectionLoops
+    {
+        public BlobArray<BrushIntersectionLoop> loops;
     }
 
     public struct BrushPairIntersection

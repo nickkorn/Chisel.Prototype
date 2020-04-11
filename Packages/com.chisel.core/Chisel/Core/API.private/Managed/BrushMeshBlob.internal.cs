@@ -26,7 +26,8 @@ namespace Chisel.Core
         public BlobArray<int>                   halfEdgePolygonIndices;
         public BlobArray<Polygon>	            polygons;
         public BlobArray<float4>                localPlanes;
-        
+        //public BlobArray<ushort>              vertexIntersectionPlanes;
+        //public BlobArray<int2>                vertexIntersectionSegments;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool IsEmpty()
@@ -34,7 +35,7 @@ namespace Chisel.Core
             return (localPlanes.Length == 0 || polygons.Length == 0 || vertices.Length == 0 || halfEdges.Length == 0);
         }
 
-        public static BlobAssetReference<BrushMeshBlob> Build(BrushMesh brushMesh)
+        public unsafe static BlobAssetReference<BrushMeshBlob> Build(BrushMesh brushMesh)
         {
             if (brushMesh == null ||
                 brushMesh.vertices.Length < 4 ||
@@ -43,10 +44,14 @@ namespace Chisel.Core
                 return BlobAssetReference<BrushMeshBlob>.Null;
 
             var builder = new BlobBuilder(Allocator.Temp);
-                
+
+            var srcVertices = brushMesh.vertices;
+            var srcPlanes = brushMesh.planes;
+
+
             ref var root = ref builder.ConstructRoot<BrushMeshBlob>();
             root.localBounds = brushMesh.localBounds;
-            builder.Construct(ref root.vertices, brushMesh.vertices);
+            builder.Construct(ref root.vertices, srcVertices);
             builder.Construct(ref root.halfEdges, brushMesh.halfEdges);
             builder.Construct(ref root.halfEdgePolygonIndices, brushMesh.halfEdgePolygonIndices);
             var polygonArray = builder.Allocate(ref root.polygons, brushMesh.polygons.Length);
@@ -61,6 +66,31 @@ namespace Chisel.Core
             }
 
             builder.Construct(ref root.localPlanes, brushMesh.planes);
+
+            /*
+            var vertexIntersectionSegments = stackalloc int2[srcVertices.Length];
+            var vertexIntersectionPlanes = stackalloc ushort[srcVertices.Length * (srcPlanes.Length - 1)];
+            var vertexIntersectionPlaneCount = 0;
+            const float kPlaneDistanceEpsilon = CSGManagerPerformCSG.kPlaneDistanceEpsilon;
+
+            for (int i = 0; i < srcVertices.Length; i++)
+            {
+                vertexIntersectionSegments[i].x = vertexIntersectionPlaneCount;
+                for (int j = 0; j < srcPlanes.Length; j++)
+                {
+                    var distance = math.dot(srcPlanes[j], new float4(srcVertices[i], 1));
+                    if (distance >= -kPlaneDistanceEpsilon && distance <= kPlaneDistanceEpsilon) // Note: this is false on NaN/Infinity, so don't invert
+                    {
+                        vertexIntersectionPlanes[vertexIntersectionPlaneCount] = (ushort)j;
+                        vertexIntersectionPlaneCount++;
+                    }
+                }
+                vertexIntersectionSegments[i].y = vertexIntersectionPlaneCount - vertexIntersectionSegments[i].x;
+            }
+            builder.Construct(ref root.vertexIntersectionPlanes, vertexIntersectionPlanes, vertexIntersectionPlaneCount);
+            builder.Construct(ref root.vertexIntersectionSegments, vertexIntersectionSegments, srcVertices.Length);
+            */
+
             var result = builder.CreateBlobAssetReference<BrushMeshBlob>(Allocator.Persistent);
             builder.Dispose();
             return result;

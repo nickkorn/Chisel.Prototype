@@ -63,7 +63,7 @@ namespace Chisel.Core
                     float closestDistance = CSGManagerPerformCSG.kSqrMergeEpsilon;
                     while (chainIndex != -1)
                     {
-                        var nextChainIndex  = ((int)UnsafeUtility.ReadArrayElement<ushort> (chainedIndices->Ptr, chainIndex)) - 1;
+                        var nextChainIndex  = ((int)((ushort*)chainedIndices->Ptr)[chainIndex]) - 1;
                         var sqrDistance     = math.lengthsq(verticesPtr[chainIndex] - vertex);
                         if (sqrDistance < closestDistance)
                         {
@@ -120,7 +120,7 @@ namespace Chisel.Core
                     float closestDistance = CSGManagerPerformCSG.kSqrMergeEpsilon;
                     while (chainIndex != -1)
                     {
-                        var nextChainIndex  = ((int)UnsafeUtility.ReadArrayElement<ushort> (chainedIndices->Ptr, chainIndex)) - 1;
+                        var nextChainIndex = ((int)((ushort*)chainedIndices->Ptr)[chainIndex]) - 1;
                         var sqrDistance     = math.lengthsq(verticesPtr[chainIndex] - vertex);
                         if (sqrDistance < closestDistance)
                         {

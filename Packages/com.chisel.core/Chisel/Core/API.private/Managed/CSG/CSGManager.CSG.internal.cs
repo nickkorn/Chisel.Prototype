@@ -77,7 +77,7 @@ namespace Chisel.Core
             public NativeHashMap<int, BlobAssetReference<BrushesTouchedByBrush>>    brushesTouchedByBrushes;
 
             public Dictionary<int, NativeList<BlobAssetReference<ChiselSurfaceRenderBuffer>>> surfaceRenderBuffers;
-            public NativeList<BlobAssetReference<BrushIntersectionLoop>> intersectionLoopBlobs;
+            public NativeList<BlobAssetReference<BrushIntersectionLoops>>   intersectionLoopBlobs;
             public NativeMultiHashMap<int, BrushPair>                       brushBrushIntersections;
             public NativeList<BrushPair>                                    uniqueBrushPairs;
             public NativeList<BlobAssetReference<BrushPairIntersection>>    intersectingBrushes;
@@ -313,7 +313,7 @@ namespace Chisel.Core
                 Profiler.EndSample();
 
                 var triangleArraySize       = GeometryMath.GetTriangleArraySize(allTreeBrushIndices.Length);
-                var intersectionLoopBlobs   = new NativeList<BlobAssetReference<BrushIntersectionLoop>>(65500, Allocator.TempJob);
+                var intersectionLoopBlobs   = new NativeList<BlobAssetReference<BrushIntersectionLoops>>(65500, Allocator.TempJob);
                 var brushBrushIntersections = new NativeMultiHashMap<int, BrushPair>(triangleArraySize * 2, Allocator.TempJob);
                 var uniqueBrushPairs        = new NativeList<BrushPair>(triangleArraySize, Allocator.TempJob);
                 var intersectingBrushes     = new NativeList<BlobAssetReference<BrushPairIntersection>>(triangleArraySize, Allocator.TempJob);
