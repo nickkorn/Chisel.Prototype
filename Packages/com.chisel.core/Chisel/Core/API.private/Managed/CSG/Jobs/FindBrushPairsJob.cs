@@ -29,13 +29,13 @@ namespace Chisel.Core
     {
         public struct Empty { }
 
-        [NoAlias, ReadOnly] public int maxPairs;
         [NoAlias, ReadOnly] public NativeArray<int>      treeBrushIndices;
         [NoAlias, ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushesTouchedByBrush>> brushesTouchedByBrushes;
         [NoAlias, WriteOnly] public NativeList<BrushPair> uniqueBrushPairs;
 
         public void Execute()
         {
+            var maxPairs = GeometryMath.GetTriangleArraySize(treeBrushIndices.Length);
             var brushPairMap = new NativeHashMap<BrushPair, FindBrushPairsJob.Empty>(maxPairs, Allocator.Temp);
             var empty = new Empty();
             for (int b0 = 0; b0 < treeBrushIndices.Length; b0++)

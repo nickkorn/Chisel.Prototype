@@ -28,6 +28,9 @@ namespace Chisel.Core
 
         public void Execute(int index)
         {
+            if (index >= treeBrushIndices.Length)
+                return;
+
             var processedNodeIndex = treeBrushIndices[index];
 
             int categoryStackNodeCount, polygonGroupCount;
@@ -84,8 +87,10 @@ namespace Chisel.Core
                         
                     var routingTableBlob = builder.CreateBlobAssetReference<RoutingTable>(Allocator.Persistent);
                     builder.Dispose();
-                    if (!routingTableLookup.TryAdd(processedNodeIndex, routingTableBlob))
-                        FailureMessage();
+
+                    // TODO: figure out why this sometimes returns false, without any duplicates, yet values seem to exist??
+                    routingTableLookup.TryAdd(processedNodeIndex, routingTableBlob);
+                    //FailureMessage();
                 }
             }
             routingTable.Dispose();

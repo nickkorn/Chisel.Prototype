@@ -172,7 +172,7 @@ namespace Chisel.Core
         /// <returns>A <see cref="Chisel.Core.GeneratedMeshContents"/> that can be used to initialize a [UnityEngine.Mesh](https://docs.unity3d.com/ScriptReference/Mesh.html) with.</returns>
         /// <seealso cref="Chisel.Core.CSGTree.GetMeshDescriptions"/>
         [MethodImpl(MethodImplOptions.AggressiveInlining)] 
-        public GeneratedMeshContents		GetGeneratedMesh	(GeneratedMeshDescription meshDescription, GeneratedMeshContents previousGeneratedMeshContents = null) { return GetGeneratedMesh(treeNodeID, meshDescription, previousGeneratedMeshContents); }
+        public GeneratedMeshContents		GetGeneratedMesh	(GeneratedMeshDescription meshDescription) { return GetGeneratedMesh(treeNodeID, meshDescription); }
 
         // TODO: add description
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

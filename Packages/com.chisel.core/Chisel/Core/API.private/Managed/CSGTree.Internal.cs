@@ -41,9 +41,9 @@ namespace Chisel.Core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static GeneratedMeshContents GetGeneratedMesh(int treeNodeID, GeneratedMeshDescription meshDescription, GeneratedMeshContents previousGeneratedMeshContents)
+        private static GeneratedMeshContents GetGeneratedMesh(int treeNodeID, GeneratedMeshDescription meshDescription)
         {
-            return CSGManager.GetGeneratedMesh(treeNodeID, meshDescription, previousGeneratedMeshContents);
+            return CSGManager.GetGeneratedMesh(treeNodeID, meshDescription);
         }
         
         

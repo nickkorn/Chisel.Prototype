@@ -149,7 +149,9 @@ namespace Chisel.Components
             try
             {
                 // Find all meshes whose refCounts are 0
+                Profiler.BeginSample("sharedUnityMeshes.FindAllUnusedUnityMeshes");
                 sharedUnityMeshes.FindAllUnusedUnityMeshes();
+                Profiler.EndSample();
 
                 // Separate loop so we can re-use garbage collected UnityEngine.Meshes to avoid allocation costs
 
@@ -159,10 +161,14 @@ namespace Chisel.Components
 
                     // Generate new UnityEngine.Mesh instances and fill them with data from the CSG algorithm (if necessary)
                     //	note: reuses garbage collected meshes when possible
+                    Profiler.BeginSample("sharedUnityMeshes.CreateNewMeshes");
                     sharedUnityMeshes.CreateNewMeshes(model);
+                    Profiler.EndSample();
 
                     // Generate (or re-use) components and set them up properly
+                    Profiler.BeginSample("componentGenerator.Rebuild");
                     componentGenerator.Rebuild(model);
+                    Profiler.EndSample();
                 }
             }
             finally
@@ -173,8 +179,10 @@ namespace Chisel.Components
                     try
                     {
                         modifications = true;
+                        Profiler.BeginSample("PostUpdateModel");
                         if (PostUpdateModel != null)
                             PostUpdateModel(model);
+                        Profiler.EndSample();
                     }
                     catch (Exception ex) // if there's a bug in user-code we don't want to end up in a bad state
                     {
@@ -185,12 +193,16 @@ namespace Chisel.Components
             }
 
             // Destroy all meshes whose refCounts are 0
+            Profiler.BeginSample("DestroyNonRecycledUnusedUnityMeshes");
             sharedUnityMeshes.DestroyNonRecycledUnusedUnityMeshes();
+            Profiler.EndSample();
 
             if (modifications)
             {
+                Profiler.BeginSample("PostUpdateModels");
                 if (PostUpdateModels != null)
                     PostUpdateModels();
+                Profiler.EndSample();
             }
         }
 

@@ -101,12 +101,14 @@ namespace Chisel.Core
     {
         const double kEpsilon = CSGManagerPerformCSG.kEpsilon;
 
-        [NoAlias,ReadOnly] public NativeArray<int>  treeBrushIndices;
-        [NoAlias,ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushMeshBlob>>         brushMeshLookup;
-        [NoAlias,ReadOnly] public NativeHashMap<int, BlobAssetReference<NodeTransformations>>   transformations;
-        [NoAlias,ReadOnly] public NativeHashMap<int, BlobAssetReference<BasePolygonsBlob>>      basePolygons;// only need bounds
+        [NoAlias, ReadOnly] public NativeArray<int>  allTreeBrushIndices;
+        [NoAlias, ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushMeshBlob>>         brushMeshLookup;
+        [NoAlias, ReadOnly] public NativeHashMap<int, BlobAssetReference<NodeTransformations>>   transformations;
+        [NoAlias, ReadOnly] public NativeHashMap<int, BlobAssetReference<BasePolygonsBlob>>      basePolygons;// only need bounds
+        
+        [NoAlias, ReadOnly] public NativeArray<int>  updateBrushIndices;
 
-        [NoAlias,WriteOnly] public NativeMultiHashMap<int, BrushPair>.ParallelWriter brushBrushIntersections;
+        [NoAlias, WriteOnly] public NativeMultiHashMap<int, BrushPair>.ParallelWriter brushBrushIntersections;
 
         static void TransformOtherIntoBrushSpace(ref float4x4 treeToBrushSpaceMatrix, ref float4x4 brushToTreeSpaceMatrix, ref BlobArray<float4> srcPlanes, float4* dstPlanes)
         {
@@ -118,7 +120,7 @@ namespace Chisel.Core
             }
         }
 
-
+         
         static IntersectionType ConvexPolytopeTouching(BlobAssetReference<BrushMeshBlob> brushMesh0,
                                                        ref float4x4 treeToNode0SpaceMatrix,
                                                        ref float4x4 nodeToTree0SpaceMatrix,
@@ -203,23 +205,22 @@ namespace Chisel.Core
 
         public void Execute()
         {
-            var triangleArraySize = GeometryMath.GetTriangleArraySize(treeBrushIndices.Length);
-            for (int index=0;index< triangleArraySize;index++)
+            for (int index0 = 0; index0 < allTreeBrushIndices.Length; index0++)
             {
-                Execute(index);
+                var brush0NodeIndex = allTreeBrushIndices[index0];
+                for (int index1 = 0; index1 < updateBrushIndices.Length; index1++)
+                {
+                    var brush1NodeIndex = updateBrushIndices[index1];
+                    if (brush0NodeIndex <= brush1NodeIndex)
+                        continue;
+                    Execute(brush0NodeIndex, brush1NodeIndex);
+                }
             }
         }
 
-        public void Execute(int index)
+        void Execute(int brush0NodeIndex, int brush1NodeIndex)
         {
             //output.BeginForEachIndex(index);
-
-            var arrayIndex = GeometryMath.GetTriangleArrayIndex(index, treeBrushIndices.Length);
-            var index0 = arrayIndex.x;
-            var index1 = arrayIndex.y;
-
-            var brush0NodeIndex = treeBrushIndices[index0];
-            var brush1NodeIndex = treeBrushIndices[index1];
 
             /*
             var brushIndex0 = index % brushData.Length;
@@ -369,6 +370,7 @@ namespace Chisel.Core
             }
             var builder = new BlobBuilder(Allocator.Temp);
             ref var root = ref builder.ConstructRoot<BrushesTouchedByBrush>();
+
             builder.Construct(ref root.brushIntersections, brushIntersections);
             builder.Construct(ref root.intersectionBits, bitset.twoBits);
             root.Length = bitset.Length;

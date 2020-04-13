@@ -7,6 +7,7 @@ using System.Reflection;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.Profiling;
 
 namespace Chisel.Editors
 { 

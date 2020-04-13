@@ -20,23 +20,23 @@ namespace Chisel.Core
     {
         //const float kEpsilon = CSGManagerPerformCSG.kDistanceEpsilon;
 
-        [NoAlias, ReadOnly] public int                                                              brushNodeIndex;
-        //[NoAlias, ReadOnly] public NativeArray<int>                                               treeBrushNodeIndices;
+        [NoAlias, ReadOnly] public int                                                              index;
+        [NoAlias, ReadOnly] public NativeArray<int>                                                 treeBrushNodeIndices;
         [NoAlias, ReadOnly] public NativeHashMap<int, BlobAssetReference<RoutingTable>>             routingTableLookup;
         [NoAlias, ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushWorldPlanes>>         brushWorldPlanes;
         [NoAlias, ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushesTouchedByBrush>>    brushesTouchedByBrushes;
 
-        [NoAlias, ReadOnly] public VertexSoup brushVertices; 
-        [NoAlias, ReadOnly] public NativeList<SurfaceInfo>  intersectionSurfaceInfos;
-        [NoAlias, ReadOnly] public NativeListArray<Edge>    intersectionEdges;
+        //[NoAlias, ReadOnly] public VertexSoup               brushVertices; 
+        //[NoAlias, ReadOnly] public NativeList<SurfaceInfo>  intersectionSurfaceInfos;
+        //[NoAlias, ReadOnly] public NativeListArray<Edge>    intersectionEdges;
+        //[NoAlias, ReadOnly] public NativeList<SurfaceInfo>  basePolygonSurfaceInfos;
+        //[NoAlias, ReadOnly] public NativeListArray<Edge>    basePolygonEdges;
 
-        [NoAlias, ReadOnly] public int                      surfaceCount;
-        [NoAlias, ReadOnly] public NativeList<SurfaceInfo>  basePolygonSurfaceInfos;
-        [NoAlias, ReadOnly] public NativeListArray<Edge>    basePolygonEdges;
+        //[NoAlias, ReadOnly] public int                      surfaceCount;
 
-        [NoAlias] public NativeListArray<int>               surfaceLoopIndices;
-        [NoAlias] public NativeList<SurfaceInfo>            allInfos;
-        [NoAlias] public NativeListArray<Edge>              allEdges;
+        [NoAlias, ReadOnly] public NativeStream.Reader      input;
+        [NoAlias, WriteOnly] public NativeStream.Writer     output;
+
 
         struct Empty {}
 
@@ -506,6 +506,61 @@ namespace Chisel.Core
 
         public void Execute()
         {
+            VertexSoup brushVertices;
+            NativeList<SurfaceInfo>  basePolygonSurfaceInfos;
+            NativeListArray<Edge>    basePolygonEdges;
+            NativeList<SurfaceInfo>  intersectionSurfaceInfos;
+            NativeListArray<Edge>    intersectionEdges;
+
+            var count = input.BeginForEachIndex(index);
+            if (count == 0)
+                return;
+            var brushNodeIndex = input.Read<int>();
+            var surfaceCount = input.Read<int>();
+            var vertexCount = input.Read<int>();
+            brushVertices = new VertexSoup(vertexCount, Allocator.Temp);
+            for (int v = 0; v < vertexCount; v++)
+            {
+                var vertex = input.Read<float3>();
+                brushVertices.AddNoResize(vertex);
+            }
+
+            var basePolygonEdgesLength = input.Read<int>();
+            basePolygonSurfaceInfos = new NativeList<SurfaceInfo>(basePolygonEdgesLength, Allocator.Temp);
+            basePolygonEdges = new NativeListArray<Edge>(basePolygonEdgesLength, Allocator.Temp);
+
+            basePolygonSurfaceInfos.ResizeUninitialized(basePolygonEdgesLength);
+            basePolygonEdges.ResizeExact(basePolygonEdgesLength);
+            for (int l = 0; l < basePolygonEdgesLength; l++)
+            {
+                basePolygonSurfaceInfos[l] = input.Read<SurfaceInfo>();
+                var edgesLength  = input.Read<int>();
+                var edgesInner  = basePolygonEdges[l];
+                edgesInner.ResizeUninitialized(edgesLength);
+                for (int e = 0; e < edgesLength; e++)
+                {
+                    edgesInner[e] = input.Read<Edge>();
+                }
+            }
+
+            var intersectionEdgesLength = input.Read<int>();
+            intersectionSurfaceInfos = new NativeList<SurfaceInfo>(intersectionEdgesLength, Allocator.Temp);
+            intersectionEdges = new NativeListArray<Edge>(intersectionEdgesLength, Allocator.Temp);
+
+            intersectionSurfaceInfos.ResizeUninitialized(intersectionEdgesLength);
+            intersectionEdges.ResizeExact(intersectionEdgesLength);
+            for (int l = 0; l < intersectionEdgesLength; l++)
+            {
+                intersectionSurfaceInfos[l] = input.Read<SurfaceInfo>();
+                var edgesLength = input.Read<int>();
+                var edgesInner  = intersectionEdges[l];
+                edgesInner.ResizeUninitialized(edgesLength);
+                for (int e = 0; e < edgesLength; e++)
+                {
+                    edgesInner[e] = input.Read<Edge>();
+                }
+            }
+            input.EndForEachIndex();
             //int brushNodeIndex = treeBrushNodeIndices[index];
 
             if (surfaceCount == 0)
@@ -517,6 +572,9 @@ namespace Chisel.Core
                 //Debug.LogError("No routing table found");
                 return;
             }
+
+            
+
 
             ref var nodes               = ref routingTableRef.Value.nodes;
             ref var routingLookups      = ref routingTableRef.Value.routingLookups;
@@ -558,7 +616,12 @@ namespace Chisel.Core
 
 
             var holeIndices = new NativeListArray<int>(routingLookups.Length * surfaceCount, Allocator.Temp);
+            var surfaceLoopIndices = new NativeListArray<int>(Allocator.Temp);
             surfaceLoopIndices.ResizeExact(surfaceCount);
+
+            var allInfos = new NativeList<SurfaceInfo>(Allocator.Temp);
+            var allEdges = new NativeListArray<Edge>(Allocator.Temp);
+
 
             ref var routingTable = ref routingTableRef.Value;
             for (int surfaceIndex = 0, offset = 0; surfaceIndex < surfaceCount; surfaceIndex++)
@@ -635,8 +698,35 @@ namespace Chisel.Core
                 CleanUp(in allInfos, allEdges, in brushVertices, in loopIndices, holeIndices);
             }
 
+            output.BeginForEachIndex(index);
+            output.Write(brushNodeIndex);
+            output.Write(brushVertices.Length);
+            for (int l = 0; l < brushVertices.Length; l++)
+                output.Write(brushVertices[l]);
+
+            output.Write(surfaceLoopIndices.Length);
+            for (int o = 0; o < surfaceLoopIndices.Length; o++)
+            {
+                var inner = surfaceLoopIndices[o];
+                output.Write(inner.Length);
+                for (int i = 0; i < inner.Length; i++)
+                    output.Write(inner[i]);
+            }
+
+            output.Write(allEdges.Length);
+            for (int l = 0; l < allEdges.Length; l++)
+            {
+                output.Write(allInfos[l]);
+                var edges = allEdges[l].AsArray();
+                output.Write(edges.Length);
+                for (int e = 0; e < edges.Length; e++)
+                    output.Write(edges[e]);
+            }
+            output.EndForEachIndex();
+
+
             intersectionLoops.Dispose();
             holeIndices.Dispose();
         }
     }
-}
+} 

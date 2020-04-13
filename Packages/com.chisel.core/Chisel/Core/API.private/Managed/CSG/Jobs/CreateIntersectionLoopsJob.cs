@@ -525,7 +525,7 @@ namespace Chisel.Core
                     dstVertices[d] = srcVertices[uniqueIndices[offset + d]];
             }
             outputSurfaces.AddNoResize(builder.CreateBlobAssetReference<BrushIntersectionLoops>(Allocator.Persistent));
-            builder.Dispose();
+            //builder.Dispose(); // Allocated with Temp, so don't need dispose
         }
 
         public void Execute(int index)
@@ -622,10 +622,11 @@ namespace Chisel.Core
 
             if (foundIndices0Length >= 3)
             {
+                ref var brushWorldPlanes0 = ref brushWorldPlanes[brushNodeIndex0].Value;
                 GenerateLoop(brushNodeIndex0,
                              brushNodeIndex1,
                              ref intersection.brushes[0].surfaceInfos,
-                             ref brushWorldPlanes[brushNodeIndex0].Value,
+                             ref brushWorldPlanes0,
                              foundIndices0, ref foundIndices0Length,
                              ref vertexSoup,
                              outputSurfaces);
@@ -633,10 +634,11 @@ namespace Chisel.Core
 
             if (foundIndices1Length >= 3)
             {
+                ref var brushWorldPlanes1 = ref brushWorldPlanes[brushNodeIndex1].Value;
                 GenerateLoop(brushNodeIndex1,
                              brushNodeIndex0,
                              ref intersection.brushes[1].surfaceInfos,
-                             ref brushWorldPlanes[brushNodeIndex1].Value,
+                             ref brushWorldPlanes1,
                              foundIndices1, 
                              ref foundIndices1Length,
                              ref vertexSoup,
@@ -646,7 +648,7 @@ namespace Chisel.Core
             //foundIndices0.Dispose();
             //foundIndices1.Dispose();
 
-            vertexSoup.Dispose();
+            //vertexSoup.Dispose(); // Allocated with Temp, so do not need to dispose
 
             intersectionAsset.Dispose();
         }

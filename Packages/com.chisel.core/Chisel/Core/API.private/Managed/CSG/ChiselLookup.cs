@@ -58,10 +58,6 @@ namespace Chisel.Core
 
         internal static BlobAssetReference<CompactTree> Create(List<CSGManager.NodeHierarchy> nodeHierarchies, int treeNodeIndex)
         {
-            var chiselLookupValues = ChiselTreeLookup.Value[treeNodeIndex];
-            if (chiselLookupValues.compactTree.IsCreated)
-                chiselLookupValues.compactTree.Dispose();
-
             var treeInfo                    = nodeHierarchies[treeNodeIndex].treeInfo;
             var treeBrushes                 = treeInfo.treeBrushes;
 
@@ -181,10 +177,10 @@ namespace Chisel.Core
             builder.Construct(ref root.bottomUpNodes, bottomUpNodes);
             root.indexOffset = minBrushIndex;
             builder.Construct(ref root.brushIndexToBottomUpIndex, brushIndexToBottomUpIndex);
-            chiselLookupValues.compactTree = builder.CreateBlobAssetReference<CompactTree>(Allocator.Persistent);
+            var compactTree = builder.CreateBlobAssetReference<CompactTree>(Allocator.Persistent);
             builder.Dispose();
 
-            return chiselLookupValues.compactTree;
+            return compactTree;
         }
     }
 
@@ -420,45 +416,96 @@ namespace Chisel.Core
 
             public BlobAssetReference<CompactTree>                                  compactTree;
 
-            internal void RemoveByBrushID(List<int> treeBrushes)
+            internal void RemoveBasePolygonsByBrushID(List<int> brushNodeIndices)
             {
-                for (int b = 0; b < treeBrushes.Count; b++)
+                if (basePolygons.Count() == 0)
+                    return;
+                for (int b = 0; b < brushNodeIndices.Count; b++)
                 {
-                    var brushNodeID = treeBrushes[b];
-                    /*
-                    if (basePolygons.TryGetValue(brushNodeID - 1, out var basePolygonsBlob))
+                    var brushNodeID = brushNodeIndices[b];
+                    if (basePolygons.TryGetValue(brushNodeID, out var basePolygonsBlob))
                     {
-                        basePolygons.Remove(brushNodeID - 1);
+                        basePolygons.Remove(brushNodeID);
                         if (basePolygonsBlob.IsCreated)
                             basePolygonsBlob.Dispose();
-                    }*/
-                    if (routingTableLookup.TryGetValue(brushNodeID - 1, out var routingTable))
+                    }
+                }
+            }
+
+            internal void RemoveRoutingTablesByBrushID(List<int> brushNodeIndices)
+            {
+                if (routingTableLookup.Count() == 0)
+                    return;
+                for (int b = 0; b < brushNodeIndices.Count; b++)
+                {
+                    var brushNodeID = brushNodeIndices[b];
+                    if (routingTableLookup.TryGetValue(brushNodeID, out var routingTable))
                     {
-                        routingTableLookup.Remove(brushNodeID - 1);
+                        routingTableLookup.Remove(brushNodeID);
                         if (routingTable.IsCreated)
                             routingTable.Dispose();
                     }
-                    if (brushWorldPlanes.TryGetValue(brushNodeID - 1, out var worldPlanes))
+                }
+            }
+
+            internal void RemoveBrushWorldPlanesByBrushID(List<int> brushNodeIndices)
+            {
+                if (brushWorldPlanes.Count() == 0)
+                    return;
+                for (int b = 0; b < brushNodeIndices.Count; b++)
+                {
+                    var brushNodeID = brushNodeIndices[b];
+                    if (brushWorldPlanes.TryGetValue(brushNodeID, out var worldPlanes))
                     {
-                        brushWorldPlanes.Remove(brushNodeID - 1);
+                        brushWorldPlanes.Remove(brushNodeID);
                         if (worldPlanes.IsCreated)
                             worldPlanes.Dispose();
                     }
-                    if (brushesTouchedByBrushes.TryGetValue(brushNodeID - 1, out var brushesTouchedByBrush))
+                }
+            }
+
+            internal void RemoveBrushTouchesByBrushID(List<int> brushNodeIndices)
+            {
+                if (brushesTouchedByBrushes.Count() == 0)
+                    return;
+                for (int b = 0; b < brushNodeIndices.Count; b++)
+                {
+                    var brushNodeID = brushNodeIndices[b];
+                    if (brushesTouchedByBrushes.TryGetValue(brushNodeID, out var brushesTouchedByBrush))
                     {
-                        brushesTouchedByBrushes.Remove(brushNodeID - 1);
+                        brushesTouchedByBrushes.Remove(brushNodeID);
                         if (brushesTouchedByBrush.IsCreated)
                             brushesTouchedByBrush.Dispose();
                     }
-                    if (transformations.TryGetValue(brushNodeID - 1, out var transformation))
+                }
+            }
+
+            internal void RemoveTransformationsByBrushID(List<int> brushNodeIndices)
+            {
+                if (transformations.Count() == 0)
+                    return;
+                for (int b = 0; b < brushNodeIndices.Count; b++)
+                {
+                    var brushNodeID = brushNodeIndices[b];
+                    if (transformations.TryGetValue(brushNodeID, out var transformation))
                     {
-                        transformations.Remove(brushNodeID - 1);
+                        transformations.Remove(brushNodeID);
                         if (transformation.IsCreated)
                             transformation.Dispose();
                     }
-                    if (surfaceRenderBuffers.TryGetValue(brushNodeID - 1, out var surfaceRenderBuffer))
+                }
+            }
+
+            internal void RemoveSurfaceRenderBuffersByBrushID(List<int> brushNodeIndices)
+            {
+                if (surfaceRenderBuffers.Count == 0)
+                    return;
+                for (int b = 0; b < brushNodeIndices.Count; b++)
+                {
+                    var brushNodeID = brushNodeIndices[b];
+                    if (surfaceRenderBuffers.TryGetValue(brushNodeID, out var surfaceRenderBuffer))
                     {
-                        surfaceRenderBuffers.Remove(brushNodeID - 1);
+                        surfaceRenderBuffers.Remove(brushNodeID);
                         surfaceRenderBuffer.Dispose();
                     }
                 }
@@ -482,65 +529,65 @@ namespace Chisel.Core
                 {
                     using (var items = basePolygons.GetValueArray(Allocator.Temp))
                     {
-                        basePolygons.Clear();
-                        basePolygons.Dispose();
                         foreach (var item in items)
                         {
                             if (item.IsCreated)
                                 item.Dispose();
                         }
+                        basePolygons.Clear();
+                        basePolygons.Dispose();
                     }
                 }
                 if (routingTableLookup.IsCreated)
                 {
                     using (var items = routingTableLookup.GetValueArray(Allocator.Temp))
                     {
-                        routingTableLookup.Clear();
-                        routingTableLookup.Dispose();
                         foreach (var item in items)
                         {
                             if (item.IsCreated)
                                 item.Dispose();
                         }
+                        routingTableLookup.Clear();
+                        routingTableLookup.Dispose();
                     }
                 }
                 if (brushWorldPlanes.IsCreated)
                 {
                     using (var items = brushWorldPlanes.GetValueArray(Allocator.Temp))
                     {
-                        brushWorldPlanes.Clear();
-                        brushWorldPlanes.Dispose();
                         foreach (var item in items)
                         {
                             if (item.IsCreated)
                                 item.Dispose();
                         }
+                        brushWorldPlanes.Clear();
+                        brushWorldPlanes.Dispose();
                     }
                 }
                 if (brushesTouchedByBrushes.IsCreated)
                 {
                     using (var items = brushesTouchedByBrushes.GetValueArray(Allocator.Temp))
                     {
-                        brushesTouchedByBrushes.Clear();
-                        brushesTouchedByBrushes.Dispose();
                         foreach (var item in items)
                         {
                             if (item.IsCreated)
                                 item.Dispose();
                         }
+                        brushesTouchedByBrushes.Clear();
+                        brushesTouchedByBrushes.Dispose();
                     }
                 }
                 if (transformations.IsCreated)
                 {
                     using (var items = transformations.GetValueArray(Allocator.Temp))
                     {
-                        transformations.Clear();
-                        transformations.Dispose();
                         foreach (var item in items)
                         {
                             if (item.IsCreated)
                                 item.Dispose();
                         }
+                        transformations.Clear();
+                        transformations.Dispose();
                     }
                 }
                 if (surfaceRenderBuffers != null)
