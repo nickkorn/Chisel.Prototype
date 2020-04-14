@@ -16,11 +16,10 @@ using ReadOnlyAttribute = Unity.Collections.ReadOnlyAttribute;
 namespace Chisel.Core
 {
     [BurstCompile(CompileSynchronously = true)]
-    unsafe struct PerformCSGJob : IJob
+    unsafe struct PerformCSGJob : IJobParallelFor
     {
         //const float kEpsilon = CSGManagerPerformCSG.kDistanceEpsilon;
 
-        [NoAlias, ReadOnly] public int                                                              index;
         [NoAlias, ReadOnly] public NativeArray<int>                                                 treeBrushNodeIndices;
         [NoAlias, ReadOnly] public NativeHashMap<int, BlobAssetReference<RoutingTable>>             routingTableLookup;
         [NoAlias, ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushWorldPlanes>>         brushWorldPlanes;
@@ -504,7 +503,7 @@ namespace Chisel.Core
             }
         }
 
-        public void Execute()
+        public void Execute(int index)
         {
             VertexSoup brushVertices;
             NativeList<SurfaceInfo>  basePolygonSurfaceInfos;

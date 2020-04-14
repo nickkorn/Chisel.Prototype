@@ -15,14 +15,13 @@ using Unity.Entities;
 namespace Chisel.Core
 {
     //[BurstCompile(CompileSynchronously = true)] // Fails for some reason
-    unsafe struct GenerateSurfaceTrianglesJob : IJob
+    unsafe struct GenerateSurfaceTrianglesJob : IJobParallelFor
     {
-        [NoAlias, ReadOnly] public int index;
         [NoAlias, ReadOnly] public NativeList<int>                                          treeBrushNodeIndices;
         [NoAlias, ReadOnly] public NativeHashMap<int, BlobAssetReference<BasePolygonsBlob>> basePolygons;
         [NoAlias, ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushWorldPlanes>> brushWorldPlanes;
 
-        [NoAlias, WriteOnly] public NativeList<BlobAssetReference<ChiselBrushRenderBuffer>> brushRenderBuffers;
+        [NoAlias, WriteOnly] public NativeHashMap<int, BlobAssetReference<ChiselBrushRenderBuffer>>.ParallelWriter brushRenderBuffers;
 
         [NoAlias, ReadOnly] public NativeStream.Reader input;
         
@@ -32,7 +31,7 @@ namespace Chisel.Core
             Debug.Assert(false, $"Invalid final category {_interiorCategory}");
         }
 
-        public void Execute()
+        public void Execute(int index)
         {
 
             VertexSoup brushVertices;
@@ -65,8 +64,7 @@ namespace Chisel.Core
                 inner.ResizeUninitialized(surfaceInnerCount);
                 for (int i = 0; i < surfaceInnerCount; i++)
                 {
-                    var index = input.Read<int>();
-                    inner[i] = index;
+                    inner[i] = input.Read<int>();
                 }
             }
 
@@ -287,7 +285,7 @@ namespace Chisel.Core
             var brushRenderBuffer = builder.CreateBlobAssetReference<ChiselBrushRenderBuffer>(Allocator.Persistent);
             builder.Dispose();
 
-            brushRenderBuffers.Add(brushRenderBuffer);
+            brushRenderBuffers.TryAdd(brushNodeIndex, brushRenderBuffer);
 
             loops.Dispose();
             surfaceIndexList.Dispose();

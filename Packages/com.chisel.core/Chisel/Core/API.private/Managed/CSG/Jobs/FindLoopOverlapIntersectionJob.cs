@@ -18,9 +18,8 @@ namespace Chisel.Core
 #if USE_MANAGED_CSG_IMPLEMENTATION
 
     [BurstCompile(CompileSynchronously = true)]
-    internal unsafe struct FindLoopOverlapIntersectionsJob : IJob
+    internal unsafe struct FindLoopOverlapIntersectionsJob : IJobParallelFor
     { 
-        [NoAlias, ReadOnly] public int                                                          index;
         [NoAlias, ReadOnly] public NativeArray<int>                                             treeBrushIndices;
         [NoAlias, ReadOnly] public NativeArray<BlobAssetReference<BrushIntersectionLoops>>      intersectionLoopBlobs;
         [NoAlias, ReadOnly] public NativeHashMap<int, BlobAssetReference<BasePolygonsBlob>>     basePolygonBlobs;
@@ -91,7 +90,7 @@ namespace Chisel.Core
             }
         }
 
-        public unsafe void Execute()
+        public unsafe void Execute(int index)
         {
             var brushNodeIndex      = treeBrushIndices[index];
 
