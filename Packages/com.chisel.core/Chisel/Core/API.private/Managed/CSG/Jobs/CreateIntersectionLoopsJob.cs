@@ -50,34 +50,6 @@ namespace Chisel.Core
             public ushort planeIndex;
         }
         
-        public static unsafe bool IsOutsidePlanes(ref BlobArray<float4> planes, float3 localVertex)
-        {
-            const float kEpsilon    = CSGManagerPerformCSG.kDistanceEpsilon;
-            var planePtr            = (float4*)planes.GetUnsafePtr();
-            int n = 0;
-            float4 localVertex4 = new float4(localVertex, 1);
-            for (; n + 4 < planes.Length; n+=4)
-            {
-                var distance = new float4(math.dot(planePtr[n+0], localVertex4),
-                                          math.dot(planePtr[n+1], localVertex4),
-                                          math.dot(planePtr[n+2], localVertex4),
-                                          math.dot(planePtr[n+3], localVertex4));
-
-                // will be 'false' when distance is NaN or Infinity
-                if (!math.all(distance <= kEpsilon))
-                    return true;
-            }
-            for (; n < planes.Length; n ++)
-            {
-                var distance = math.dot(planePtr[n], localVertex4);
-
-                // will be 'false' when distance is NaN or Infinity
-                if (!(distance <= kEpsilon))
-                    return true;
-            }
-            return false;
-        }
-        
         public static unsafe bool IsOutsidePlanes(ref BlobArray<float4> planes, float4 localVertex)
         {
             const float kEpsilon    = CSGManagerPerformCSG.kDistanceEpsilon;

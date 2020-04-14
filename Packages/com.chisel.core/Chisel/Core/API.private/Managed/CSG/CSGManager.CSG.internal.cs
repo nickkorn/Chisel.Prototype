@@ -294,8 +294,7 @@ namespace Chisel.Core
 
                 Profiler.BeginSample("Tag_Allocations");
                 Profiler.BeginSample("Tag_BrushOutputLoops");
-                var brushLoopCount      = rebuildTreeBrushIndices.Length;
-                
+                var brushLoopCount = rebuildTreeBrushIndices.Length;                
                 for (int index = 0; index < brushLoopCount; index++)
                 {
                     var brushNodeIndex  = rebuildTreeBrushIndices[index];
