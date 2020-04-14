@@ -53,42 +53,16 @@ using System.Runtime.CompilerServices;
 using Unity.Burst;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
+using Unity.Jobs;
 using Unity.Mathematics;
 using Debug = UnityEngine.Debug;
 
-namespace Chisel.Core
-{
-    public struct Edge : IEquatable<Edge>
-    {
-        public ushort index1;
-        public ushort index2;
-
-        public bool Equals(Edge other)
-        {
-            return index1 == other.index1 && index2 == other.index2;
-        }
-        public override int GetHashCode()
-        {
-            return (int)math.hash(new int2(index1, index2));
-        }
-
-        public override string ToString() => $"({index1}, {index2})";
-        
-        internal void Flip()
-        {
-            //if (index1 < index2)
-            //    return;
-            var t = index1; index1 = index2; index2 = t;
-        }
-    }
-}
-
 namespace Poly2Tri
 {
-    public unsafe struct DTSweep
+    public unsafe struct DTSweep : IJob
     {
-        const double PI_div2     = (double)(Math.PI / 2);
-        const double PI_3div4    = (double)(3 * Math.PI / 4);
+        const float PI_div2     = (math.PI / 2);
+        const float PI_3div4    = (3 * math.PI / 4);
 
         public unsafe struct DelaunayTriangle
         {
@@ -316,22 +290,24 @@ namespace Poly2Tri
         //
         // SweepContext
         //
-        
-        quaternion                                  rotation;
-        public VertexSoup                           vertices;
-        public NativeArray<float2>                  points;
-        public NativeArray<ushort>                  edges;
-        public NativeList<DirectedEdge>             allEdges;
-        public NativeList<int>                      triangleIndices;
-        public NativeList<DelaunayTriangle>         triangles;
-        public NativeList<bool>                     triangleInterior;
-        public NativeList<ushort>                   sortedPoints;
-        public NativeList<AdvancingFrontNode>       advancingFrontNodes;
-        public NativeListArray<Chisel.Core.Edge>    edgeLookupEdges;
-        public NativeHashMap<ushort, int>           edgeLookups;
-        public NativeListArray<Chisel.Core.Edge>    foundLoops;
-        public NativeListArray<int>                 children;
-        public NativeList<Edge>                     inputEdgesCopy;
+
+        [NoAlias, ReadOnly] public quaternion                           rotation;
+        [NoAlias, ReadOnly] public float3                               normal;
+        [NoAlias, ReadOnly] public VertexSoup                           vertices;
+        [NoAlias, ReadOnly] public NativeArray<float2>                  points;
+        [NoAlias, ReadOnly] public NativeArray<ushort>                  edges;
+        [NoAlias, ReadOnly] public NativeList<DirectedEdge>             allEdges;
+        [NoAlias, ReadOnly] public NativeList<DelaunayTriangle>         triangles;
+        [NoAlias, ReadOnly] public NativeList<bool>                     triangleInterior;
+        [NoAlias, ReadOnly] public NativeList<ushort>                   sortedPoints;
+        [NoAlias, ReadOnly] public NativeList<AdvancingFrontNode>       advancingFrontNodes;
+        [NoAlias, ReadOnly] public NativeListArray<Chisel.Core.Edge>    edgeLookupEdges;
+        [NoAlias, ReadOnly] public NativeHashMap<ushort, int>           edgeLookups;
+        [NoAlias, ReadOnly] public NativeListArray<Chisel.Core.Edge>    foundLoops;
+        [NoAlias, ReadOnly] public NativeListArray<int>                 children;
+        [NoAlias, ReadOnly] public NativeList<Edge>                     inputEdgesCopy;
+        [NoAlias, ReadOnly] public NativeListArray<Edge>.NativeList     inputEdges;
+        [NoAlias, ReadOnly] public NativeList<int>                      surfaceIndicesArray;
 
         void Clear()
         {
@@ -366,7 +342,7 @@ namespace Poly2Tri
         bool edgeEventRight;
 
         
-        internal unsafe static bool IsPointInPolygon(float3 right, float3 forward, in NativeListArray<Chisel.Core.Edge>.NativeList indices1, in NativeListArray<Chisel.Core.Edge>.NativeList indices2, in VertexSoup vertices)
+        internal unsafe static bool IsPointInPolygon(float3 right, float3 forward, NativeListArray<Chisel.Core.Edge>.NativeList indices1, NativeListArray<Chisel.Core.Edge>.NativeList indices2, VertexSoup vertices)
         {
             int index = 0;
             while (index < indices2.Count &&
@@ -411,19 +387,18 @@ namespace Poly2Tri
 
 
 
-        public void TriangulateLoops(quaternion rotation, float3 right, float3 forward, in NativeListArray<Chisel.Core.Edge>.NativeList inputEdges, NativeList<int> triangleIndices)
+        public void Execute()
         {
-            triangleIndices.Clear();
-            this.rotation = rotation;
+            surfaceIndicesArray.Clear();
             if (inputEdges.Count < 4)
             {
-                Triangulate(inputEdges.ToArray(Allocator.Temp), triangleIndices);
+                Triangulate(inputEdges.ToArray(Allocator.Temp), surfaceIndicesArray);
                 return;
             }
 
             // This is a hack around bugs in the triangulation code
 
-            triangleIndices.Clear();
+            surfaceIndicesArray.Clear();
             edgeLookupEdges.Clear();
             edgeLookups.Clear();
             foundLoops.Clear();
@@ -499,7 +474,7 @@ namespace Poly2Tri
             {
                 if (foundLoops[0].Count == 0)
                     return;
-                Triangulate(foundLoops[0].ToArray(Allocator.Temp), triangleIndices);
+                Triangulate(foundLoops[0].ToArray(Allocator.Temp), surfaceIndicesArray);
                 return;
             }
 
@@ -507,6 +482,7 @@ namespace Poly2Tri
             children.ResizeExact(foundLoops.Count);
 
 
+            MathExtensions.CalculateTangents(normal, out float3 right, out float3 forward);
             for (int l1 = foundLoops.Count - 1; l1 >= 0; l1--)
             {
                 if (foundLoops[l1].Count == 0)
@@ -563,30 +539,29 @@ namespace Poly2Tri
             {
                 if (foundLoops[l1].Count == 0)
                     continue;
-                Triangulate(foundLoops[l1].ToArray(Allocator.Temp), triangleIndices);
+                Triangulate(foundLoops[l1].ToArray(Allocator.Temp), surfaceIndicesArray);
             }
         }
 
         /// <summary>
         /// Triangulate simple polygon with holes
         /// </summary>
-        public void Triangulate(NativeArray<Chisel.Core.Edge> inputEdges, NativeList<int> triangleIndices)
+        public void Triangulate(NativeArray<Chisel.Core.Edge> inputEdgesArray, NativeList<int> triangleIndices)
         {
-            this.triangleIndices = triangleIndices;
             Clear();
-            PrepareTriangulation(inputEdges);
+            PrepareTriangulation(inputEdgesArray);
             CreateAdvancingFront(0);
             Sweep();
             FixupConstrainedEdges();
-            FinalizationPolygon();
-            inputEdges.Dispose();
+            FinalizationPolygon(triangleIndices);
+            inputEdgesArray.Dispose();
         }
 
 
 
 
 
-        void AddTriangle(in DelaunayTriangle triangle)
+        void AddTriangle(DelaunayTriangle triangle)
         {
             triangles.Add(triangle);
             triangleInterior.Add(false);
@@ -703,7 +678,7 @@ namespace Poly2Tri
         }
 
 
-        void MeshClean(ushort triangleIndex)
+        void MeshClean(NativeList<int> triangleIndices, ushort triangleIndex)
         {
             if (triangleIndex == ushort.MaxValue || triangleInterior[triangleIndex])
                 return;
@@ -724,9 +699,9 @@ namespace Poly2Tri
                 triangleIndices.Add(index2);
             }
 
-            if (!triangle.GetConstrainedEdge(0)) MeshClean(triangle.neighbors[0]);
-            if (!triangle.GetConstrainedEdge(1)) MeshClean(triangle.neighbors[1]);
-            if (!triangle.GetConstrainedEdge(2)) MeshClean(triangle.neighbors[2]);
+            if (!triangle.GetConstrainedEdge(0)) MeshClean(triangleIndices, triangle.neighbors[0]);
+            if (!triangle.GetConstrainedEdge(1)) MeshClean(triangleIndices, triangle.neighbors[1]);
+            if (!triangle.GetConstrainedEdge(2)) MeshClean(triangleIndices, triangle.neighbors[2]);
         }
 
 
@@ -812,15 +787,15 @@ namespace Poly2Tri
         }
 
 
-        void PrepareTriangulation(NativeArray<Chisel.Core.Edge> inputEdges)
+        void PrepareTriangulation(NativeArray<Chisel.Core.Edge> inputEdgesArray)
         {
             var min = new float2(float.PositiveInfinity, float.PositiveInfinity);
             var max = new float2(float.NegativeInfinity, float.NegativeInfinity);
 
             var s_KnownVertices = stackalloc bool[vertices.Length];
-            for (int e = 0; e < inputEdges.Length; e++)
+            for (int e = 0; e < inputEdgesArray.Length; e++)
             {
-                var edge = inputEdges[e];
+                var edge = inputEdgesArray[e];
                 var index1 = edge.index1;
                 var index2 = edge.index2;
 
@@ -1046,7 +1021,7 @@ namespace Poly2Tri
         }
 
 
-        void FinalizationPolygon()
+        void FinalizationPolygon(NativeList<int> triangleIndices)
         {
             // Get an Internal triangle to start with
             var headNextNode    = advancingFrontNodes[advancingFrontNodes[headNodeIndex].nextNodeIndex];
@@ -1062,7 +1037,7 @@ namespace Poly2Tri
             }
 
             // Collect interior triangles constrained by edges
-            MeshClean(triangleIndex);
+            MeshClean(triangleIndices, triangleIndex);
         }
 
 
@@ -1656,7 +1631,7 @@ namespace Poly2Tri
             return basinWidth > height;
         }
 
-        double HoleAngle(ushort nodeIndex)
+        float HoleAngle(ushort nodeIndex)
         {
             var node     = advancingFrontNodes[nodeIndex];
             var nodePrev = advancingFrontNodes[node.prevNodeIndex];
@@ -1677,21 +1652,21 @@ namespace Poly2Tri
             var ay = nodeNext.nodePoint.y - py;
             var bx = nodePrev.nodePoint.x - px;
             var by = nodePrev.nodePoint.y - py;
-            return (double)Math.Atan2((ax * by) - (ay * bx), (ax * bx) + (ay * by));
+            return math.atan2((ax * by) - (ay * bx), (ax * bx) + (ay * by));
         }
 
 
         /// <summary>
         /// The basin angle is decided against the horizontal line [1,0]
         /// </summary>
-        double BasinAngle(ushort nodeIndex)
+        float BasinAngle(ushort nodeIndex)
         {
             var node = advancingFrontNodes[nodeIndex];
             var nodeNext = advancingFrontNodes[node.nextNodeIndex];
             var nodeNextNext = advancingFrontNodes[nodeNext.nextNodeIndex];
             var ax = node.nodePoint.x - nodeNextNext.nodePoint.x;
             var ay = node.nodePoint.y - nodeNextNext.nodePoint.y;
-            return (double)Math.Atan2(ay, ax);
+            return math.atan2(ay, ax);
         }
 
         void Fill(ushort nodeIndex)
@@ -1997,7 +1972,7 @@ namespace Poly2Tri
             return HasEdgeByPoints(p1, p2) || HasEdgeByPoints(p2, p1);
         }
 
-        static bool SmartIncircle(double2 pa, double2 pb, double2 pc, double2 pd)
+        static bool SmartIncircle(float2 pa, float2 pb, float2 pc, float2 pd)
         {
             var pdx = pd.x;
             var pdy = pd.y;
@@ -2038,7 +2013,7 @@ namespace Poly2Tri
         }
 
 
-        static bool InScanArea(double2 pa, double2 pb, double2 pc, double2 pd)
+        static bool InScanArea(float2 pa, float2 pb, float2 pc, float2 pd)
         {
             var pdx = pd.x;
             var pdy = pd.y;
@@ -2068,7 +2043,7 @@ namespace Poly2Tri
             return true;
         }
 
-        const double kEpsilon = 1e-8f;//12f;
+        const float kEpsilon = 1e-8f;//12f;
 
         /// Forumla to calculate signed area
         /// Positive if CCW
@@ -2076,7 +2051,7 @@ namespace Poly2Tri
         /// 0 if collinear
         /// A[P1,P2,P3]  =  (x1*y2 - y1*x2) + (x2*y3 - y2*x3) + (x3*y1 - y3*x1)
         ///              =  (x1-x3)*(y2-y3) - (y1-y3)*(x2-x3)
-        static Orientation Orient2d(double2 pa, double2 pb, double2 pc)
+        static Orientation Orient2d(float2 pa, float2 pb, float2 pc)
         {
             var detleft     = (pa.x - pc.x) * (pb.y - pc.y);
             var detright    = (pa.y - pc.y) * (pb.x - pc.x);

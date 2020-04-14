@@ -381,14 +381,13 @@ namespace Chisel.Core
             try
             {
                 // TODO: optimize, use hashed grid
-
                 for (int t = 0; t < treeUpdateLength; t++)
                 {
                     ref var treeUpdate = ref treeUpdates[t];
                     var findAllIntersectionsJob = new FindAllBrushIntersectionsJob
                     {
                         // Read
-                        updateBrushIndices  = treeUpdate.rebuildTreeBrushIndices,   // TODO: need to add found intersected brushes to this list and find intersections with those brushes as well
+                        updateBrushIndices  = treeUpdate.rebuildTreeBrushIndices,
                         allTreeBrushIndices = treeUpdate.allTreeBrushIndices,
                         transformations     = treeUpdate.transformations,
                         brushMeshLookup     = treeUpdate.brushMeshLookup,
@@ -430,7 +429,6 @@ namespace Chisel.Core
                 {
                     ref var treeUpdate = ref treeUpdates[t];
                     var dependencies = treeUpdate.findAllIntersectionsJobHandle;
-                    // TODO: optimize, only do this when necessary
                     var createBrushWorldPlanesJob = new CreateBrushWorldPlanesJob
                     {
                         // Read
@@ -446,7 +444,7 @@ namespace Chisel.Core
                 }
             } finally { Profiler.EndSample(); }
 
-            // TODO: only change when brush or any touching brush has been added/removed or changes operation/order
+            // TODO: only update when brush or any touching brush has been added/removed or changes operation/order
             Profiler.BeginSample("Tag_UpdateBrushCategorizationTables");
             try
             {
@@ -560,10 +558,8 @@ namespace Chisel.Core
                     var dependencies = JobHandle.CombineDependencies(treeUpdate.allFindLoopOverlapIntersectionsJobHandle, treeUpdate.updateBrushCategorizationTablesJobHandle);
 
                     // Perform CSG
-                    // TODO: only do this when necessary (when brushes have been modified)
                     // TODO: determine when a brush is completely inside another brush
                     //		 (might not have any intersection loops)
-
                     var performCSGJob = new PerformCSGJob
                     {
                         // Read
@@ -577,7 +573,7 @@ namespace Chisel.Core
                         output                      = treeUpdate.dataStream2.AsWriter(),
                     };
                     treeUpdate.allPerformAllCSGJobHandle = performCSGJob.
-                        Schedule(treeUpdate.rebuildTreeBrushIndices, 64, dependencies);
+                        Schedule(treeUpdate.rebuildTreeBrushIndices, 32, dependencies);
                 }
             } finally { Profiler.EndSample(); }
 
@@ -589,7 +585,7 @@ namespace Chisel.Core
                     ref var treeUpdate = ref treeUpdates[t];
                     var dependencies = treeUpdate.allPerformAllCSGJobHandle;
 
-                    // TODO: Cache the output surface meshes, only update when necessary
+                    // TODO: Make this work with burst so we can, potentially, merge it with PerformCSGJob?
                     var generateSurfaceRenderBuffers = new GenerateSurfaceTrianglesJob
                     {
                         // Read

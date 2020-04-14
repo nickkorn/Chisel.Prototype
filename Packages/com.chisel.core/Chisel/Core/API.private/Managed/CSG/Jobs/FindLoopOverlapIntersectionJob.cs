@@ -25,38 +25,10 @@ namespace Chisel.Core
         [NoAlias, ReadOnly] public NativeHashMap<int, BlobAssetReference<BasePolygonsBlob>>     basePolygonBlobs;
         [NoAlias, ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushWorldPlanes>>     brushWorldPlanes;
         
-        //[NoAlias] public VertexSoup                         vertexSoup;
-        //[NoAlias] public NativeListArray<Edge>              basePolygonEdges;
-        //[NoAlias] public NativeList<SurfaceInfo>            basePolygonSurfaceInfos;
-        //[NoAlias] public NativeListArray<Edge>              intersectionEdges;
-        //[NoAlias] public NativeList<SurfaceInfo>            intersectionSurfaceInfos;
-
         [NoAlias, WriteOnly] public NativeStream.Writer     output;
 
         public struct Empty { };
-        /*
-        struct SortByBasePlaneIndex : IComparer<BlobAssetReference<BrushIntersectionLoop>>
-        {
-            public int Compare(BlobAssetReference<BrushIntersectionLoop> x, BlobAssetReference<BrushIntersectionLoop> y)
-            {
-                if (!x.IsCreated) return y.IsCreated ? 1 : 0;
-                if (!y.IsCreated) return -1;
 
-                ref var vx = ref x.Value;
-                ref var vy = ref y.Value;
-
-                var diff = vx.surfaceInfo.basePlaneIndex - vy.surfaceInfo.basePlaneIndex;
-                if (diff != 0)
-                    return diff;
-
-                diff = vx.surfaceInfo.brushNodeIndex - vy.surfaceInfo.brushNodeIndex;
-                if (diff != 0)
-                    return diff;
-
-                return 0;
-            }
-        }
-        */
         public int CompareSortByBasePlaneIndex(int2 x, int2 y)
         {
             ref var vx = ref intersectionLoopBlobs[x.x].Value.loops[x.y];
