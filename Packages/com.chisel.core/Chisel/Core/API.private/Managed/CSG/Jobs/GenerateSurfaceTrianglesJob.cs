@@ -18,13 +18,14 @@ namespace Chisel.Core
     unsafe struct GenerateSurfaceTrianglesJob : IJob
     {
         [NoAlias, ReadOnly] public int index;
+        [NoAlias, ReadOnly] public NativeList<int>                                          treeBrushNodeIndices;
         [NoAlias, ReadOnly] public NativeHashMap<int, BlobAssetReference<BasePolygonsBlob>> basePolygons;
         [NoAlias, ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushWorldPlanes>> brushWorldPlanes;
 
         [NoAlias, WriteOnly] public NativeList<BlobAssetReference<ChiselBrushRenderBuffer>> brushRenderBuffers;
 
         [NoAlias, ReadOnly] public NativeStream.Reader input;
-
+        
         [BurstDiscard]
         public static void InvalidFinalCategory(CategoryIndex _interiorCategory)
         {
@@ -39,6 +40,7 @@ namespace Chisel.Core
             NativeList<SurfaceInfo> surfaceLoopAllInfos;
             NativeListArray<Edge> surfaceLoopAllEdges;
 
+            //var brushNodeIndex = treeBrushNodeIndices[index];
 
             var count = input.BeginForEachIndex(index);
             if (count == 0)

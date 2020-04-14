@@ -412,7 +412,7 @@ namespace Chisel.Core
             public NativeHashMap<int, BlobAssetReference<BrushWorldPlanes>>         brushWorldPlanes;
             public NativeHashMap<int, BlobAssetReference<BrushesTouchedByBrush>>    brushesTouchedByBrushes;
             public NativeHashMap<int, BlobAssetReference<NodeTransformations>>      transformations;
-            public Dictionary<int, BlobAssetReference<ChiselBrushRenderBuffer>>     brushRenderBuffers;
+            public NativeHashMap<int, BlobAssetReference<ChiselBrushRenderBuffer>>  brushRenderBuffers;
 
             public BlobAssetReference<CompactTree>                                  compactTree;
 
@@ -498,7 +498,7 @@ namespace Chisel.Core
 
             internal void RemoveSurfaceRenderBuffersByBrushID(List<int> brushNodeIndices)
             {
-                if (brushRenderBuffers.Count == 0)
+                if (brushRenderBuffers.Count() == 0)
                     return;
                 for (int b = 0; b < brushNodeIndices.Count; b++)
                 {
@@ -506,7 +506,8 @@ namespace Chisel.Core
                     if (brushRenderBuffers.TryGetValue(brushNodeID, out var surfaceRenderBuffer))
                     {
                         brushRenderBuffers.Remove(brushNodeID);
-                        surfaceRenderBuffer.Dispose();
+                        if (surfaceRenderBuffer.IsCreated)
+                            surfaceRenderBuffer.Dispose();
                     }
                 }
             }
@@ -520,7 +521,7 @@ namespace Chisel.Core
                 brushWorldPlanes        = new NativeHashMap<int, BlobAssetReference<BrushWorldPlanes>>(1000, Allocator.Persistent);
                 brushesTouchedByBrushes = new NativeHashMap<int, BlobAssetReference<BrushesTouchedByBrush>>(1000, Allocator.Persistent);
                 transformations         = new NativeHashMap<int, BlobAssetReference<NodeTransformations>>(1000, Allocator.Persistent);
-                brushRenderBuffers      = new Dictionary<int, BlobAssetReference<ChiselBrushRenderBuffer>>();
+                brushRenderBuffers      = new NativeHashMap<int, BlobAssetReference<ChiselBrushRenderBuffer>>(1000, Allocator.Persistent);
             }
 
             internal void Dispose()
@@ -590,12 +591,18 @@ namespace Chisel.Core
                         transformations.Dispose();
                     }
                 }
-                if (brushRenderBuffers != null)
+                if (brushRenderBuffers.IsCreated)
                 {
-                    foreach (var item in brushRenderBuffers)
-                        item.Value.Dispose();
-                    brushRenderBuffers.Clear();
-                    brushRenderBuffers = null;
+                    using (var items = brushRenderBuffers.GetValueArray(Allocator.Temp))
+                    {
+                        foreach (var item in items)
+                        {
+                            if (item.IsCreated)
+                                item.Dispose();
+                        }
+                        brushRenderBuffers.Clear();
+                        brushRenderBuffers.Dispose();
+                    }
                 }
                 if (compactTree.IsCreated)
                 {

@@ -50,16 +50,18 @@ namespace Chisel.Core
             public NativeHashMap<int, BlobAssetReference<RoutingTable>>             routingTableLookup;
             public NativeHashMap<int, BlobAssetReference<BrushesTouchedByBrush>>    brushesTouchedByBrushes;
 
-            public Dictionary<int, BlobAssetReference<ChiselBrushRenderBuffer>>     brushRenderBuffers;
+            public NativeHashMap<int, BlobAssetReference<ChiselBrushRenderBuffer>>  brushRenderBuffers;
             public NativeList<BlobAssetReference<BrushIntersectionLoops>>           intersectionLoopBlobs;
             public NativeMultiHashMap<int, BrushPair>                               brushBrushIntersections;
             public NativeList<BrushPair>                                            uniqueBrushPairs;
             public NativeList<BlobAssetReference<BrushPairIntersection>>            intersectingBrushes;
+            
+            public NativeStream   dataStream1;
+            public NativeStream   dataStream2;
 
             public BrushOutputLoops[]   brushOutputLoops;
             public BrushOutputLoops2[]  brushOutputLoops2;
-            public BrushHandles[]       brushHandles;
-
+            
             public JobHandle generateBasePolygonLoopsJobHandle;
 
             public JobHandle findAllIntersectionsJobHandle;
@@ -76,6 +78,7 @@ namespace Chisel.Core
 
             public JobHandle allFindLoopOverlapIntersectionsJobHandle;
 
+            public JobHandle allPerformAllCSGJobHandle;
             public JobHandle allGenerateSurfaceTrianglesJobHandle;
             public JobHandle performCSGJobDependenciesJobHandle;
         }
@@ -89,12 +92,6 @@ namespace Chisel.Core
         {
             [NoAlias] public NativeStream   dataStream2;
             [NoAlias] public NativeList<BlobAssetReference<ChiselBrushRenderBuffer>> temp;
-        }
-
-        public struct BrushHandles
-        {
-            public JobHandle performAllCSGJobHandle;
-            public JobHandle generateSurfaceTrianglesJobHandle;
         }
 
         struct TreeSorter : IComparer<TreeUpdate>
@@ -332,23 +329,23 @@ namespace Chisel.Core
                 var brushLoopCount      = rebuildTreeBrushIndices.Length;
                 var brushOutputLoops    = new BrushOutputLoops[brushLoopCount];
                 var brushOutputLoops2   = new BrushOutputLoops2[brushLoopCount];
-                var brushHandles        = new BrushHandles[brushLoopCount];
+
                 for (int index = 0; index < brushLoopCount; index++)
                 {
                     var brushNodeIndex  = rebuildTreeBrushIndices[index];
 
-                    var dataStream1     = new NativeStream(allTreeBrushIndices.Length, Allocator.TempJob);
-                    var dataStream2     = new NativeStream(allTreeBrushIndices.Length, Allocator.TempJob);
+                    var dataStream1_     = new NativeStream(allTreeBrushIndices.Length, Allocator.TempJob);
+                    var dataStream2_     = new NativeStream(allTreeBrushIndices.Length, Allocator.TempJob);
                     var temp            = new NativeList<BlobAssetReference<ChiselBrushRenderBuffer>>(1, Allocator.TempJob);
 
                     brushOutputLoops[index] = new BrushOutputLoops
                     {
-                        dataStream1     = dataStream1
+                        dataStream1     = dataStream1_
                     };
                     
                     brushOutputLoops2[index] = new BrushOutputLoops2
                     {
-                        dataStream2     = dataStream2,
+                        dataStream2     = dataStream2_,
                         temp            = temp
                     };
 
@@ -368,6 +365,8 @@ namespace Chisel.Core
                 var brushBrushIntersections = new NativeMultiHashMap<int, BrushPair>(intersectionCount * allTreeBrushIndices.Length, Allocator.TempJob);
                 var uniqueBrushPairs        = new NativeList<BrushPair>(intersectionCount, Allocator.TempJob);
                 var intersectingBrushes     = new NativeList<BlobAssetReference<BrushPairIntersection>>(intersectionCount, Allocator.TempJob);
+                var dataStream1             = new NativeStream(allTreeBrushIndices.Length, Allocator.TempJob);
+                var dataStream2             = new NativeStream(allTreeBrushIndices.Length, Allocator.TempJob);
                 Profiler.EndSample();
 
 
@@ -387,11 +386,12 @@ namespace Chisel.Core
                     brushBrushIntersections         = brushBrushIntersections,
                     uniqueBrushPairs                = uniqueBrushPairs,
                     intersectingBrushes             = intersectingBrushes,
+                    dataStream1                     = dataStream1,
+                    dataStream2                     = dataStream2,
 
                     compactTree                     = compactTree,
                     brushOutputLoops                = brushOutputLoops,
-                    brushOutputLoops2               = brushOutputLoops2,
-                    brushHandles                    = brushHandles
+                    brushOutputLoops2               = brushOutputLoops2
                 };
                 treeUpdateLength++;
             }
@@ -626,8 +626,7 @@ namespace Chisel.Core
                 {
                     ref var outputLoops     = ref treeUpdate.brushOutputLoops[b];
                     ref var outputLoops2    = ref treeUpdate.brushOutputLoops2[b];
-                    ref var brushHandles    = ref treeUpdate.brushHandles[b];
-
+                    
                     var performCSGJob = new PerformCSGJob//time=1171.83ms
                     {
                         // Read
@@ -643,7 +642,8 @@ namespace Chisel.Core
                         // Write
                         output                      = outputLoops2.dataStream2.AsWriter(),
                     };
-                    brushHandles.performAllCSGJobHandle = performCSGJob.Schedule(treeUpdate.performCSGJobDependenciesJobHandle);
+                    var performAllCSGJobHandle = performCSGJob.Schedule(treeUpdate.performCSGJobDependenciesJobHandle);                    
+                    treeUpdate.allPerformAllCSGJobHandle = JobHandle.CombineDependencies(performAllCSGJobHandle, treeUpdate.allPerformAllCSGJobHandle);
                 }
             }
             Profiler.EndSample();
@@ -661,12 +661,12 @@ namespace Chisel.Core
 
                     ref var outputLoops         = ref treeUpdate.brushOutputLoops[b];
                     ref var outputLoops2        = ref treeUpdate.brushOutputLoops2[b];
-                    ref var brushHandles        = ref treeUpdate.brushHandles[b];
                     
                     var generateSurfaceRenderBuffers = new GenerateSurfaceTrianglesJob//time=786.62ms
                     {
                         // Read
                         index                   = b,
+                        treeBrushNodeIndices    = treeUpdate.rebuildTreeBrushIndices,
                         brushWorldPlanes        = treeUpdate.brushWorldPlanes,
                         basePolygons            = treeUpdate.basePolygons,
 
@@ -677,8 +677,8 @@ namespace Chisel.Core
                         brushRenderBuffers      = outputLoops2.temp,
                     };
 
-                    brushHandles.generateSurfaceTrianglesJobHandle = generateSurfaceRenderBuffers.Schedule(brushHandles.performAllCSGJobHandle);
-                    treeUpdate.allGenerateSurfaceTrianglesJobHandle = JobHandle.CombineDependencies(brushHandles.generateSurfaceTrianglesJobHandle, treeUpdate.allGenerateSurfaceTrianglesJobHandle);
+                    var generateSurfaceTrianglesJobHandle = generateSurfaceRenderBuffers.Schedule(treeUpdate.allPerformAllCSGJobHandle);
+                    treeUpdate.allGenerateSurfaceTrianglesJobHandle = JobHandle.CombineDependencies(generateSurfaceTrianglesJobHandle, treeUpdate.allGenerateSurfaceTrianglesJobHandle);
                 }
             }
             Profiler.EndSample();
@@ -757,6 +757,8 @@ namespace Chisel.Core
                     }
                     treeUpdate.brushOutputLoops2 = null;
 
+                    treeUpdate.dataStream1              .Dispose();//disposeJobHandle);
+                    treeUpdate.dataStream2              .Dispose();//disposeJobHandle);
                     treeUpdate.brushMeshLookup          .Dispose();//disposeJobHandle);                     
                     treeUpdate.allTreeBrushIndices      .Dispose();//disposeJobHandle);
                     treeUpdate.rebuildTreeBrushIndices  .Dispose();//disposeJobHandle);
