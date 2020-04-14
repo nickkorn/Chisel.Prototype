@@ -102,11 +102,12 @@ namespace Chisel.Core
         const double kEpsilon = CSGManagerPerformCSG.kEpsilon;
 
         [NoAlias, ReadOnly] public NativeArray<int>  allTreeBrushIndices;
+
         [NoAlias, ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushMeshBlob>>         brushMeshLookup;
         [NoAlias, ReadOnly] public NativeHashMap<int, BlobAssetReference<NodeTransformations>>   transformations;
-        [NoAlias, ReadOnly] public NativeHashMap<int, BlobAssetReference<BasePolygonsBlob>>      basePolygons;// only need bounds
-        
-        [NoAlias, ReadOnly] public NativeArray<int>  updateBrushIndices;
+        [NoAlias, ReadOnly] public NativeHashMap<int, BlobAssetReference<BasePolygonsBlob>>      basePolygons;// TODO: only need bounds, should separate that data
+
+        [NoAlias] public NativeList<int> updateBrushIndices;
 
         [NoAlias, WriteOnly] public NativeMultiHashMap<int, BrushPair>.ParallelWriter brushBrushIntersections;
 
@@ -205,86 +206,121 @@ namespace Chisel.Core
 
         public void Execute()
         {
+            var updateBrushIndicesArray = updateBrushIndices.AsArray();
+            if (allTreeBrushIndices.Length == updateBrushIndices.Length)
+            {
+                for (int index0 = 0; index0 < updateBrushIndicesArray.Length; index0++)
+                {
+                    var brush0NodeIndex = updateBrushIndicesArray[index0];
+                    for (int index1 = 0; index1 < updateBrushIndicesArray.Length; index1++)
+                    {
+                        var brush1NodeIndex = updateBrushIndicesArray[index1];
+                        if (brush0NodeIndex <= brush1NodeIndex)
+                            continue;
+                        var result = FindIntersection(brush0NodeIndex, brush1NodeIndex);
+                        StoreIntersection(brush0NodeIndex, brush1NodeIndex, result);
+                    }
+                }
+                return;
+            }
+            //*
+
+            var brushesThatNeedIndirectUpdate = new NativeList<int>(allTreeBrushIndices.Length, Allocator.Temp);
             for (int index0 = 0; index0 < allTreeBrushIndices.Length; index0++)
             {
                 var brush0NodeIndex = allTreeBrushIndices[index0];
-                for (int index1 = 0; index1 < updateBrushIndices.Length; index1++)
+                var found = false;
+                for (int index1 = 0; index1 < updateBrushIndicesArray.Length; index1++)
                 {
-                    var brush1NodeIndex = updateBrushIndices[index1];
+                    var brush1NodeIndex = updateBrushIndicesArray[index1];
+                    var result = FindIntersection(brush0NodeIndex, brush1NodeIndex);
+                    if (result == IntersectionType.NoIntersection)
+                        continue;
+                    found = true;
+                    if (brush0NodeIndex > brush1NodeIndex)
+                        StoreIntersection(brush0NodeIndex, brush1NodeIndex, result);
+                }
+                if (found)
+                {
+                    if (!updateBrushIndicesArray.Contains(brush0NodeIndex))
+                        brushesThatNeedIndirectUpdate.Add(brush0NodeIndex);
+                }
+            }
+
+            if (allTreeBrushIndices.Length == 0)
+                return;
+
+            var brushesThatNeedIndirectUpdateArray = brushesThatNeedIndirectUpdate.AsArray();
+
+            updateBrushIndices.AddRange(brushesThatNeedIndirectUpdateArray);
+
+            for (int index0 = 0; index0 < allTreeBrushIndices.Length; index0++)
+            {
+                var brush0NodeIndex = allTreeBrushIndices[index0];
+                for (int index1 = 0; index1 < brushesThatNeedIndirectUpdateArray.Length; index1++)
+                {
+                    var brush1NodeIndex = brushesThatNeedIndirectUpdateArray[index1];
                     if (brush0NodeIndex <= brush1NodeIndex)
                         continue;
-                    Execute(brush0NodeIndex, brush1NodeIndex);
+                    var result = FindIntersection(brush0NodeIndex, brush1NodeIndex);
+                    StoreIntersection(brush0NodeIndex, brush1NodeIndex, result);
                 }
             }
+            //*/
+
         }
 
-        void Execute(int brush0NodeIndex, int brush1NodeIndex)
+        IntersectionType FindIntersection(int brush0NodeIndex, int brush1NodeIndex)
         {
-            //output.BeginForEachIndex(index);
+            var brushMesh0 = brushMeshLookup[brush0NodeIndex];
+            var brushMesh1 = brushMeshLookup[brush1NodeIndex];
+            if (!brushMesh0.IsCreated || !brushMesh1.IsCreated)
+                return IntersectionType.NoIntersection;
 
-            /*
-            var brushIndex0 = index % brushData.Length;
-            var brushIndex1 = index / brushData.Length;
+            var bounds0 = basePolygons[brush0NodeIndex].Value.bounds;
+            var bounds1 = basePolygons[brush1NodeIndex].Value.bounds;
 
-            // Remove this inefficiency
-            if (brushIndex0 >= brushIndex1)
-                return;
-            */
+            if (!bounds0.Intersects(bounds1, kEpsilon))
+                return IntersectionType.NoIntersection;
+            
+            ref var transformation0 = ref transformations[brush0NodeIndex].Value;
+            ref var transformation1 = ref transformations[brush1NodeIndex].Value;
+
+            var treeToNode0SpaceMatrix = transformation0.treeToNode;
+            var nodeToTree0SpaceMatrix = transformation0.nodeToTree;
+            var treeToNode1SpaceMatrix = transformation1.treeToNode;
+            var nodeToTree1SpaceMatrix = transformation1.nodeToTree;
+
+            var result = ConvexPolytopeTouching(brushMesh0,
+                                                ref treeToNode0SpaceMatrix,
+                                                ref nodeToTree0SpaceMatrix,
+                                                brushMesh1,
+                                                ref treeToNode1SpaceMatrix,
+                                                ref nodeToTree1SpaceMatrix);
+          
+            return result;
+        }
+
+        void StoreIntersection(int brush0NodeIndex, int brush1NodeIndex, IntersectionType result)
+        {
+            if (result != IntersectionType.NoIntersection)
             {
-                var brushMesh0 = brushMeshLookup[brush0NodeIndex];
-                var brushMesh1 = brushMeshLookup[brush1NodeIndex];
-
-                var bounds0 = basePolygons[brush0NodeIndex].Value.bounds;
-                var bounds1 = basePolygons[brush1NodeIndex].Value.bounds;
-
-                IntersectionType result;
-                if (brushMesh0 != BlobAssetReference<BrushMeshBlob>.Null &&
-                    brushMesh1 != BlobAssetReference<BrushMeshBlob>.Null &&
-                    bounds0.Intersects(bounds1, kEpsilon))
+                if (result == IntersectionType.Intersection)
                 {
-                    //*
-
-                    ref var transformation0 = ref transformations[brush0NodeIndex].Value;
-                    ref var transformation1 = ref transformations[brush1NodeIndex].Value;
-
-                    var treeToNode0SpaceMatrix = transformation0.treeToNode;
-                    var nodeToTree0SpaceMatrix = transformation0.nodeToTree;
-                    var treeToNode1SpaceMatrix = transformation1.treeToNode;
-                    var nodeToTree1SpaceMatrix = transformation1.nodeToTree;
-                    /*/
-                    var treeToNode0SpaceMatrix = brushData[brushIndex0].treeToNodeSpaceMatrix;
-                    var nodeToTree0SpaceMatrix = brushData[brushIndex0].nodeToTreeSpaceMatrix;
-                    var treeToNode1SpaceMatrix = brushData[brushIndex1].treeToNodeSpaceMatrix;
-                    var nodeToTree1SpaceMatrix = brushData[brushIndex1].nodeToTreeSpaceMatrix;
-                    //*/
-                    result = ConvexPolytopeTouching(brushMesh0,
-                                                    ref treeToNode0SpaceMatrix,
-                                                    ref nodeToTree0SpaceMatrix,
-                                                    brushMesh1,
-                                                    ref treeToNode1SpaceMatrix,
-                                                    ref nodeToTree1SpaceMatrix);
-
-                    if (result != IntersectionType.NoIntersection)
-                    {
-                        if (result == IntersectionType.Intersection)
-                        {
-                            brushBrushIntersections.Add(brush0NodeIndex, new BrushPair() { brushNodeIndex0 = brush0NodeIndex, brushNodeIndex1 = brush1NodeIndex, type = IntersectionType.Intersection });
-                            brushBrushIntersections.Add(brush1NodeIndex, new BrushPair() { brushNodeIndex0 = brush1NodeIndex, brushNodeIndex1 = brush0NodeIndex, type = IntersectionType.Intersection });
-                        } else
-                        if (result == IntersectionType.AInsideB)
-                        {
-                            brushBrushIntersections.Add(brush0NodeIndex, new BrushPair() { brushNodeIndex0 = brush0NodeIndex, brushNodeIndex1 = brush1NodeIndex, type = IntersectionType.AInsideB });
-                            brushBrushIntersections.Add(brush1NodeIndex, new BrushPair() { brushNodeIndex0 = brush1NodeIndex, brushNodeIndex1 = brush0NodeIndex, type = IntersectionType.BInsideA });
-                        } else
-                        //if (intersectionType == IntersectionType.BInsideA)
-                        {
-                            brushBrushIntersections.Add(brush0NodeIndex, new BrushPair() { brushNodeIndex0 = brush0NodeIndex, brushNodeIndex1 = brush1NodeIndex, type = IntersectionType.BInsideA });
-                            brushBrushIntersections.Add(brush1NodeIndex, new BrushPair() { brushNodeIndex0 = brush1NodeIndex, brushNodeIndex1 = brush0NodeIndex, type = IntersectionType.AInsideB });
-                        }
-                    }
+                    brushBrushIntersections.Add(brush0NodeIndex, new BrushPair() { brushNodeIndex0 = brush0NodeIndex, brushNodeIndex1 = brush1NodeIndex, type = IntersectionType.Intersection });
+                    brushBrushIntersections.Add(brush1NodeIndex, new BrushPair() { brushNodeIndex0 = brush1NodeIndex, brushNodeIndex1 = brush0NodeIndex, type = IntersectionType.Intersection });
+                } else
+                if (result == IntersectionType.AInsideB)
+                {
+                    brushBrushIntersections.Add(brush0NodeIndex, new BrushPair() { brushNodeIndex0 = brush0NodeIndex, brushNodeIndex1 = brush1NodeIndex, type = IntersectionType.AInsideB });
+                    brushBrushIntersections.Add(brush1NodeIndex, new BrushPair() { brushNodeIndex0 = brush1NodeIndex, brushNodeIndex1 = brush0NodeIndex, type = IntersectionType.BInsideA });
+                } else
+                //if (intersectionType == IntersectionType.BInsideA)
+                {
+                    brushBrushIntersections.Add(brush0NodeIndex, new BrushPair() { brushNodeIndex0 = brush0NodeIndex, brushNodeIndex1 = brush1NodeIndex, type = IntersectionType.BInsideA });
+                    brushBrushIntersections.Add(brush1NodeIndex, new BrushPair() { brushNodeIndex0 = brush1NodeIndex, brushNodeIndex1 = brush0NodeIndex, type = IntersectionType.AInsideB });
                 }
             }
-            //output.EndForEachIndex();
         }
     }
 

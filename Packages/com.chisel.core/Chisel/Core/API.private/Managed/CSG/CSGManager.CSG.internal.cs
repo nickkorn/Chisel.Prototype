@@ -409,7 +409,7 @@ namespace Chisel.Core
                     {
                         // Read
                         treeNodeIndex           = treeUpdate.treeNodeIndex,
-                        treeBrushIndices        = treeUpdate.rebuildTreeBrushIndices,
+                        treeBrushIndices        = treeUpdate.rebuildTreeBrushIndices.AsDeferredJobArray(),
                         compactTree             = treeUpdate.compactTree,
                         brushBrushIntersections = treeUpdate.brushBrushIntersections,
 
@@ -434,7 +434,7 @@ namespace Chisel.Core
                     var createBrushWorldPlanesJob = new CreateBrushWorldPlanesJob
                     {
                         // Read
-                        treeBrushIndices        = treeUpdate.rebuildTreeBrushIndices,
+                        treeBrushIndices        = treeUpdate.rebuildTreeBrushIndices.AsDeferredJobArray(),
                         brushMeshLookup         = treeUpdate.brushMeshLookup,
                         transformations         = treeUpdate.transformations,
 
@@ -458,7 +458,7 @@ namespace Chisel.Core
                     var createRoutingTableJob = new CreateRoutingTableJob
                     {
                         // Read
-                        treeBrushIndices        = treeUpdate.rebuildTreeBrushIndices,
+                        treeBrushIndices        = treeUpdate.rebuildTreeBrushIndices.AsDeferredJobArray(),
                         brushesTouchedByBrushes = treeUpdate.brushesTouchedByBrushes,
                         compactTree             = treeUpdate.compactTree,
 
@@ -482,7 +482,7 @@ namespace Chisel.Core
                     var findBrushPairsJob = new FindBrushPairsJob
                     {
                         // Read
-                        treeBrushIndices        = treeUpdate.rebuildTreeBrushIndices,
+                        treeBrushIndices        = treeUpdate.rebuildTreeBrushIndices.AsDeferredJobArray(),
                         brushesTouchedByBrushes = treeUpdate.brushesTouchedByBrushes,
                                     
                         // Write
@@ -506,8 +506,8 @@ namespace Chisel.Core
                         // Write
                         intersectingBrushes     = treeUpdate.intersectingBrushes.AsParallelWriter()
                     };
-                    treeUpdate.prepareBrushPairIntersectionsJobHandle = prepareBrushPairIntersectionsJob
-                        .Schedule(treeUpdate.uniqueBrushPairs, 4, dependencies);
+                    treeUpdate.prepareBrushPairIntersectionsJobHandle = prepareBrushPairIntersectionsJob.
+                        Schedule(treeUpdate.uniqueBrushPairs, 4, dependencies);
                 }
 
                 for (int t = 0; t < treeUpdateLength; t++)
@@ -523,8 +523,8 @@ namespace Chisel.Core
                         // Write
                         outputSurfaces          = treeUpdate.intersectionLoopBlobs.AsParallelWriter()
                     };
-                    treeUpdate.findAllIntersectionLoopsJobHandle = findAllIntersectionLoopsJob                        
-                        .Schedule(treeUpdate.intersectingBrushes, 4, dependencies);
+                    treeUpdate.findAllIntersectionLoopsJobHandle = findAllIntersectionLoopsJob.
+                        Schedule(treeUpdate.intersectingBrushes, 4, dependencies);
                 }
             } finally { Profiler.EndSample(); }
 
@@ -538,7 +538,7 @@ namespace Chisel.Core
                     var findLoopOverlapIntersectionsJob = new FindLoopOverlapIntersectionsJob
                     {
                         // Read
-                        treeBrushIndices            = treeUpdate.rebuildTreeBrushIndices,
+                        treeBrushIndices            = treeUpdate.rebuildTreeBrushIndices.AsDeferredJobArray(),
                         intersectionLoopBlobs       = treeUpdate.intersectionLoopBlobs.AsDeferredJobArray(),
                         brushWorldPlanes            = treeUpdate.brushWorldPlanes,
                         basePolygonBlobs            = treeUpdate.basePolygons,
@@ -567,7 +567,7 @@ namespace Chisel.Core
                     var performCSGJob = new PerformCSGJob
                     {
                         // Read
-                        treeBrushNodeIndices        = treeUpdate.rebuildTreeBrushIndices,
+                        treeBrushNodeIndices        = treeUpdate.rebuildTreeBrushIndices.AsDeferredJobArray(),
                         routingTableLookup          = treeUpdate.routingTableLookup,
                         brushWorldPlanes            = treeUpdate.brushWorldPlanes,
                         brushesTouchedByBrushes     = treeUpdate.brushesTouchedByBrushes,
@@ -593,7 +593,7 @@ namespace Chisel.Core
                     var generateSurfaceRenderBuffers = new GenerateSurfaceTrianglesJob
                     {
                         // Read
-                        treeBrushNodeIndices    = treeUpdate.rebuildTreeBrushIndices,
+                        treeBrushNodeIndices    = treeUpdate.rebuildTreeBrushIndices.AsDeferredJobArray(),
                         brushWorldPlanes        = treeUpdate.brushWorldPlanes,
                         basePolygons            = treeUpdate.basePolygons,
                         input                   = treeUpdate.dataStream2.AsReader(),
@@ -785,4 +785,4 @@ namespace Chisel.Core
 
     }
 #endif
-        }
+}
