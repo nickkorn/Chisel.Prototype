@@ -15,13 +15,13 @@ using Unity.Entities;
 namespace Chisel.Core
 {
     //[BurstCompile(CompileSynchronously = true)] // Fails for some reason
-    unsafe struct GenerateSurfaceTrianglesJob : IJob, IGenerateSurfaceTrianglesJob
+    unsafe struct GenerateSurfaceTrianglesJob : IJob
     {
         [NoAlias, ReadOnly] public int index;
         [NoAlias, ReadOnly] public NativeHashMap<int, BlobAssetReference<BasePolygonsBlob>> basePolygons;
         [NoAlias, ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushWorldPlanes>> brushWorldPlanes;
 
-        [NoAlias, WriteOnly] public NativeList<BlobAssetReference<ChiselSurfaceRenderBuffer>> surfaceRenderBuffers;
+        [NoAlias, WriteOnly] public NativeList<BlobAssetReference<ChiselBrushRenderBuffer>> brushRenderBuffers;
 
         [NoAlias, ReadOnly] public NativeStream.Reader input;
 
@@ -104,8 +104,6 @@ namespace Chisel.Core
             var basePolygonsBlob = basePolygons[brushNodeIndex];
             var brushWorldPlanesBlob = brushWorldPlanes[brushNodeIndex];
 
-            surfaceRenderBuffers.Capacity = surfaceLoopIndices.Length;
-
             var pointCount = brushVertices.Length + 2;
             var context_points = new NativeArray<float2>(pointCount, Allocator.Temp);
             var context_edges = new NativeArray<ushort>(pointCount, Allocator.Temp);
@@ -138,10 +136,15 @@ namespace Chisel.Core
                 inputEdgesCopy = context_inputEdgesCopy,
             };
 
+            var builder = new BlobBuilder(Allocator.Temp);
+            ref var root = ref builder.ConstructRoot<ChiselBrushRenderBuffer>();
+            var surfaceRenderBuffers = builder.Allocate(ref root.surfaces, surfaceLoopIndices.Length);
+
             var loops = new NativeList<int>(maxLoops, Allocator.Temp);
             var surfaceIndexList = new NativeList<int>(maxIndices, Allocator.Temp);
             for (int s = 0; s < surfaceLoopIndices.Length; s++)
             {
+                ref var surfaceRenderBuffer = ref surfaceRenderBuffers[s];
                 loops.Clear();
 
                 var loopIndices = surfaceLoopIndices[s];
@@ -268,22 +271,22 @@ namespace Chisel.Core
                 }
                 var uv0Hash = math.hash(surfaceUV0, surfaceVerticesCount);
 
-                var builder = new BlobBuilder(Allocator.Temp);
-                ref var root = ref builder.ConstructRoot<ChiselSurfaceRenderBuffer>();
-                builder.Construct(ref root.indices, surfaceIndices, surfaceIndicesCount);
-                builder.Construct(ref root.vertices, surfaceVertices, surfaceVerticesCount);
-                builder.Construct(ref root.normals, surfaceNormals, surfaceVerticesCount);
-                builder.Construct(ref root.uv0, surfaceUV0, surfaceVerticesCount);
+                builder.Construct(ref surfaceRenderBuffer.indices, surfaceIndices, surfaceIndicesCount);
+                builder.Construct(ref surfaceRenderBuffer.vertices, surfaceVertices, surfaceVerticesCount);
+                builder.Construct(ref surfaceRenderBuffer.normals, surfaceNormals, surfaceVerticesCount);
+                builder.Construct(ref surfaceRenderBuffer.uv0, surfaceUV0, surfaceVerticesCount);
 
-                root.surfaceHash = math.hash(new uint2(normalHash, uv0Hash));
-                root.geometryHash = geometryHash;
-                root.surfaceLayers = surfaceLayers;
-                root.surfaceIndex = surfaceIndex;
-                var surfaceRenderBuffer = builder.CreateBlobAssetReference<ChiselSurfaceRenderBuffer>(Allocator.Persistent);
-                builder.Dispose();
-
-                surfaceRenderBuffers.Add(surfaceRenderBuffer);
+                surfaceRenderBuffer.surfaceHash = math.hash(new uint2(normalHash, uv0Hash));
+                surfaceRenderBuffer.geometryHash = geometryHash;
+                surfaceRenderBuffer.surfaceLayers = surfaceLayers;
+                surfaceRenderBuffer.surfaceIndex = surfaceIndex;
             }
+
+            var brushRenderBuffer = builder.CreateBlobAssetReference<ChiselBrushRenderBuffer>(Allocator.Persistent);
+            builder.Dispose();
+
+            brushRenderBuffers.Add(brushRenderBuffer);
+
             loops.Dispose();
             surfaceIndexList.Dispose();
 

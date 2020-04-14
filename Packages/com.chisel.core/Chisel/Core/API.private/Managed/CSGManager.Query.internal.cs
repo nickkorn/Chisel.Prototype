@@ -325,13 +325,16 @@ namespace Chisel.Core
 
                 if (intersectsFrustum)
                 {
-                    if (!chiselLookupValues.surfaceRenderBuffers.TryGetValue(brushNodeIndex, out var surfaceRenderBuffers))
+                    if (!chiselLookupValues.brushRenderBuffers.TryGetValue(brushNodeIndex, out var brushRenderBuffers) ||
+                        !brushRenderBuffers.IsCreated)
                         continue;
 
+                    ref var surfaceRenderBuffers = ref brushRenderBuffers.Value.surfaces;
+
                     // Double check if the vertices of the brush are inside the frustum
-                    foreach(var surfaceRenderBufferRef in surfaceRenderBuffers)
+                    for (int s=0;s< surfaceRenderBuffers.Length;s++)
                     {
-                        ref var surfaceRenderBuffer = ref surfaceRenderBufferRef.Value;
+                        ref var surfaceRenderBuffer = ref surfaceRenderBuffers[s];
 
                         // Compare surface with 'current' meshquery (is this surface even being rendered???)
                         for (int n = 0; n < meshQueries.Length; n++)

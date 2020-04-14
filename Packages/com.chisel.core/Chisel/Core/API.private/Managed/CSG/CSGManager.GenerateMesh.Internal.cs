@@ -15,7 +15,7 @@ using ReadOnlyAttribute = Unity.Collections.ReadOnlyAttribute;
 namespace Chisel.Core
 {
 #if USE_MANAGED_CSG_IMPLEMENTATION
-    internal struct ChiselSurfaceRenderBuffer
+    public struct ChiselSurfaceRenderBuffer
     {
         public BlobArray<Int32>		indices;
         public BlobArray<float3>	vertices;
@@ -29,6 +29,11 @@ namespace Chisel.Core
         public SurfaceLayers    surfaceLayers;
         //public Int32		    surfaceParameter;
         public Int32		    surfaceIndex;
+    };
+
+    public struct ChiselBrushRenderBuffer
+    {
+        public BlobArray<ChiselSurfaceRenderBuffer> surfaces;
     };
 
     internal sealed class Outline
@@ -73,6 +78,12 @@ namespace Chisel.Core
 #if USE_MANAGED_CSG_IMPLEMENTATION
         const int kMaxVertexCount = VertexSoup.kMaxVertexCount;
 
+        internal struct SubMeshSurface
+        {
+            public int surfaceIndex;
+            public BlobAssetReference<ChiselBrushRenderBuffer> brushRenderBuffer;
+        }
+
         internal sealed class SubMeshCounts
         {
             public MeshQuery meshQuery;
@@ -87,7 +98,7 @@ namespace Chisel.Core
             public int		indexCount;
             public int		vertexCount;
 
-            public readonly List<BlobAssetReference<ChiselSurfaceRenderBuffer>> surfaces = new List<BlobAssetReference<ChiselSurfaceRenderBuffer>>();
+            public readonly List<SubMeshSurface> surfaces = new List<SubMeshSurface>();
         };
 
         private struct MeshID
@@ -203,7 +214,7 @@ namespace Chisel.Core
                 return null;
 
 
-            var submeshSurfaces          = new NativeArray<BlobAssetReference<ChiselSurfaceRenderBuffer>>(subMeshCount.surfaces.Count, Allocator.TempJob);
+            var submeshSurfaces          = new NativeArray<SubMeshSurface>(subMeshCount.surfaces.Count, Allocator.TempJob);
             for (int n = 0; n < subMeshCount.surfaces.Count; n++)
                 submeshSurfaces[n] = subMeshCount.surfaces[n];
 
@@ -262,7 +273,7 @@ namespace Chisel.Core
             [NoAlias, ReadOnly] public int		    submeshIndexCount;
             [NoAlias, ReadOnly] public int		    submeshVertexCount;
 
-            [NoAlias, ReadOnly] public NativeArray<BlobAssetReference<ChiselSurfaceRenderBuffer>> submeshSurfaces;
+            [NoAlias, ReadOnly] public NativeArray<SubMeshSurface> submeshSurfaces;
 
             [NoAlias] public NativeArray<int>		generatedMeshIndices; 
             [NoAlias] public NativeArray<float3>    generatedMeshPositions;
@@ -368,8 +379,8 @@ namespace Chisel.Core
                          surfaceIndex < surfaceCount;
                          ++surfaceIndex)
                     {
-                        var sourceBufferRef = submeshSurfaces[surfaceIndex];
-                        ref var sourceBuffer = ref sourceBufferRef.Value;
+                        var subMeshSurface = submeshSurfaces[surfaceIndex];
+                        ref var sourceBuffer = ref subMeshSurface.brushRenderBuffer.Value.surfaces[subMeshSurface.surfaceIndex];
                         if (sourceBuffer.indices.Length == 0 ||
                             sourceBuffer.vertices.Length == 0)
                             continue;
@@ -538,18 +549,21 @@ namespace Chisel.Core
                 var treeNodeID          = nodeHierarchies[brushNodeIndex].treeNodeID;
                 var chiselLookupValues  = ChiselTreeLookup.Value[treeNodeID - 1];
 
-                if (!chiselLookupValues.surfaceRenderBuffers.TryGetValue(brushNodeIndex, out var surfaceRenderBuffers))
+                if (!chiselLookupValues.brushRenderBuffers.TryGetValue(brushNodeIndex, out var brushRenderBuffer) ||
+                    !brushRenderBuffer.IsCreated)
                     continue;
 
-                if (surfaceRenderBuffers.Length == 0)
+                ref var brushRenderBufferRef = ref brushRenderBuffer.Value;
+                ref var surfaces = ref brushRenderBufferRef.surfaces;
+
+                if (surfaces.Length == 0)
                     continue;
 
-                for (int j = 0, count_j = (int)surfaceRenderBuffers.Length; j < count_j; j++)
+                for (int j = 0, count_j = (int)surfaces.Length; j < count_j; j++)
                 {
-                    var brushSurfaceBufferRef   = surfaceRenderBuffers[j];
-                    ref var brushSurfaceBuffer  = ref brushSurfaceBufferRef.Value;
-                    var surfaceVertexCount      = brushSurfaceBuffer.vertices.Length;
-                    var surfaceIndexCount       = brushSurfaceBuffer.indices.Length;
+                    ref var brushSurfaceBuffer      = ref surfaces[j];
+                    var surfaceVertexCount          = brushSurfaceBuffer.vertices.Length;
+                    var surfaceIndexCount           = brushSurfaceBuffer.indices.Length;
 
                     if (surfaceVertexCount <= 0 || surfaceIndexCount <= 0)
                         continue;
@@ -615,7 +629,11 @@ namespace Chisel.Core
                                 surfaceHash         = brushSurfaceBuffer.surfaceHash,
                                 geometryHash        = brushSurfaceBuffer.geometryHash
                             };
-                            newSubMesh.surfaces.Add(brushSurfaceBufferRef);
+                            newSubMesh.surfaces.Add(new SubMeshSurface
+                            {
+                                surfaceIndex = j,
+                                brushRenderBuffer = brushRenderBuffer
+                            });
                             subMeshCounts.Add(newSubMesh);
                             continue;
                         }
@@ -625,7 +643,11 @@ namespace Chisel.Core
                         currentSubMesh.vertexCount  += surfaceVertexCount;
                         currentSubMesh.surfaceHash  = Hashing.XXH64_mergeRound(currentSubMesh.surfaceHash, brushSurfaceBuffer.surfaceHash);
                         currentSubMesh.geometryHash = Hashing.XXH64_mergeRound(currentSubMesh.geometryHash, brushSurfaceBuffer.geometryHash);
-                        currentSubMesh.surfaces.Add(brushSurfaceBufferRef);
+                        currentSubMesh.surfaces.Add(new SubMeshSurface
+                        {
+                            surfaceIndex = j,
+                            brushRenderBuffer = brushRenderBuffer
+                        });
                     }
                 }
             }
