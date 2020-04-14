@@ -560,6 +560,7 @@ namespace Chisel.Core
                 }
             }
             input.EndForEachIndex();
+
             //int brushNodeIndex = treeBrushNodeIndices[index];
 
             if (surfaceCount == 0)

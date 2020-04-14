@@ -283,8 +283,8 @@ namespace Chisel.Core
                     surfaceIndices[i] = vertexIndexDst;
                 }
 
-                var vertexHash = math.hash(surfaceVertices, surfaceVerticesCount);
-                var indicesHash = math.hash(surfaceIndices, surfaceIndicesCount);
+                var vertexHash = math.hash(surfaceVertices, surfaceVerticesCount * sizeof(float3));
+                var indicesHash = math.hash(surfaceIndices, surfaceIndicesCount * sizeof(int));
                 var geometryHash = math.hash(new uint2(vertexHash, indicesHash));
 
                 var surfaceNormals = stackalloc float3[surfaceVerticesCount];
@@ -294,13 +294,13 @@ namespace Chisel.Core
                     for (int i = 0; i < surfaceVerticesCount; i++)
                         surfaceNormals[i] = normal;
                 }
-                var normalHash = math.hash(surfaceNormals, surfaceVerticesCount);
+                var normalHash = math.hash(surfaceNormals, surfaceVerticesCount * sizeof(float3));
                 var surfaceUV0 = stackalloc float2[surfaceVerticesCount];
                 {
                     for (int v = 0; v < surfaceVerticesCount; v++)
                         surfaceUV0[v] = math.mul(uv0Matrix, new float4(surfaceVertices[v], 1)).xy;
                 }
-                var uv0Hash = math.hash(surfaceUV0, surfaceVerticesCount);
+                var uv0Hash = math.hash(surfaceUV0, surfaceVerticesCount * sizeof(float2));
 
                 builder.Construct(ref surfaceRenderBuffer.indices, surfaceIndices, surfaceIndicesCount);
                 builder.Construct(ref surfaceRenderBuffer.vertices, surfaceVertices, surfaceVerticesCount);

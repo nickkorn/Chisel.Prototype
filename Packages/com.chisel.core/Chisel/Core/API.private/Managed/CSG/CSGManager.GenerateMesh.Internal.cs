@@ -22,8 +22,8 @@ namespace Chisel.Core
         public BlobArray<float3>	normals;
         public BlobArray<float2>    uv0;
 
-        public UInt64		    geometryHash;
-        public UInt64		    surfaceHash;
+        public uint             geometryHash;
+        public uint             surfaceHash;
 
         //public MeshQuery	    meshQuery;
         public SurfaceLayers    surfaceLayers;
@@ -92,8 +92,8 @@ namespace Chisel.Core
             public int		meshIndex;
             public int		subMeshIndex;
             
-            public ulong	surfaceHash;   // used to detect changes in color, normal, tangent or uv (doesn't effect lighting)
-            public ulong	geometryHash;  // used to detect changes in vertex positions / indices
+            public uint	    surfaceHash;   // used to detect changes in color, normal, tangent or uv (doesn't effect lighting)
+            public uint	    geometryHash;  // used to detect changes in vertex positions / indices
 
             public int		indexCount;
             public int		vertexCount;
@@ -641,8 +641,8 @@ namespace Chisel.Core
                         var currentSubMesh = subMeshCounts[generatedMeshIndex];
                         currentSubMesh.indexCount   += surfaceIndexCount;
                         currentSubMesh.vertexCount  += surfaceVertexCount;
-                        currentSubMesh.surfaceHash  = Hashing.XXH64_mergeRound(currentSubMesh.surfaceHash, brushSurfaceBuffer.surfaceHash);
-                        currentSubMesh.geometryHash = Hashing.XXH64_mergeRound(currentSubMesh.geometryHash, brushSurfaceBuffer.geometryHash);
+                        currentSubMesh.surfaceHash  = math.hash(new uint2(currentSubMesh.surfaceHash, brushSurfaceBuffer.surfaceHash));
+                        currentSubMesh.geometryHash = math.hash(new uint2(currentSubMesh.geometryHash, brushSurfaceBuffer.geometryHash));
                         currentSubMesh.surfaces.Add(new SubMeshSurface
                         {
                             surfaceIndex = j,

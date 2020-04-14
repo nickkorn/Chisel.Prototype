@@ -309,10 +309,10 @@ namespace Chisel.Core
                 }
                 Profiler.EndSample();
                 
-                var triangleArraySize       = GeometryMath.GetTriangleArraySize(brushLoopCount);
-                var intersectionCount       = triangleArraySize + (triangleArraySize * (allTreeBrushIndices.Length - rebuildTreeBrushIndices.Length));
-                var intersectionLoopBlobs   = new NativeList<BlobAssetReference<BrushIntersectionLoops>>(65500, Allocator.TempJob);
-                var brushBrushIntersections = new NativeMultiHashMap<int, BrushPair>(intersectionCount * allTreeBrushIndices.Length, Allocator.TempJob);
+                var triangleArraySize       = GeometryMath.GetTriangleArraySize(allTreeBrushIndices.Length);
+                var intersectionCount       = triangleArraySize;
+                var intersectionLoopBlobs   = new NativeList<BlobAssetReference<BrushIntersectionLoops>>(intersectionCount, Allocator.TempJob);
+                var brushBrushIntersections = new NativeMultiHashMap<int, BrushPair>(intersectionCount * 2, Allocator.TempJob);
                 var uniqueBrushPairs        = new NativeList<BrushPair>(intersectionCount, Allocator.TempJob);
                 var intersectingBrushes     = new NativeList<BlobAssetReference<BrushPairIntersection>>(intersectionCount, Allocator.TempJob);
                 var dataStream1             = new NativeStream(allTreeBrushIndices.Length, Allocator.TempJob);
@@ -386,11 +386,11 @@ namespace Chisel.Core
                     var findAllIntersectionsJob = new FindAllBrushIntersectionsJob
                     {
                         // Read
-                        updateBrushIndices  = treeUpdate.rebuildTreeBrushIndices,
-                        allTreeBrushIndices = treeUpdate.allTreeBrushIndices,
-                        transformations     = treeUpdate.transformations,
-                        brushMeshLookup     = treeUpdate.brushMeshLookup,
-                        basePolygons        = treeUpdate.basePolygons,
+                        updateBrushIndices      = treeUpdate.rebuildTreeBrushIndices,
+                        allTreeBrushIndices     = treeUpdate.allTreeBrushIndices,
+                        transformations         = treeUpdate.transformations,
+                        brushMeshLookup         = treeUpdate.brushMeshLookup,
+                        basePolygons            = treeUpdate.basePolygons,
 
                         // Write
                         brushBrushIntersections = treeUpdate.brushBrushIntersections.AsParallelWriter()
@@ -419,7 +419,6 @@ namespace Chisel.Core
                 }
             } finally { Profiler.EndSample(); }
 
-
             // TODO: should only do this at creation time + when moved / store with brush component itself
             Profiler.BeginSample("Tag_UpdateBrushWorldPlanes");
             try
@@ -427,7 +426,7 @@ namespace Chisel.Core
                 for (int t = 0; t < treeUpdateLength; t++)
                 {
                     ref var treeUpdate = ref treeUpdates[t];
-                    var dependencies = treeUpdate.findAllIntersectionsJobHandle;
+                    var dependencies = treeUpdate.findIntersectingBrushesJobHandle;
                     var createBrushWorldPlanesJob = new CreateBrushWorldPlanesJob
                     {
                         // Read
@@ -441,7 +440,8 @@ namespace Chisel.Core
                     treeUpdate.updateBrushWorldPlanesJobHandle = createBrushWorldPlanesJob.
                         Schedule(treeUpdate.rebuildTreeBrushIndices, 16, dependencies);
                 }
-            } finally { Profiler.EndSample(); }
+            }
+            finally { Profiler.EndSample(); }
 
             // TODO: only update when brush or any touching brush has been added/removed or changes operation/order
             Profiler.BeginSample("Tag_UpdateBrushCategorizationTables");
