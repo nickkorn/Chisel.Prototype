@@ -38,7 +38,7 @@ namespace Chisel.Core
         }
     }
 
-    //[BurstCompile(CompileSynchronously = true)] // Fails for some reason
+    [BurstCompile(CompileSynchronously = true)] // Fails for some reason
     unsafe struct GenerateSurfaceTrianglesJob : IJobParallelFor
     {
         [NoAlias, ReadOnly] public NativeArray<int>                                         treeBrushNodeIndices;
@@ -132,14 +132,14 @@ namespace Chisel.Core
 
             var pointCount                  = brushVertices.Length + 2;
             var context_points              = new NativeArray<float2>(pointCount, allocator);
-            var context_edges               = new NativeArray<ushort>(pointCount, allocator);
+            var context_edges               = new NativeArray<int>(pointCount, allocator);
             var context_allEdges            = new NativeList<Poly2Tri.DTSweep.DirectedEdge>(pointCount, allocator);
-            var context_sortedPoints        = new NativeList<ushort>(pointCount, allocator);
+            var context_sortedPoints        = new NativeList<int>(pointCount, allocator);
             var context_triangles           = new NativeList<Poly2Tri.DTSweep.DelaunayTriangle>(pointCount * 3, allocator);
             var context_triangleInterior    = new NativeList<bool>(pointCount * 3, allocator);
             var context_advancingFrontNodes = new NativeList<Poly2Tri.DTSweep.AdvancingFrontNode>(pointCount, allocator);
             var context_edgeLookupEdges     = new NativeListArray<Chisel.Core.Edge>(pointCount, allocator);
-            var context_edgeLookups         = new NativeHashMap<ushort, int>(pointCount, allocator);
+            var context_edgeLookups         = new NativeHashMap<int, int>(pointCount, allocator);
             var context_foundLoops          = new NativeListArray<Chisel.Core.Edge>(pointCount, allocator);
 
             var context_children            = new NativeListArray<int>(64, allocator);

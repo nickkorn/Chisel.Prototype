@@ -66,39 +66,40 @@ namespace Poly2Tri
 
         public unsafe struct DelaunayTriangle
         {
-            public enum EdgeFlags : byte
+            public enum EdgeFlags : int
             {
                 None = 0,
                 Constrained = 1,
                 Delaunay = 2
             }
 
-            public fixed ushort indices[3];
-            public fixed ushort neighbors[3];
-            fixed byte          edgeFlags[3];
+            public int3 indices;
+            public int3 neighbors;
+            int3  edgeFlags;
 
-            public DelaunayTriangle(ushort p1, ushort p2, ushort p3)
+            public DelaunayTriangle(int3 p)
             {
-                indices[0] = p1;
-                indices[1] = p2;
-                indices[2] = p3;
-
-                neighbors[0] = ushort.MaxValue;
-                neighbors[1] = ushort.MaxValue;
-                neighbors[2] = ushort.MaxValue;
+                indices   = p;
+                neighbors = new int3(int.MaxValue, int.MaxValue, int.MaxValue);
+                edgeFlags = int3.zero;
             }
+
+            public DelaunayTriangle(int p1, int p2, int p3) : this(new int3(p1, p2, p3))
+            {
+            }
+
             public void ClearDelauney()
             {
-                edgeFlags[0] &= (byte)~EdgeFlags.Delaunay;
-                edgeFlags[1] &= (byte)~EdgeFlags.Delaunay;
-                edgeFlags[2] &= (byte)~EdgeFlags.Delaunay;
+                edgeFlags[0] &= (int)~EdgeFlags.Delaunay;
+                edgeFlags[1] &= (int)~EdgeFlags.Delaunay;
+                edgeFlags[2] &= (int)~EdgeFlags.Delaunay;
             }
             public void SetDelauneyEdge(int index, bool value)
             {
                 if (value)
-                    edgeFlags[index] |= (byte)EdgeFlags.Delaunay;
+                    edgeFlags[index] |= (int)EdgeFlags.Delaunay;
                 else
-                    edgeFlags[index] &= (byte)~EdgeFlags.Delaunay;
+                    edgeFlags[index] &= (int)~EdgeFlags.Delaunay;
             }
 
             public bool GetDelaunayEdge(int idx) { return (edgeFlags[idx] & (byte)EdgeFlags.Delaunay) != 0; }
@@ -106,68 +107,68 @@ namespace Poly2Tri
             public void SetConstrainedEdge(int index, bool value)
             {
                 if (value)
-                    edgeFlags[index] |= (byte)EdgeFlags.Constrained;
+                    edgeFlags[index] |= (int)EdgeFlags.Constrained;
                 else
-                    edgeFlags[index] &= (byte)~EdgeFlags.Constrained;
+                    edgeFlags[index] &= (int)~EdgeFlags.Constrained;
             }
 
             public bool GetConstrainedEdge(int idx) { return (edgeFlags[idx] & (byte)EdgeFlags.Constrained) != 0; }
 
-            public ushort IndexOf(ushort p)
+            public int IndexOf(int p)
             {
-                if (indices[0] == p) return (ushort)0; else if (indices[1] == p) return (ushort)1; else if (indices[2] == p) return (ushort)2;
-                return ushort.MaxValue;
+                if (indices[0] == p) return (int)0; else if (indices[1] == p) return (int)1; else if (indices[2] == p) return (int)2;
+                return int.MaxValue;
             }
 
-            public bool Contains(ushort p)
+            public bool Contains(int p)
             {
                 if (indices[0] == p || indices[1] == p || indices[2] == p) 
                     return true;
                 return false;
             }
 
-            [BurstDiscard]
+            //[BurstDiscard]
             public static void MarkNeighborException()
             {
                 throw new Exception("Error marking neighbors -- t doesn't contain edge p1-p2!");
             }
 
 
-            public void MarkNeighbor(ushort p1, ushort p2, ushort triangleIndex)
+            public void MarkNeighbor(int p1, int p2, int triangleIndex)
             {
-                ushort i = EdgeIndex(p1, p2);
-                if (i == ushort.MaxValue)
+                int i = EdgeIndex(p1, p2);
+                if (i == int.MaxValue)
                     MarkNeighborException();
                 neighbors[i] = triangleIndex;
             }
 
 
-            public ushort NeighborCWFrom(ushort point)
+            public int NeighborCWFrom(int point)
             {
                 return neighbors[(IndexOf(point) + 1) % 3];
             }
 
-            public ushort NeighborCCWFrom(ushort point)
+            public int NeighborCCWFrom(int point)
             {
                 return neighbors[(IndexOf(point) + 2) % 3];
             }
 
-            public ushort NeighborAcrossFrom(ushort point)
+            public int NeighborAcrossFrom(int point)
             {
                 return neighbors[IndexOf(point)];
             }
 
-            public ushort PointCCWFrom(ushort point)
+            public int PointCCWFrom(int point)
             {
                 return indices[(IndexOf(point) + 1) % 3];
             }
 
-            public ushort PointCWFrom(ushort point)
+            public int PointCWFrom(int point)
             {
                 return indices[(IndexOf(point) + 2) % 3];
             }
 
-            public void Legalize(ushort oPoint, ushort nPoint)
+            public void Legalize(int oPoint, int nPoint)
             {
                 //RotateCW();
                 {
@@ -191,23 +192,23 @@ namespace Poly2Tri
             /// <summary>
             /// Mark edge as constrained
             /// </summary>
-            public void MarkConstrainedEdge(ushort p, ushort q)
+            public void MarkConstrainedEdge(int p, int q)
             {
-                ushort i = EdgeIndex(p, q);
-                if (i != ushort.MaxValue)
+                int i = EdgeIndex(p, q);
+                if (i != int.MaxValue)
                     SetConstrainedEdge(i, true);
             }
 
 
 
             /// <summary>
-            /// Get the index of the neighbor that shares this edge (or ushort.MaxValue if it isn't shared)
+            /// Get the index of the neighbor that shares this edge (or int.MaxValue if it isn't shared)
             /// </summary>
-            /// <returns>index of the shared edge or ushort.MaxValue if edge isn't shared</returns>
-            public ushort EdgeIndex(ushort p1, ushort p2)
+            /// <returns>index of the shared edge or int.MaxValue if edge isn't shared</returns>
+            public int EdgeIndex(int p1, int p2)
             {
-                ushort i1 = IndexOf(p1);
-                ushort i2 = IndexOf(p2);
+                int i1 = IndexOf(p1);
+                int i2 = IndexOf(p2);
 
                 // Points of this triangle in the edge p1-p2
                 bool a = (i1 == 0 || i2 == 0);
@@ -227,35 +228,35 @@ namespace Poly2Tri
                     return 2;
                 }
 
-                return ushort.MaxValue;
+                return int.MaxValue;
             }
 
-            public bool GetConstrainedEdgeCCW(ushort p) { return GetConstrainedEdge((IndexOf(p) + 2) % 3); }
-            public bool GetConstrainedEdgeCW(ushort p) { return GetConstrainedEdge((IndexOf(p) + 1) % 3); }
+            public bool GetConstrainedEdgeCCW(int p) { return GetConstrainedEdge((IndexOf(p) + 2) % 3); }
+            public bool GetConstrainedEdgeCW(int p) { return GetConstrainedEdge((IndexOf(p) + 1) % 3); }
 
-            public void SetConstrainedEdgeCCW(ushort p, bool ce)
+            public void SetConstrainedEdgeCCW(int p, bool ce)
             {
                 int idx = (IndexOf(p) + 2) % 3;
                 SetConstrainedEdge(idx, ce);
             }
-            public void SetConstrainedEdgeCW(ushort p, bool ce)
+            public void SetConstrainedEdgeCW(int p, bool ce)
             {
                 int idx = (IndexOf(p) + 1) % 3;
                 SetConstrainedEdge(idx, ce);
             }
-            public void SetConstrainedEdgeAcross(ushort p, bool ce)
+            public void SetConstrainedEdgeAcross(int p, bool ce)
             {
                 int idx = IndexOf(p);
                 SetConstrainedEdge(idx, ce);
             }
 
-            public bool GetDelaunayEdgeCCW(ushort p) { return GetDelaunayEdge((IndexOf(p) + 2) % 3); }
+            public bool GetDelaunayEdgeCCW(int p) { return GetDelaunayEdge((IndexOf(p) + 2) % 3); }
 
-            public bool GetDelaunayEdgeCW(ushort p) { return GetDelaunayEdge((IndexOf(p) + 1) % 3); }
+            public bool GetDelaunayEdgeCW(int p) { return GetDelaunayEdge((IndexOf(p) + 1) % 3); }
 
-            public void SetDelaunayEdgeCCW(ushort p, bool ce) { SetDelauneyEdge((IndexOf(p) + 2) % 3, ce); }
+            public void SetDelaunayEdgeCCW(int p, bool ce) { SetDelauneyEdge((IndexOf(p) + 2) % 3, ce); }
 
-            public void SetDelaunayEdgeCW(ushort p, bool ce) { SetDelauneyEdge((IndexOf(p) + 1) % 3, ce); }
+            public void SetDelaunayEdgeCW(int p, bool ce) { SetDelauneyEdge((IndexOf(p) + 1) % 3, ce); }
         
         }
 
@@ -268,23 +269,23 @@ namespace Poly2Tri
 
         struct DTSweepConstraint
         {
-            public ushort P;
-            public ushort Q;
+            public int P;
+            public int Q;
         }
 
         public struct AdvancingFrontNode
         {
-            public ushort prevNodeIndex;
-            public ushort nextNodeIndex;
-            public ushort triangleIndex;
-            public ushort pointIndex;
+            public int prevNodeIndex;
+            public int nextNodeIndex;
+            public int triangleIndex;
+            public int pointIndex;
             public float2 nodePoint;
         }
 
         public struct DirectedEdge
         {
-            public ushort index2;
-            public ushort next;
+            public int index2;
+            public int next;
         }
 
         //
@@ -295,14 +296,14 @@ namespace Poly2Tri
         [NoAlias, ReadOnly] public float3                               normal;
         [NoAlias, ReadOnly] public VertexSoup                           vertices;
         [NoAlias, ReadOnly] public NativeArray<float2>                  points;
-        [NoAlias, ReadOnly] public NativeArray<ushort>                  edges;
+        [NoAlias, ReadOnly] public NativeArray<int>                     edges;
         [NoAlias, ReadOnly] public NativeList<DirectedEdge>             allEdges;
         [NoAlias, ReadOnly] public NativeList<DelaunayTriangle>         triangles;
         [NoAlias, ReadOnly] public NativeList<bool>                     triangleInterior;
-        [NoAlias, ReadOnly] public NativeList<ushort>                   sortedPoints;
+        [NoAlias, ReadOnly] public NativeList<int>                      sortedPoints;
         [NoAlias, ReadOnly] public NativeList<AdvancingFrontNode>       advancingFrontNodes;
         [NoAlias, ReadOnly] public NativeListArray<Chisel.Core.Edge>    edgeLookupEdges;
-        [NoAlias, ReadOnly] public NativeHashMap<ushort, int>           edgeLookups;
+        [NoAlias, ReadOnly] public NativeHashMap<int, int>              edgeLookups;
         [NoAlias, ReadOnly] public NativeListArray<Chisel.Core.Edge>    foundLoops;
         [NoAlias, ReadOnly] public NativeListArray<int>                 children;
         [NoAlias, ReadOnly] public NativeList<Edge>                     inputEdgesCopy;
@@ -312,7 +313,7 @@ namespace Poly2Tri
         void Clear()
         {
             for (int i = 0; i < edges.Length; i++)
-                edges[i] = ushort.MaxValue;
+                edges[i] = int.MaxValue;
 
             allEdges.Clear();
             triangles.Clear();
@@ -325,16 +326,16 @@ namespace Poly2Tri
         // PointSet width to both left and right.
         const float ALPHA = 0.3f;
 
-        ushort headNodeIndex;
-        ushort tailNodeIndex;
-        ushort searchNodeIndex;
-        ushort headPointIndex;
-        ushort tailPointIndex;
+        int headNodeIndex;
+        int tailNodeIndex;
+        int searchNodeIndex;
+        int headPointIndex;
+        int tailPointIndex;
 
         //Basin
-        ushort leftNodeIndex;
-        ushort bottomNodeIndex;
-        ushort rightNodeIndex;
+        int leftNodeIndex;
+        int bottomNodeIndex;
+        int rightNodeIndex;
         float basinWidth;
         bool basinLeftHighest;
 
@@ -568,18 +569,18 @@ namespace Poly2Tri
         }
 
 
-        bool HasNext(ushort nodeIndex) { if (nodeIndex == ushort.MaxValue) return false; return advancingFrontNodes[nodeIndex].nextNodeIndex != ushort.MaxValue; }
-        bool HasPrev(ushort nodeIndex) { if (nodeIndex == ushort.MaxValue) return false; return advancingFrontNodes[nodeIndex].prevNodeIndex != ushort.MaxValue; }
+        bool HasNext(int nodeIndex) { if (nodeIndex == int.MaxValue) return false; return advancingFrontNodes[nodeIndex].nextNodeIndex != int.MaxValue; }
+        bool HasPrev(int nodeIndex) { if (nodeIndex == int.MaxValue) return false; return advancingFrontNodes[nodeIndex].prevNodeIndex != int.MaxValue; }
 
-        ushort LocateNode(float x)
+        int LocateNode(float x)
         {
             var nodeIndex = searchNodeIndex;
             if (nodeIndex >= advancingFrontNodes.Length)
-                return ushort.MaxValue;
+                return int.MaxValue;
             if (x < advancingFrontNodes[nodeIndex].nodePoint.x)
             {
                 nodeIndex = advancingFrontNodes[nodeIndex].prevNodeIndex;
-                while (nodeIndex != ushort.MaxValue)
+                while (nodeIndex != int.MaxValue)
                 {
                     if (x >= advancingFrontNodes[nodeIndex].nodePoint.x)
                     {
@@ -591,7 +592,7 @@ namespace Poly2Tri
             } else
             {
                 nodeIndex = advancingFrontNodes[nodeIndex].nextNodeIndex;
-                while (nodeIndex != ushort.MaxValue)
+                while (nodeIndex != int.MaxValue)
                 {
                     if (x < advancingFrontNodes[nodeIndex].nodePoint.x)
                     {
@@ -602,17 +603,17 @@ namespace Poly2Tri
                 }
             }
 
-            return ushort.MaxValue;
+            return int.MaxValue;
         }
 
-        internal ushort CreateAdvancingFrontNode(float2 point, ushort pointIndex, ushort prevIndex, ushort nextIndex)
+        internal int CreateAdvancingFrontNode(float2 point, int pointIndex, int prevIndex, int nextIndex)
         {
-            var newIndex = (ushort)advancingFrontNodes.Length;
-            advancingFrontNodes.Add(new AdvancingFrontNode() { nodePoint = point, pointIndex = pointIndex, nextNodeIndex = nextIndex, prevNodeIndex = prevIndex, triangleIndex = ushort.MaxValue });
+            var newIndex = (int)advancingFrontNodes.Length;
+            advancingFrontNodes.Add(new AdvancingFrontNode() { nodePoint = point, pointIndex = pointIndex, nextNodeIndex = nextIndex, prevNodeIndex = prevIndex, triangleIndex = int.MaxValue });
             return newIndex;
         }
 
-        [BurstDiscard]
+        //[BurstDiscard]
         public static void FailedToFindNodeForGivenAfrontPointException()
         {
             throw new Exception("Failed to find Node for given afront point");
@@ -621,7 +622,7 @@ namespace Poly2Tri
         /// <summary>
         /// This implementation will use simple node traversal algorithm to find a point on the front
         /// </summary>
-        ushort LocatePoint(ushort index)
+        int LocatePoint(int index)
         {
             var px          = points[index].x;
             var nodeIndex   = searchNodeIndex;
@@ -633,7 +634,7 @@ namespace Poly2Tri
                 {
                     CheckValidIndex(advancingFrontNodes[nodeIndex].prevNodeIndex);
                     // We might have two nodes with same x value for a short time
-                    if (advancingFrontNodes[nodeIndex].prevNodeIndex != ushort.MaxValue &&
+                    if (advancingFrontNodes[nodeIndex].prevNodeIndex != int.MaxValue &&
                         index == advancingFrontNodes[advancingFrontNodes[nodeIndex].prevNodeIndex].pointIndex)
                     {
                         nodeIndex = advancingFrontNodes[nodeIndex].prevNodeIndex;
@@ -641,7 +642,7 @@ namespace Poly2Tri
                     else
                     {
                         CheckValidIndex(advancingFrontNodes[nodeIndex].nextNodeIndex);
-                        if (advancingFrontNodes[nodeIndex].nextNodeIndex != ushort.MaxValue &&
+                        if (advancingFrontNodes[nodeIndex].nextNodeIndex != int.MaxValue &&
                         index == advancingFrontNodes[advancingFrontNodes[nodeIndex].nextNodeIndex].pointIndex)
                         {
                             nodeIndex = advancingFrontNodes[nodeIndex].nextNodeIndex;
@@ -656,7 +657,7 @@ namespace Poly2Tri
             if (px < nx)
             {
                 nodeIndex = advancingFrontNodes[nodeIndex].prevNodeIndex;
-                while (nodeIndex != ushort.MaxValue)
+                while (nodeIndex != int.MaxValue)
                 {
                     if (index == advancingFrontNodes[nodeIndex].pointIndex)
                         break;
@@ -665,7 +666,7 @@ namespace Poly2Tri
             } else
             {
                 nodeIndex = advancingFrontNodes[nodeIndex].nextNodeIndex;
-                while (nodeIndex != ushort.MaxValue)
+                while (nodeIndex != int.MaxValue)
                 {
                     if (index == advancingFrontNodes[nodeIndex].pointIndex)
                         break;
@@ -678,9 +679,9 @@ namespace Poly2Tri
         }
 
 
-        void MeshClean(NativeList<int> triangleIndices, ushort triangleIndex)
+        void MeshClean(NativeList<int> triangleIndices, int triangleIndex)
         {
-            if (triangleIndex == ushort.MaxValue || triangleInterior[triangleIndex])
+            if (triangleIndex == int.MaxValue || triangleInterior[triangleIndex])
                 return;
             
             triangleInterior[triangleIndex] = true;
@@ -709,21 +710,21 @@ namespace Poly2Tri
         void CreateAdvancingFront(int index)
         {
             // Initial triangle
-            var triangleIndex = (ushort)triangles.Length;
-            AddTriangle(new DelaunayTriangle(sortedPoints[index], tailPointIndex, headPointIndex));
+            var triangleIndex = (int)triangles.Length;
+            AddTriangle(new DelaunayTriangle(new int3(sortedPoints[index], tailPointIndex, headPointIndex)));
 
-            headNodeIndex = (ushort)advancingFrontNodes.Length;
-            var middleNodeIndex = (ushort)(headNodeIndex + 1);
-            tailNodeIndex = (ushort)(middleNodeIndex + 1);
+            headNodeIndex = (int)advancingFrontNodes.Length;
+            var middleNodeIndex = (int)(headNodeIndex + 1);
+            tailNodeIndex = (int)(middleNodeIndex + 1);
 
             var triangle = triangles[triangleIndex];
             var index0 = triangle.indices[0];
             var index1 = triangle.indices[1];
             var index2 = triangle.indices[2];
 
-            advancingFrontNodes.Add(new AdvancingFrontNode() { nodePoint = points[index1], pointIndex = index1, triangleIndex = triangleIndex, prevNodeIndex = ushort.MaxValue, nextNodeIndex = middleNodeIndex });
+            advancingFrontNodes.Add(new AdvancingFrontNode() { nodePoint = points[index1], pointIndex = index1, triangleIndex = triangleIndex, prevNodeIndex = int.MaxValue, nextNodeIndex = middleNodeIndex });
             advancingFrontNodes.Add(new AdvancingFrontNode() { nodePoint = points[index0], pointIndex = index0, triangleIndex = triangleIndex, prevNodeIndex = headNodeIndex, nextNodeIndex = tailNodeIndex });
-            advancingFrontNodes.Add(new AdvancingFrontNode() { nodePoint = points[index2], pointIndex = index2, triangleIndex = ushort.MaxValue, prevNodeIndex = middleNodeIndex, nextNodeIndex = ushort.MaxValue });
+            advancingFrontNodes.Add(new AdvancingFrontNode() { nodePoint = points[index2], pointIndex = index2, triangleIndex = int.MaxValue, prevNodeIndex = middleNodeIndex, nextNodeIndex = int.MaxValue });
 
             searchNodeIndex = headNodeIndex;
         }
@@ -733,14 +734,14 @@ namespace Poly2Tri
         /// Try to map a node to all sides of this triangle that don't have 
         /// a neighbor.
         /// </summary>
-        void MapTriangleToNodes(ushort triangleIndex)
+        void MapTriangleToNodes(int triangleIndex)
         {
             var triangle = triangles[triangleIndex];
-            if (triangle.neighbors[0] == ushort.MaxValue)
+            if (triangle.neighbors[0] == int.MaxValue)
             {
                 var index = triangle.indices[0];
                 var nodeIndex = LocatePoint(triangle.PointCWFrom(index));
-                if (nodeIndex != ushort.MaxValue)
+                if (nodeIndex != int.MaxValue)
                 {
                     var node = advancingFrontNodes[nodeIndex];
                     node.triangleIndex = triangleIndex;
@@ -748,11 +749,11 @@ namespace Poly2Tri
                 }
             }
 
-            if (triangle.neighbors[1] == ushort.MaxValue)
+            if (triangle.neighbors[1] == int.MaxValue)
             {
                 var index = triangle.indices[1];
                 var nodeIndex = LocatePoint(triangle.PointCWFrom(index));
-                if (nodeIndex != ushort.MaxValue)
+                if (nodeIndex != int.MaxValue)
                 {
                     var node = advancingFrontNodes[nodeIndex];
                     node.triangleIndex = triangleIndex;
@@ -760,11 +761,11 @@ namespace Poly2Tri
                 }
             }
 
-            if (triangle.neighbors[2] == ushort.MaxValue)
+            if (triangle.neighbors[2] == int.MaxValue)
             {
                 var index = triangle.indices[2];
                 var nodeIndex = LocatePoint(triangle.PointCWFrom(index));
-                if (nodeIndex != ushort.MaxValue)
+                if (nodeIndex != int.MaxValue)
                 {
                     var node = advancingFrontNodes[nodeIndex];
                     node.triangleIndex = triangleIndex;
@@ -773,10 +774,10 @@ namespace Poly2Tri
             }
         }
 
-        struct PointComparer : IComparer<ushort>
+        struct PointComparer : IComparer<int>
         {
             public NativeArray<float2> points;
-            public int Compare(ushort i1, ushort i2)
+            public int Compare(int i1, int i2)
             {
                 var pt1 = points[i1];
                 var pt2 = points[i2];
@@ -829,12 +830,12 @@ namespace Poly2Tri
                 var p1 = points[index1];
                 var p2 = points[index2];
 
-                ushort P, Q;
+                int P, Q;
                 if (p1.y > p2.y || (p1.y == p2.y && p1.x > p2.x)) { Q = index1; P = index2; }
                 else { P = index1; Q = index2; }
 
                 allEdges.Add(new DirectedEdge() { index2 = P, next = this.edges[Q] });
-                this.edges[Q] = (ushort)(allEdges.Length - 1);
+                this.edges[Q] = (int)(allEdges.Length - 1);
             }
 
 
@@ -842,10 +843,10 @@ namespace Poly2Tri
             pointComparer.points = points;
 
             // Sort the points along y-axis
-            NativeSortExtension.Sort<ushort, PointComparer>((ushort*)sortedPoints.GetUnsafePtr(), sortedPoints.Length, pointComparer);
+            NativeSortExtension.Sort<int, PointComparer>((int*)sortedPoints.GetUnsafePtr(), sortedPoints.Length, pointComparer);
 
-            headPointIndex = (ushort)(vertices.Length);
-            tailPointIndex = (ushort)(vertices.Length + 1);
+            headPointIndex = (int)(vertices.Length);
+            tailPointIndex = (int)(vertices.Length + 1);
 
             var delta = ALPHA * (max - min);
             points[headPointIndex] = new float2(max.x + delta.x, min.y - delta.y);
@@ -872,10 +873,10 @@ namespace Poly2Tri
                 var point           = points[pointIndex];
                 var frontNodeIndex  = LocateNode(point.x);
 
-                if (frontNodeIndex == ushort.MaxValue)
+                if (frontNodeIndex == int.MaxValue)
                     continue;
 
-                var triangleIndex       = (ushort)triangles.Length;
+                var triangleIndex       = (int)triangles.Length;
                 var frontNodeNextIndex  = advancingFrontNodes[frontNodeIndex].nextNodeIndex;
                 AddTriangle(new DelaunayTriangle(pointIndex, advancingFrontNodes[frontNodeIndex].pointIndex, advancingFrontNodes[frontNodeNextIndex].pointIndex));
 
@@ -961,7 +962,7 @@ namespace Poly2Tri
                 }
 
                 var edgeIndex = this.edges[pointIndex];
-                while (edgeIndex != ushort.MaxValue)
+                while (edgeIndex != int.MaxValue)
                 {
                     var pIndex  = allEdges[edgeIndex].index2;
                     edgeIndex = allEdges[edgeIndex].next;
@@ -1031,7 +1032,7 @@ namespace Poly2Tri
             while (!triangles[triangleIndex].GetConstrainedEdgeCW(pointIndex))
             {
                 var ccwNeighborIndex = triangles[triangleIndex].NeighborCCWFrom(pointIndex);
-                if (ccwNeighborIndex == ushort.MaxValue)
+                if (ccwNeighborIndex == int.MaxValue)
                     break;
                 triangleIndex = ccwNeighborIndex;
             }
@@ -1042,7 +1043,7 @@ namespace Poly2Tri
 
 
         
-        void FillRightConcaveEdgeEvent(DTSweepConstraint edge, ushort nodeIndex)
+        void FillRightConcaveEdgeEvent(DTSweepConstraint edge, int nodeIndex)
         {
             var nodeNextIndex = advancingFrontNodes[nodeIndex].nextNodeIndex;
             Fill(nodeNextIndex); 
@@ -1070,7 +1071,7 @@ namespace Poly2Tri
         }
 
 
-        void FillRightConvexEdgeEvent(DTSweepConstraint edge, ushort nodeIndex)
+        void FillRightConvexEdgeEvent(DTSweepConstraint edge, int nodeIndex)
         {
             var node                = advancingFrontNodes[nodeIndex];
             var nodeNext            = advancingFrontNodes[node.nextNodeIndex];
@@ -1096,7 +1097,7 @@ namespace Poly2Tri
             }
         }
 
-        void FillRightBelowEdgeEvent(DTSweepConstraint edge, ushort nodeIndex)
+        void FillRightBelowEdgeEvent(DTSweepConstraint edge, int nodeIndex)
         {
             var node = advancingFrontNodes[nodeIndex];
             if (node.nodePoint.x < points[edge.P].x)
@@ -1119,7 +1120,7 @@ namespace Poly2Tri
         }
 
 
-        void FillRightAboveEdgeEvent(DTSweepConstraint edge, ushort nodeIndex)
+        void FillRightAboveEdgeEvent(DTSweepConstraint edge, int nodeIndex)
         {
             var node = advancingFrontNodes[nodeIndex];
             var edgeP = points[edge.P];
@@ -1138,7 +1139,7 @@ namespace Poly2Tri
         }
 
         
-        void FillLeftConvexEdgeEvent(DTSweepConstraint edge, ushort nodeIndex)
+        void FillLeftConvexEdgeEvent(DTSweepConstraint edge, int nodeIndex)
         {
             var node             = advancingFrontNodes[nodeIndex];
             var nodePrev         = advancingFrontNodes[node.prevNodeIndex];
@@ -1166,7 +1167,7 @@ namespace Poly2Tri
         }
 
         
-        void FillLeftConcaveEdgeEvent(DTSweepConstraint edge, ushort nodeIndex)
+        void FillLeftConcaveEdgeEvent(DTSweepConstraint edge, int nodeIndex)
         {
             var node = advancingFrontNodes[nodeIndex];
             Fill(node.prevNodeIndex); 
@@ -1193,7 +1194,7 @@ namespace Poly2Tri
         }
 
         
-        void FillLeftBelowEdgeEvent(DTSweepConstraint edge, ushort nodeIndex)
+        void FillLeftBelowEdgeEvent(DTSweepConstraint edge, int nodeIndex)
         {
             var node = advancingFrontNodes[nodeIndex];
             if (node.nodePoint.x > points[edge.P].x)
@@ -1217,7 +1218,7 @@ namespace Poly2Tri
         }
 
         
-        void FillLeftAboveEdgeEvent(DTSweepConstraint edge, ushort nodeIndex)
+        void FillLeftAboveEdgeEvent(DTSweepConstraint edge, int nodeIndex)
         {
             var node = advancingFrontNodes[nodeIndex];
             var edgeP = points[edge.P];
@@ -1235,13 +1236,13 @@ namespace Poly2Tri
         }
 
 
-        bool IsEdgeSideOfTriangle(ushort triangleIndex, ushort epIndex, ushort eqIndex)
+        bool IsEdgeSideOfTriangle(int triangleIndex, int epIndex, int eqIndex)
         {
-            if (triangleIndex == ushort.MaxValue)
+            if (triangleIndex == int.MaxValue)
                 return false;
 
-            ushort index = triangles[triangleIndex].EdgeIndex(epIndex, eqIndex);
-            if (index == ushort.MaxValue)
+            int index = triangles[triangleIndex].EdgeIndex(epIndex, eqIndex);
+            if (index == int.MaxValue)
                 return false;
 
             var triangle = triangles[triangleIndex];
@@ -1249,7 +1250,7 @@ namespace Poly2Tri
             triangles[triangleIndex] = triangle;
 
             triangleIndex = triangle.neighbors[index];
-            if (triangleIndex != ushort.MaxValue)
+            if (triangleIndex != int.MaxValue)
             {
                 triangle = triangles[triangleIndex];
                 triangle.MarkConstrainedEdge(epIndex, eqIndex);
@@ -1258,22 +1259,25 @@ namespace Poly2Tri
             return true;
         }
 
-        [BurstDiscard]
+        //[BurstDiscard]
         public static void CheckValidIndex(int index)
         {
-            UnityEngine.Debug.Assert(index != ushort.MaxValue, "invalid index (== ushort.MaxValue)");
+            if (index == int.MaxValue)
+                throw new Exception("invalid index (== int.MaxValue)");
+            //UnityEngine.Debug.Assert(index != int.MaxValue, "invalid index (== int.MaxValue)");
         }
 
-        [BurstDiscard]
+        //[BurstDiscard]
         public static void PointOnConstrainedEdgeNotSupportedException(int epIndex, int eqIndex, int p1Index)
         {
-            throw new Exception($"PerformEdgeEvent - Point on constrained edge not supported yet {epIndex} {eqIndex} {p1Index}");
+            //throw new Exception($"PerformEdgeEvent - Point on constrained edge not supported yet {epIndex} {eqIndex} {p1Index}");
+            throw new Exception("PerformEdgeEvent - Point on constrained edge not supported yet");
         }
 
-        void PerformEdgeEvent(ushort epIndex, ushort eqIndex, ushort triangleIndex, ushort pointIndex)
+        void PerformEdgeEvent(int epIndex, int eqIndex, int triangleIndex, int pointIndex)
         {
             CheckValidIndex(triangleIndex);
-            if (triangleIndex == ushort.MaxValue)
+            if (triangleIndex == int.MaxValue)
                 return;
 
             if (IsEdgeSideOfTriangle(triangleIndex, epIndex, eqIndex))
@@ -1313,7 +1317,7 @@ namespace Poly2Tri
                     edgeEventConstrainedEdge.Q = p2Index;
                     triangles[triangleIndex] = triangle;
                     triangleIndex = triangle.NeighborAcrossFrom(pointIndex);
-                    if (triangleIndex != ushort.MaxValue)
+                    if (triangleIndex != int.MaxValue)
                         PerformEdgeEvent(epIndex, p2Index, triangleIndex, p2Index);
                 } else
                     PointOnConstrainedEdgeNotSupportedException(epIndex, eqIndex, p2Index);
@@ -1337,27 +1341,29 @@ namespace Poly2Tri
             }
         }
 
-        ushort OppositePoint(ushort triangleIndex1, ushort triangleIndex2, ushort p)
+        int OppositePoint(int triangleIndex1, int triangleIndex2, int p)
         {
             return triangles[triangleIndex1].PointCWFrom(triangles[triangleIndex2].PointCWFrom(p));
         }
 
-        [BurstDiscard]
+        //[BurstDiscard]
         public static void FLIPFailedDueToMissingTriangleException()
         {
             throw new Exception("[BUG:FIXME] FLIP failed due to missing triangle");
         }
 
-        [BurstDiscard]
+        //[BurstDiscard]
         public static void CheckSelfPointer(int triangleIndex, int otIndex)
         {
-            UnityEngine.Debug.Assert(triangleIndex != otIndex, "self-pointer error");
+            if (triangleIndex == otIndex)
+                throw new Exception("[BUG:FIXME] self-pointer error");
+            //UnityEngine.Debug.Assert(triangleIndex != otIndex, "self-pointer error");
         }
 
-        void FlipEdgeEvent(ushort epIndex, ushort eqIndex, ushort triangleIndex, ushort pIndex)
+        void FlipEdgeEvent(int epIndex, int eqIndex, int triangleIndex, int pIndex)
         {
             var otIndex = triangles[triangleIndex].NeighborAcrossFrom(pIndex);            
-            if (otIndex == ushort.MaxValue)
+            if (otIndex == int.MaxValue)
             {
                 // If we want to integrate the fillEdgeEvent do it here
                 // With current implementation we should never get here
@@ -1407,7 +1413,7 @@ namespace Poly2Tri
             }
             else
             {
-                if (NextFlipPoint(epIndex, eqIndex, otIndex, opIndex, out ushort newP))
+                if (NextFlipPoint(epIndex, eqIndex, otIndex, opIndex, out int newP))
                 {
                     FlipScanEdgeEvent(epIndex, eqIndex, triangleIndex, otIndex, newP);
                     PerformEdgeEvent(epIndex, eqIndex, triangleIndex, pIndex);
@@ -1415,15 +1421,15 @@ namespace Poly2Tri
             }
         }
 
-        [BurstDiscard]
+        //[BurstDiscard]
         public static void OrientationNotHandledException()
         {
             throw new NotImplementedException("Orientation not handled");
         }
 
-        bool NextFlipPoint(ushort epIndex, ushort eqIndex, ushort otherTriangleIndex, ushort opIndex, out ushort newP)
+        bool NextFlipPoint(int epIndex, int eqIndex, int otherTriangleIndex, int opIndex, out int newP)
         {
-            newP = ushort.MaxValue;
+            newP = int.MaxValue;
             var o2d = Orient2d(points[eqIndex], points[opIndex], points[epIndex]);
             switch (o2d)
             {
@@ -1443,9 +1449,9 @@ namespace Poly2Tri
             }
         }
 
-        ushort NextFlipTriangle(Orientation o, ushort triangleIndex, ushort otherTriangleIndex, ushort pIndex, ushort opIndex)
+        int NextFlipTriangle(Orientation o, int triangleIndex, int otherTriangleIndex, int pIndex, int opIndex)
         {
-            ushort edgeIndex;
+            int edgeIndex;
             if (o == Orientation.CCW)
             {
                 // ot is not crossing edge after flip
@@ -1471,10 +1477,10 @@ namespace Poly2Tri
             return otherTriangleIndex;
         }
 
-        void FlipScanEdgeEvent(ushort epIndex, ushort eqIndex, ushort flipTriangle, ushort triangleIndex, ushort pIndex)
+        void FlipScanEdgeEvent(int epIndex, int eqIndex, int flipTriangle, int triangleIndex, int pIndex)
         {
             var otIndex = triangles[triangleIndex].NeighborAcrossFrom(pIndex);
-            if (otIndex == ushort.MaxValue)
+            if (otIndex == int.MaxValue)
             {
                 // If we want to integrate the fillEdgeEvent do it here
                 // With current implementation we should never get here
@@ -1502,7 +1508,7 @@ namespace Poly2Tri
             }
             else
             {
-                if (NextFlipPoint(epIndex, eqIndex, otIndex, opIndex, out ushort newP))
+                if (NextFlipPoint(epIndex, eqIndex, otIndex, opIndex, out int newP))
                 {
                     var triangle = triangles[otIndex];
                     var index0 = triangle.indices[0];
@@ -1517,7 +1523,7 @@ namespace Poly2Tri
             }
         }
 
-        void FillBasin(ushort nodeIndex)
+        void FillBasin(int nodeIndex)
         {
             var node         = advancingFrontNodes[nodeIndex];
             var nodeNext     = advancingFrontNodes[node.nextNodeIndex];
@@ -1569,7 +1575,7 @@ namespace Poly2Tri
         /// <summary>
         /// Recursive algorithm to fill a Basin with triangles
         /// </summary>
-        void FillBasinReq(ushort nodeIndex)
+        void FillBasinReq(int nodeIndex)
         {
             if (IsShallow(nodeIndex))
             {
@@ -1623,7 +1629,7 @@ namespace Poly2Tri
         }
 
 
-        bool IsShallow(ushort nodeIndex)
+        bool IsShallow(int nodeIndex)
         {
             var node    = advancingFrontNodes[nodeIndex];
             var height  = basinLeftHighest ? (advancingFrontNodes[leftNodeIndex].nodePoint.y  - node.nodePoint.y)
@@ -1631,7 +1637,7 @@ namespace Poly2Tri
             return basinWidth > height;
         }
 
-        float HoleAngle(ushort nodeIndex)
+        float HoleAngle(int nodeIndex)
         {
             var node     = advancingFrontNodes[nodeIndex];
             var nodePrev = advancingFrontNodes[node.prevNodeIndex];
@@ -1659,7 +1665,7 @@ namespace Poly2Tri
         /// <summary>
         /// The basin angle is decided against the horizontal line [1,0]
         /// </summary>
-        float BasinAngle(ushort nodeIndex)
+        float BasinAngle(int nodeIndex)
         {
             var node = advancingFrontNodes[nodeIndex];
             var nodeNext = advancingFrontNodes[node.nextNodeIndex];
@@ -1669,16 +1675,16 @@ namespace Poly2Tri
             return math.atan2(ay, ax);
         }
 
-        void Fill(ushort nodeIndex)
+        void Fill(int nodeIndex)
         {
             var node     = advancingFrontNodes[nodeIndex];
             var nodePrevIndex = node.prevNodeIndex;
             var nodeNextIndex = node.nextNodeIndex;
-            var triangleIndex = (ushort)triangles.Length;
+            var triangleIndex = (int)triangles.Length;
 
-            if (nodePrevIndex == ushort.MaxValue ||
-                nodeNextIndex == ushort.MaxValue ||
-                node.pointIndex == ushort.MaxValue)
+            if (nodePrevIndex == int.MaxValue ||
+                nodeNextIndex == int.MaxValue ||
+                node.pointIndex == int.MaxValue)
             {
                 CheckValidIndex(nodePrevIndex);
                 CheckValidIndex(nodeNextIndex);
@@ -1727,7 +1733,7 @@ namespace Poly2Tri
         /// <summary>
         /// Returns true if triangle was legalized
         /// </summary>
-        bool Legalize(ushort triangleIndex)
+        bool Legalize(int triangleIndex)
         {
             var inputTriangle = triangles[triangleIndex];
             
@@ -1744,15 +1750,15 @@ namespace Poly2Tri
 
                 var pIndex = inputTriangle.indices[i];
                 var otIndex = inputTriangle.neighbors[i];
-                if (otIndex == ushort.MaxValue)
+                if (otIndex == int.MaxValue)
                 {
                     continue;
                 }
 
                 var otTriangle = triangles[otIndex];
 
-                ushort opIndex = OppositePoint(otIndex, triangleIndex, pIndex);
-                ushort oi = otTriangle.IndexOf(opIndex);
+                int opIndex = OppositePoint(otIndex, triangleIndex, pIndex);
+                int oi = otTriangle.IndexOf(opIndex);
                 // If this is a Constrained Edge or a Delaunay Edge(only during recursive legalization)
                 // then we should not try to legalize
                 if (otTriangle.GetConstrainedEdge(oi) ||
@@ -1833,7 +1839,7 @@ namespace Poly2Tri
         ///    +-----+ oP            +-----+
         ///       n4                    n4
         /// </summary>
-        void RotateTrianglePair(ushort triangleIndex, ushort pIndex, ushort otherTriangleIndex, ushort opIndex)
+        void RotateTrianglePair(int triangleIndex, int pIndex, int otherTriangleIndex, int opIndex)
         {
             // TODO: optimize
             var otherTriangle   = triangles[otherTriangleIndex];
@@ -1874,23 +1880,23 @@ namespace Poly2Tri
             //      what side should be assigned to what neighbor after the 
             //      rotation. Now mark neighbor does lots of testing to find 
             //      the right side.
-            triangle.neighbors[0] = ushort.MaxValue;
-            triangle.neighbors[1] = ushort.MaxValue;
-            triangle.neighbors[2] = ushort.MaxValue;
-            otherTriangle.neighbors[0] = ushort.MaxValue;
-            otherTriangle.neighbors[1] = ushort.MaxValue;
-            otherTriangle.neighbors[2] = ushort.MaxValue;
+            triangle.neighbors[0] = int.MaxValue;
+            triangle.neighbors[1] = int.MaxValue;
+            triangle.neighbors[2] = int.MaxValue;
+            otherTriangle.neighbors[0] = int.MaxValue;
+            otherTriangle.neighbors[1] = int.MaxValue;
+            otherTriangle.neighbors[2] = int.MaxValue;
             triangles[otherTriangleIndex] = otherTriangle;
             triangles[triangleIndex] = triangle;
-            if (n1 != ushort.MaxValue) MarkNeighbor(n1, otherTriangleIndex);
-            if (n2 != ushort.MaxValue) MarkNeighbor(n2, triangleIndex);
-            if (n3 != ushort.MaxValue) MarkNeighbor(n3, triangleIndex);
-            if (n4 != ushort.MaxValue) MarkNeighbor(n4, otherTriangleIndex);
+            if (n1 != int.MaxValue) MarkNeighbor(n1, otherTriangleIndex);
+            if (n2 != int.MaxValue) MarkNeighbor(n2, triangleIndex);
+            if (n3 != int.MaxValue) MarkNeighbor(n3, triangleIndex);
+            if (n4 != int.MaxValue) MarkNeighbor(n4, otherTriangleIndex);
             MarkNeighbor(otherTriangleIndex, triangleIndex);
         }
 
 
-        [BurstDiscard]
+        //[BurstDiscard]
         public static void FailedToMarkNeighborException()
         {
             throw new Exception("Failed to mark neighbor, doesn't share an edge!");
@@ -1899,7 +1905,7 @@ namespace Poly2Tri
         /// <summary>
         /// Exhaustive search to update neighbor pointers
         /// </summary>
-        void MarkNeighbor(ushort triangleIndex1, ushort triangleIndex2)
+        void MarkNeighbor(int triangleIndex1, int triangleIndex2)
         {
             var triangle2 = triangles[triangleIndex2];
 
@@ -1940,14 +1946,14 @@ namespace Poly2Tri
 
 
 
-        bool HasEdgeByPoints(ushort p1, ushort p2)
+        bool HasEdgeByPoints(int p1, int p2)
         {
-            if (p2 == ushort.MaxValue ||
+            if (p2 == int.MaxValue ||
                 p2 == p1)
                 return false;
 
             var edgeIndex = this.edges[p1];
-            while (edgeIndex != ushort.MaxValue)
+            while (edgeIndex != int.MaxValue)
             {
                 var sc = allEdges[edgeIndex].index2;
                 edgeIndex = allEdges[edgeIndex].next;
@@ -1958,7 +1964,7 @@ namespace Poly2Tri
         }
 
 
-        bool HasEdgeCCW(int triangleIndex, ushort p)
+        bool HasEdgeCCW(int triangleIndex, int p)
         {
             var triangle = triangles[triangleIndex];
             int pointIndex = triangle.IndexOf(p);
