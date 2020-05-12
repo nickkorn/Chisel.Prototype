@@ -6,25 +6,29 @@ using System.Runtime.InteropServices;
 using Unity.Burst;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
+using Unity.Entities;
 using Unity.Jobs;
 using Unity.Mathematics;
+using Chisel.Core.LowLevel.Unsafe;
 using UnityEngine;
 using ReadOnlyAttribute = Unity.Collections.ReadOnlyAttribute;
 
 namespace Chisel.Core
 {
 #if USE_MANAGED_CSG_IMPLEMENTATION
-    [BurstCompile(Debug = false)]
+    [BurstCompile(CompileSynchronously = true)]
     public struct FindLoopVertexOverlapsJob : IJob
     {
         public const int kMaxVertexCount = short.MaxValue;
         const float kPlaneDistanceEpsilon = CSGManagerPerformCSG.kDistanceEpsilon;
 
-        // Add [NativeDisableContainerSafetyRestriction] when done, for performance
-        [ReadOnly] public NativeArray<float4>   selfPlanes;
-        [ReadOnly] public VertexSoup            vertexSoup;
-        [ReadOnly] public NativeList<Edge>      otherEdges;
-        public NativeList<Edge>                 edges;
+        [NoAlias, ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushWorldPlanes>> brushWorldPlanes;
+        [NoAlias, ReadOnly] public int                              selfBrushNodeIndex;
+        [NoAlias, ReadOnly] public VertexSoup                       vertexSoup;
+        [NoAlias, ReadOnly] public NativeListArray<Edge>.NativeList otherEdges;
+
+
+        [NoAlias] public NativeListArray<Edge>.NativeList           edges;
 
         public unsafe void ExecuteEdges()
         {
@@ -32,12 +36,14 @@ namespace Chisel.Core
                 otherEdges.Length < 3)
                 return;
 
-            var vertices = vertexSoup.vertices;
+            ref var selfPlanes = ref brushWorldPlanes[selfBrushNodeIndex].Value.worldPlanes;
 
             var otherVerticesLength = 0;
-            var otherVertices       = (ushort*)UnsafeUtility.Malloc(otherEdges.Length * sizeof(ushort), 4, Allocator.TempJob);
-             
+            var otherVertices       = stackalloc ushort[otherEdges.Length];
+            //var otherVertices       = (ushort*)UnsafeUtility.Malloc(otherEdges.Length * sizeof(ushort), 4, Allocator.TempJob);
+
             // TODO: use edges instead + 2 planes intersecting each edge
+            var vertices = vertexSoup.GetUnsafeReadOnlyPtr();
             for (int v = 0; v < otherEdges.Length; v++)
             {
                 var vertexIndex = otherEdges[v].index1; // <- assumes no gaps
@@ -64,15 +70,16 @@ namespace Chisel.Core
 
             if (otherVerticesLength == 0)
             {
-                UnsafeUtility.Free(otherVertices, Allocator.TempJob);
+                //UnsafeUtility.Free(otherVertices, Allocator.TempJob);
                 return;
             }
 
             var tempList = new NativeList<ushort>(Allocator.Temp);
             {
-                var tempListPtr = (ushort*)tempList.GetUnsafePtr();
-                var inputEdgesLength = edges.Length;
-                var inputEdges = (Edge*)UnsafeUtility.Malloc(edges.Length * sizeof(Edge), 4, Allocator.TempJob);
+                var tempListPtr         = (ushort*)tempList.GetUnsafePtr();
+                var inputEdgesLength    = edges.Length;
+                var inputEdges          = stackalloc Edge[edges.Length];
+                //var inputEdges = (Edge*)UnsafeUtility.Malloc(edges.Length * sizeof(Edge), 4, Allocator.TempJob);
                 UnsafeUtility.MemCpyReplicate(inputEdges, edges.GetUnsafePtr(), sizeof(Edge) * edges.Length, 1);
                 edges.Clear();
 
@@ -82,8 +89,8 @@ namespace Chisel.Core
                     var vertexIndex0 = inputEdges[e].index1;
                     var vertexIndex1 = inputEdges[e].index2;
 
-                    var vertex0 = vertexSoup.vertices[vertexIndex0];
-                    var vertex1 = vertexSoup.vertices[vertexIndex1];
+                    var vertex0 = vertices[vertexIndex0];
+                    var vertex1 = vertices[vertexIndex1];
 
                     var vertex0w = new float4(vertex0, 1);
                     var vertex1w = new float4(vertex1, 1);
@@ -149,8 +156,8 @@ namespace Chisel.Core
                     }
                 }
 
-                UnsafeUtility.Free(inputEdges, Allocator.TempJob);
-                UnsafeUtility.Free(otherVertices, Allocator.TempJob);
+                //UnsafeUtility.Free(inputEdges, Allocator.TempJob);
+                //UnsafeUtility.Free(otherVertices, Allocator.TempJob);
             }
             tempList.Dispose();
         }

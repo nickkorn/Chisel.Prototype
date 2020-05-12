@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
@@ -15,13 +15,28 @@ using ReadOnlyAttribute = Unity.Collections.ReadOnlyAttribute;
 namespace Chisel.Core
 {
 #if USE_MANAGED_CSG_IMPLEMENTATION
-    
-    [BurstCompile(Debug = false)]
+    [BurstCompile(CompileSynchronously = true)]
     public unsafe struct RemoveIdenticalIndicesEdgesJob : IJob
     {
-        public NativeList<Edge> edges;
+        [NoAlias] public NativeListArray<Edge>.NativeList edges;
 
         public static void RemoveDuplicates(ref NativeList<Edge> edges)
+        {
+            if (edges.Length < 3)
+            {
+                edges.Clear();
+                return;
+            }
+
+            for (int e = edges.Length - 1; e >= 0; e--)
+            {
+                if (edges[e].index1 != edges[e].index2)
+                    continue;
+                edges.RemoveAtSwapBack(e);
+            }
+        }
+
+        public static void RemoveDuplicates(ref NativeListArray<Edge>.NativeList edges)
         {
             if (edges.Length < 3)
             {
@@ -46,20 +61,19 @@ namespace Chisel.Core
 
     // TODO: probably makes sense to break this up into multiple pieces/multiple jobs that can run parallel,
     //      but requires that change some storage formats first
-    [BurstCompile(Debug = false)]
+    [BurstCompile(CompileSynchronously = true)]
     public unsafe struct CopyPolygonToIndicesJob : IJob
     {
-        [ReadOnly] public BlobAssetReference<BrushMeshBlob> mesh;
-        [ReadOnly] public int       polygonIndex;
-        [ReadOnly] public float4x4  nodeToTreeSpaceMatrix;
-        [ReadOnly] public float4x4  nodeToTreeSpaceInvertedTransposedMatrix;
+        [NoAlias, ReadOnly] public BlobAssetReference<BrushMeshBlob> mesh;
+        [NoAlias, ReadOnly] public int       polygonIndex;
+        [NoAlias, ReadOnly] public float4x4  nodeToTreeSpaceMatrix;
+        [NoAlias, ReadOnly] public float4x4  nodeToTreeSpaceInvertedTransposedMatrix;
 
-        public VertexSoup           vertexSoup;
-        public NativeList<Edge>     edges;
+        [NativeDisableContainerSafetyRestriction]
+        [NoAlias] public VertexSoup           vertexSoup; // <-- TODO: we're reading AND writing to the same NativeList!?!?!
+        [NoAlias] public NativeList<Edge>     edges;
 
-        // TODO: do this in separate loop so we don't need to rely on pointers to make this work
-        [NativeDisableUnsafePtrRestriction] public AABB* aabb;
-        [WriteOnly] [NativeDisableUnsafePtrRestriction] public float4* worldPlane;
+        public AABB aabb;
 
         public void Execute()
         {
@@ -75,8 +89,8 @@ namespace Chisel.Core
 
             vertexSoup.Reserve(indexCount); // ensure we have at least this many extra vertices in capacity
 
-            var min = aabb->min;
-            var max = aabb->max;
+            var min = aabb.min;
+            var max = aabb.max;
 
             // TODO: put in job so we can burstify this, maybe join with RemoveIdenticalIndicesJob & IsDegenerate?
             for (int e = firstEdge; e < lastEdge; e++)
@@ -115,14 +129,8 @@ namespace Chisel.Core
 
             if (edges.Length > 0)
             {
-                aabb->min = min;
-                aabb->max = max;
-
-                localPlane = math.mul(nodeToTreeSpaceInvertedTransposedMatrix, localPlane);
-                var length = math.length(localPlane.xyz);
-                if (length > 0)
-                    localPlane /= length;
-                *worldPlane = localPlane;
+                aabb.min = min;
+                aabb.max = max;
             }
         }
     }

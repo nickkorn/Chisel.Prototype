@@ -5,7 +5,8 @@
         "com.chisel.components",
         "com.scene.handle.extensions.editor",
         "com.scene.handle.extensions.runtime",
-        "Unity.Mathematics"
+        "Unity.Mathematics",
+        "Unity.Collections"
     ],
     "includePlatforms": [
         "Editor"
@@ -16,5 +17,6 @@
     "precompiledReferences": [],
     "autoReferenced": true,
     "defineConstraints": [],
-    "versionDefines": []
+    "versionDefines": [],
+    "noEngineReferences": false
 }

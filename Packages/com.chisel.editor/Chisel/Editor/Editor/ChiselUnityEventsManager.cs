@@ -7,6 +7,7 @@ using System.Reflection;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.Profiling;
 
 namespace Chisel.Editors
 { 
@@ -257,7 +258,8 @@ namespace Chisel.Editors
             ChiselOutlineRenderer.Instance.OnReset();
             Editors.ChiselManagedHierarchyView.RepaintAll();
             Editors.ChiselInternalHierarchyView.RepaintAll();
-            SceneView.RepaintAll(); 
+            //SceneView.RepaintAll();
+            UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
         }
 
         private static void OnHierarchyReset()

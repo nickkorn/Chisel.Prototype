@@ -277,7 +277,7 @@ namespace Chisel.Core
             return true;
         }
 
-        internal static bool GetNodesInFrustum(MeshQuery[]          meshQuery, // TODO: add meshquery support here
+        internal static bool GetNodesInFrustum(MeshQuery[]          meshQueries, // TODO: add meshquery support here
                                                Plane[]              planes,
                                                out CSGTreeNode[]    nodes)
         {
@@ -303,7 +303,8 @@ namespace Chisel.Core
             var bounds = new Bounds();
             for (int i = 0; i < CSGManager.brushes.Count; i++)
             {
-                var brushNodeID = CSGManager.brushes[i];
+                var brushNodeID     = CSGManager.brushes[i];
+                var brushNodeIndex  = brushNodeID - 1;
                 if (!CSGManager.GetBrushBounds(brushNodeID, ref bounds))
                     continue;
 
@@ -319,20 +320,32 @@ namespace Chisel.Core
                         intersectsFrustum = true;
                 }
 
+                var treeNodeID          = nodeHierarchies[brushNodeIndex].treeNodeID;
+                var chiselLookupValues  = ChiselTreeLookup.Value[treeNodeID - 1];
+
                 if (intersectsFrustum)
                 {
+                    if (!chiselLookupValues.brushRenderBuffers.TryGetValue(brushNodeIndex, out var brushRenderBuffers) ||
+                        !brushRenderBuffers.IsCreated)
+                        continue;
+
+                    ref var surfaceRenderBuffers = ref brushRenderBuffers.Value.surfaces;
+
                     // Double check if the vertices of the brush are inside the frustum
-                    var brushInfo = CSGManager.GetBrushInfo(brushNodeID);
-                    foreach(var surfaceRenderBuffer in brushInfo.renderBuffers.surfaceRenderBuffers)
+                    for (int s=0;s< surfaceRenderBuffers.Length;s++)
                     {
+                        ref var surfaceRenderBuffer = ref surfaceRenderBuffers[s];
+
                         // Compare surface with 'current' meshquery (is this surface even being rendered???)
-                        for (int n = 0; n < meshQuery.Length; n++)
+                        for (int n = 0; n < meshQueries.Length; n++)
                         {
-                            if ((surfaceRenderBuffer.meshQuery.LayerQuery & meshQuery[n].LayerQuery) == LayerUsageFlags.None)
+                            var meshQuery = meshQueries[n];
+                            var core_surface_flags = surfaceRenderBuffer.surfaceLayers.layerUsage;
+                            if ((core_surface_flags & meshQuery.LayerQueryMask) != meshQuery.LayerQuery)
                                 goto SkipSurface;
                         }
 
-                        var vertices = surfaceRenderBuffer.vertices;
+                        ref var vertices = ref surfaceRenderBuffer.vertices;
                         for (int p = 0; p < 6; p++)
                         {
                             var plane = planes[p];

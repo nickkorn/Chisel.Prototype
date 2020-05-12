@@ -30,8 +30,7 @@ namespace Chisel.Core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        [BurstCompile]
-        public static bool Intersects(this Bounds left, Bounds right, double epsilon)
+        public static bool Intersects(this AABB left, AABB right, double epsilon)
         {
             return  ((right.max.x - left.min.x) >= -epsilon) && ((left.max.x - right.min.x) >= -epsilon) &&
                     ((right.max.y - left.min.y) >= -epsilon) && ((left.max.y - right.min.y) >= -epsilon) &&

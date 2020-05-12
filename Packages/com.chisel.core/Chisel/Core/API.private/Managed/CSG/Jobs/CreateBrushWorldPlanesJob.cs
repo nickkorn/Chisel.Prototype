@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
@@ -14,19 +14,19 @@ using ReadOnlyAttribute = Unity.Collections.ReadOnlyAttribute;
 
 namespace Chisel.Core
 {
+    [BurstCompile(CompileSynchronously = true)]
     public struct CreateBrushWorldPlanesJob : IJobParallelFor   
     {
-        [ReadOnly] public NativeArray<int> treeBrushes;
-        [ReadOnly] public NativeArray<int> brushMeshInstanceIDs;
-        [ReadOnly] public NativeHashMap<int, BlobAssetReference<NodeTransformations>>   transformations;
+        [NoAlias,ReadOnly] public NativeArray<int> treeBrushIndices;
+        [NoAlias,ReadOnly] public NativeHashMap<int, BlobAssetReference<BrushMeshBlob>>         brushMeshLookup;
+        [NoAlias,ReadOnly] public NativeHashMap<int, BlobAssetReference<NodeTransformations>>   transformations;
 
-        [WriteOnly] public NativeHashMap<int, BlobAssetReference<BrushWorldPlanes>>.ParallelWriter brushWorldPlanes;
+        [NoAlias,WriteOnly] public NativeHashMap<int, BlobAssetReference<BrushWorldPlanes>>.ParallelWriter brushWorldPlanes;
 
         public void Execute(int index)
         {
-            var brushNodeID     = treeBrushes[index];
-            var brushNodeIndex  = brushNodeID - 1;
-            var worldPlanes     = BrushWorldPlanes.Build(BrushMeshManager.GetBrushMeshBlob(brushMeshInstanceIDs[index]), 
+            var brushNodeIndex  = treeBrushIndices[index];
+            var worldPlanes     = BrushWorldPlanes.Build(brushMeshLookup[brushNodeIndex], 
                                                          transformations[brushNodeIndex].Value.nodeToTree);
             brushWorldPlanes.TryAdd(brushNodeIndex, worldPlanes);
         }

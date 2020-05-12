@@ -428,9 +428,7 @@ namespace Chisel.Components
             if (transform.parent != modelState.modelTransform)
             {
                 transform.SetParent(modelState.modelTransform, false);
-                transform.localPosition = Vector3.zero;
-                transform.localRotation = Quaternion.identity;
-                transform.localScale    = Vector3.one;
+                ResetTransform(transform);
             }
             
             if (gameObject.layer     != modelState.layer   ) gameObject.layer     = modelState.layer;
@@ -453,7 +451,7 @@ namespace Chisel.Components
                 componentGameObject.name = componentName;
 
             // TODO: make components turn off this flag when its gameObject is directly selected?
-            HideFlags ComponentHideFlags = HideFlags.HideInHierarchy | (notEditable ? HideFlags.NotEditable : HideFlags.None); // Avoids MeshCollider showing wireframe
+            var ComponentHideFlags = HideFlags.HideInHierarchy | (notEditable ? HideFlags.NotEditable : HideFlags.None); // Avoids MeshCollider showing wireframe
 
             // Some components could theoretically just be put on the model itself, so we don't modify any flags then
             if (componentGameObject == modelState.modelGameObject)
@@ -463,9 +461,7 @@ namespace Chisel.Components
             if (componentTransform.parent != modelState.containerTransform)
             {
                 componentTransform.SetParent(modelState.containerTransform, false);
-                componentTransform.localPosition = Vector3.zero;
-                componentTransform.localRotation = Quaternion.identity;
-                componentTransform.localScale    = Vector3.one;
+                ResetTransform(componentTransform);
             }
             
             if (componentGameObject.layer     != modelState.layer   ) componentGameObject.layer     = modelState.layer;
@@ -510,10 +506,8 @@ namespace Chisel.Components
                     return model;
 
                 var transform = gameObject.GetComponent<Transform>();
-                transform.localPosition = Vector3.zero;
-                transform.localRotation = Quaternion.identity;
-                transform.localScale	= Vector3.one;
-                    
+                ResetTransform(transform);
+
                 model = gameObject.AddComponent<ChiselModel>();
                 UpdateModelFlags(model);
                 return model;
@@ -537,6 +531,26 @@ namespace Chisel.Components
             }
         }
 
+        private static void ResetTransform(Transform transform)
+        {
+            var prevLocalPosition   = transform.localPosition;
+            var prevLocalRotation   = transform.localRotation;
+            var prevLocalScale      = transform.localScale;
+                
+            if (prevLocalPosition.x != 0 ||
+                prevLocalPosition.y != 0 ||
+                prevLocalPosition.z != 0)
+                transform.localPosition = Vector3.zero;
+                
+            if (prevLocalRotation != Quaternion.identity)
+                transform.localRotation = Quaternion.identity;
+
+            if (prevLocalScale.x != 1 ||
+                prevLocalScale.y != 1 ||
+                prevLocalScale.z != 1)
+                transform.localScale    = Vector3.one;
+        }
+
         private static void UpdateModelFlags(ChiselModel model)
         {
             if (!IsDefaultModel(model))
@@ -553,9 +567,7 @@ namespace Chisel.Components
             if (transform.parent != null)
             {
                 transform.SetParent(null, false);
-                transform.localPosition = Vector3.zero;
-                transform.localRotation = Quaternion.identity;
-                transform.localScale    = Vector3.one;
+                ResetTransform(transform);
             }
         }
                 
@@ -577,9 +589,7 @@ namespace Chisel.Components
                     ChiselNodeHierarchyManager.ignoreNextChildrenChanged = true;
                     transform.SetParent(model.transform, false);
                     ChiselNodeHierarchyManager.ignoreNextChildrenChanged = false;
-                    transform.localPosition = Vector3.zero;
-                    transform.localRotation = Quaternion.identity;
-                    transform.localScale    = Vector3.one;
+                    ResetTransform(transform);
                     model.GeneratedDataContainer = newGameObject;
                     model.GeneratedDataTransform = transform;
                 }
@@ -608,6 +618,11 @@ namespace Chisel.Components
                 ChiselNodeHierarchyManager.ignoreNextChildrenChanged = false;
                 model.GeneratedDataContainer = null;
                 model.GeneratedDataTransform = null;
+                if (model.generatedMeshContents != null)
+                {
+                    model.generatedMeshContents.Dispose();
+                    model.generatedMeshContents = null;
+                }
             }
         }
 
@@ -687,9 +702,7 @@ namespace Chisel.Components
                 var gameObject = new GameObject(name, components);
                 var transform  = gameObject.GetComponent<Transform>();
                 transform.SetParent(container.transform, false);
-                transform.localPosition = Vector3.zero;
-                transform.localRotation = Quaternion.identity;
-                transform.localScale = Vector3.one;
+                ResetTransform(transform);
                 return gameObject;
             }
             finally
@@ -736,28 +749,41 @@ namespace Chisel.Components
                 #if !UNITY_2017_2_OR_ABOVE
                 var dynamicOccludeeProp						 = serializedObject.FindProperty("m_DynamicOccludee");
                 if (dynamicOccludeeProp != null)
-                    dynamicOccludeeProp.boolValue			 = renderSettings.dynamicOccludee;
+                {
+                    if (dynamicOccludeeProp.boolValue != renderSettings.dynamicOccludee)
+                        dynamicOccludeeProp.boolValue			 = renderSettings.dynamicOccludee;
+                }
                 #endif
                 #if !UNITY_2018_2_OR_ABOVE
                 var renderingLayerMaskProp					 = serializedObject.FindProperty("m_RenderingLayerMask");
                 if (renderingLayerMaskProp != null)
-                    renderingLayerMaskProp.intValue			 = (int)renderSettings.renderingLayerMask;
+                {
+                    if (renderingLayerMaskProp.intValue != (int)renderSettings.renderingLayerMask)
+                        renderingLayerMaskProp.intValue = (int)renderSettings.renderingLayerMask;
+                }
                 #endif
 
                 var importantGIProp							 = serializedObject.FindProperty("m_ImportantGI");
-                importantGIProp.boolValue					 = renderSettings.importantGI;
+                if (importantGIProp.boolValue != renderSettings.importantGI)
+                    importantGIProp.boolValue					 = renderSettings.importantGI;
                 var optimizeUVsProp							 = serializedObject.FindProperty("m_PreserveUVs");
-                optimizeUVsProp.boolValue					 = renderSettings.optimizeUVs;
+                if (optimizeUVsProp.boolValue != renderSettings.optimizeUVs)
+                    optimizeUVsProp.boolValue					 = renderSettings.optimizeUVs;
                 var ignoreNormalsForChartDetectionProp		 = serializedObject.FindProperty("m_IgnoreNormalsForChartDetection");
-                ignoreNormalsForChartDetectionProp.boolValue = renderSettings.ignoreNormalsForChartDetection;
+                if (ignoreNormalsForChartDetectionProp.boolValue != renderSettings.ignoreNormalsForChartDetection)
+                    ignoreNormalsForChartDetectionProp.boolValue = renderSettings.ignoreNormalsForChartDetection;
                 var scaleInLightmapProp						 = serializedObject.FindProperty("m_ScaleInLightmap");
-                scaleInLightmapProp.floatValue				 = renderSettings.scaleInLightmap;
+                if (scaleInLightmapProp.floatValue != renderSettings.scaleInLightmap)
+                    scaleInLightmapProp.floatValue				 = renderSettings.scaleInLightmap;
                 var autoUVMaxDistanceProp					 = serializedObject.FindProperty("m_AutoUVMaxDistance");
-                autoUVMaxDistanceProp.floatValue			 = renderSettings.autoUVMaxDistance;
+                if (autoUVMaxDistanceProp.floatValue != renderSettings.autoUVMaxDistance)
+                    autoUVMaxDistanceProp.floatValue			 = renderSettings.autoUVMaxDistance;
                 var autoUVMaxAngleProp						 = serializedObject.FindProperty("m_AutoUVMaxAngle");
-                autoUVMaxAngleProp.floatValue				 = renderSettings.autoUVMaxAngle;
+                if (autoUVMaxAngleProp.floatValue != renderSettings.autoUVMaxAngle)
+                    autoUVMaxAngleProp.floatValue				 = renderSettings.autoUVMaxAngle;
                 var minimumChartSizeProp					 = serializedObject.FindProperty("m_MinimumChartSize");
-                minimumChartSizeProp.intValue				 = renderSettings.minimumChartSize;
+                if (minimumChartSizeProp.intValue != renderSettings.minimumChartSize)
+                    minimumChartSizeProp.intValue				 = renderSettings.minimumChartSize;
 
                 #if UNITY_2017_2_OR_ABOVE
                 var stitchLightmapSeamsProp					= serializedObject.FindProperty("m_StitchLightmapSeams");
@@ -768,11 +794,16 @@ namespace Chisel.Components
                 for(int i = 0; i < meshRenderers.Count; i++)
                 {
                     var meshRenderer = meshRenderers[i];
-                    meshRenderer.lightProbeProxyVolumeOverride	= renderSettings.lightProbeProxyVolumeOverride;
-                    meshRenderer.probeAnchor					= renderSettings.probeAnchor;
-                    meshRenderer.motionVectorGenerationMode		= renderSettings.motionVectorGenerationMode;
-                    meshRenderer.reflectionProbeUsage			= renderSettings.reflectionProbeUsage;
-                    meshRenderer.lightProbeUsage				= renderSettings.lightProbeUsage;
+                    if (meshRenderer.lightProbeProxyVolumeOverride != renderSettings.lightProbeProxyVolumeOverride)
+                        meshRenderer.lightProbeProxyVolumeOverride	= renderSettings.lightProbeProxyVolumeOverride;
+                    if (meshRenderer.probeAnchor != renderSettings.probeAnchor)
+                        meshRenderer.probeAnchor					= renderSettings.probeAnchor;
+                    if (meshRenderer.motionVectorGenerationMode != renderSettings.motionVectorGenerationMode)
+                        meshRenderer.motionVectorGenerationMode		= renderSettings.motionVectorGenerationMode;
+                    if (meshRenderer.reflectionProbeUsage != renderSettings.reflectionProbeUsage)
+                        meshRenderer.reflectionProbeUsage			= renderSettings.reflectionProbeUsage;
+                    if (meshRenderer.lightProbeUsage != renderSettings.lightProbeUsage)
+                        meshRenderer.lightProbeUsage				= renderSettings.lightProbeUsage;
                     #if UNITY_2017_2_OR_ABOVE
                     meshRenderer.allowOcclusionWhenDynamic		= renderSettings.allowOcclusionWhenDynamic;
                     #endif
@@ -789,9 +820,12 @@ namespace Chisel.Components
                 {
                     var meshCollider = meshColliders[i];
 
-                    meshCollider.cookingOptions	= colliderSettings.cookingOptions;
-                    meshCollider.convex			= colliderSettings.convex;
-                    meshCollider.isTrigger		= colliderSettings.isTrigger;
+                    if (meshCollider.cookingOptions != colliderSettings.cookingOptions)
+                        meshCollider.cookingOptions	= colliderSettings.cookingOptions;
+                    if (meshCollider.convex != colliderSettings.convex)
+                        meshCollider.convex			= colliderSettings.convex;
+                    if (meshCollider.isTrigger != colliderSettings.isTrigger)
+                        meshCollider.isTrigger		= colliderSettings.isTrigger;
                 }
             }
         }

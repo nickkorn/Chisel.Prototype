@@ -4,7 +4,7 @@ namespace Chisel.Core
 {
 #if USE_MANAGED_CSG_IMPLEMENTATION
     [Serializable]
-    public enum CategoryIndex
+    public enum CategoryIndex : sbyte
     {
         None                = -1,
 #if HAVE_SELF_CATEGORIES
@@ -30,9 +30,9 @@ namespace Chisel.Core
     };
 
 
-    public enum EdgeCategory
+    public enum EdgeCategory : sbyte
     {
-        None = -1,
+        None                = -1,
 
         LastCategory        = 3,
 

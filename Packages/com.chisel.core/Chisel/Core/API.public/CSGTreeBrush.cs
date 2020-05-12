@@ -13,7 +13,7 @@ namespace Chisel.Core
     /// <seealso cref="Chisel.Core.CSGTreeBrush"/>
     /// <seealso cref="Chisel.Core.CSGTreeBrush.Flags"/>
     [Serializable, Flags]
-    public enum CSGTreeBrushFlags
+    public enum CSGTreeBrushFlags : byte
     {
         /// <summary>This brush has no special states</summary>
         Default		= 0,
@@ -86,11 +86,11 @@ namespace Chisel.Core
         #region Node
         /// <value>Returns if the current <see cref="Chisel.Core.CSGTreeBrush"/> is valid or not.</value>
         /// <remarks><note>If <paramref name="Valid"/> is <b>false</b> that could mean that this node has been destroyed.</note></remarks>
-        public bool				Valid			{ [BurstDiscard] get { return brushNodeID != CSGTreeNode.InvalidNodeID && CSGTreeNode.IsNodeIDValid(brushNodeID); } }
+        public bool				Valid			{ [MethodImpl(MethodImplOptions.AggressiveInlining)] get { return brushNodeID != CSGTreeNode.InvalidNodeID && CSGTreeNode.IsNodeIDValid(brushNodeID); } }
 
         /// <value>Gets the <see cref="Chisel.Core.CSGTreeBrush.NodeID"/> of the <see cref="Chisel.Core.CSGTreeBrush"/>, which is a unique ID of this node.</value>
         /// <remarks><note>NodeIDs are eventually recycled, so be careful holding on to Nodes that have been destroyed.</note></remarks>
-        public Int32			NodeID			{ [BurstDiscard] get { return brushNodeID; } }
+        public Int32			NodeID			{ [MethodImpl(MethodImplOptions.AggressiveInlining)] get { return brushNodeID; } }
 
         /// <value>Gets the <see cref="Chisel.Core.CSGTreeBrush.UserID"/> set to the <see cref="Chisel.Core.CSGTreeBrush"/> at creation time.</value>
         public Int32			UserID			{ [MethodImpl(MethodImplOptions.AggressiveInlining)] get { return CSGTreeNode.GetUserIDOfNode(brushNodeID); } }
@@ -120,7 +120,7 @@ namespace Chisel.Core
         public CSGTree			Tree				{ get { return new CSGTree       { treeNodeID   = CSGTreeNode.GetTreeOfNode(brushNodeID) }; } }
 
         /// <value>The CSG operation that this <see cref="Chisel.Core.CSGTreeBrush"/> will use.</value>
-        public CSGOperationType Operation			{ get { return (CSGOperationType)CSGTreeNode.GetNodeOperationType(brushNodeID); } [BurstDiscard] set { CSGTreeNode.SetNodeOperationType(brushNodeID, value); } }
+        public CSGOperationType Operation			{ get { return (CSGOperationType)CSGTreeNode.GetNodeOperationType(brushNodeID); } set { CSGTreeNode.SetNodeOperationType(brushNodeID, value); } }
         #endregion
 
         #region TreeBrush specific
@@ -132,7 +132,7 @@ namespace Chisel.Core
         /// <note><see cref="Chisel.Core.BrushMeshInstance"/>s can be shared between <see cref="Chisel.Core.CSGTreeBrush"/>es.</note></remarks>
         /// <seealso cref="Chisel.Core.BrushMesh" />
         
-        public BrushMeshInstance BrushMesh			{ [BurstDiscard] set { SetBrushMesh(brushNodeID, value); } [BurstDiscard] get { return GetBrushMesh(brushNodeID); } }
+        public BrushMeshInstance BrushMesh			{ [MethodImpl(MethodImplOptions.AggressiveInlining)] set { SetBrushMesh(brushNodeID, value); } [BurstDiscard] get { return GetBrushMesh(brushNodeID); } }
 
         /// <value>Gets the bounds of this <see cref="Chisel.Core.CSGTreeBrush"/>.</value>
         public Bounds			Bounds				{ [MethodImpl(MethodImplOptions.AggressiveInlining)] get { return GetBrushBounds(brushNodeID); } }
@@ -140,11 +140,11 @@ namespace Chisel.Core
         
         #region Transformation
         // TODO: add description
-		public Matrix4x4			LocalTransformation		{ [BurstDiscard] get { return CSGTreeNode.GetNodeLocalTransformation(brushNodeID); } [BurstDiscard] set { CSGTreeNode.SetNodeLocalTransformation(brushNodeID, ref value); } }		
+		public Matrix4x4			LocalTransformation		{ [MethodImpl(MethodImplOptions.AggressiveInlining)] get { return CSGTreeNode.GetNodeLocalTransformation(brushNodeID); } [BurstDiscard] set { CSGTreeNode.SetNodeLocalTransformation(brushNodeID, ref value); } }		
         // TODO: add description
-		public Matrix4x4			TreeToNodeSpaceMatrix	{ [BurstDiscard] get { if (!CSGManager.GetTreeToNodeSpaceMatrix(brushNodeID, out Matrix4x4 result)) return Matrix4x4.identity; return result; } }
+		public Matrix4x4			TreeToNodeSpaceMatrix	{ [MethodImpl(MethodImplOptions.AggressiveInlining)] get { if (!CSGManager.GetTreeToNodeSpaceMatrix(brushNodeID, out Matrix4x4 result)) return Matrix4x4.identity; return result; } }
         // TODO: add description
-		public Matrix4x4			NodeToTreeSpaceMatrix	{ [BurstDiscard] get { if (!CSGManager.GetNodeToTreeSpaceMatrix(brushNodeID, out Matrix4x4 result)) return Matrix4x4.identity; return result; } }
+		public Matrix4x4			NodeToTreeSpaceMatrix	{ [MethodImpl(MethodImplOptions.AggressiveInlining)] get { if (!CSGManager.GetNodeToTreeSpaceMatrix(brushNodeID, out Matrix4x4 result)) return Matrix4x4.identity; return result; } }
         #endregion
         
         #region Comparison

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Runtime.CompilerServices;
+using Unity.Jobs;
 
 namespace Chisel.Core
 {
@@ -13,7 +14,8 @@ namespace Chisel.Core
         /// <summary>Updates all pending changes to all <see cref="Chisel.Core.CSGTree"/>s.</summary>
         /// <returns>True if any <see cref="Chisel.Core.CSGTree"/>s have been updated, false if no changes have been found.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static bool	Flush	()	{ return UpdateAllTreeMeshes(); }
+        public static bool	Flush	()	{ if (!UpdateAllTreeMeshes(out JobHandle handle)) return false; handle.Complete(); return true; }
+
 
         /// <summary>Clears all caches and rebuilds all <see cref="Chisel.Core.CSGTree"/>s.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
