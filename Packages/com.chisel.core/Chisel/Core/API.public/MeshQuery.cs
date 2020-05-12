@@ -11,7 +11,7 @@ namespace Chisel.Core
     /// <seealso cref="Chisel.Core.LayerUsageFlags"/>
     /// <seealso cref="Chisel.Core.LayerParameterIndex"/>
     /// <seealso cref="Chisel.Core.CSGTree.GetMeshDescriptions" />
-    [Serializable, StructLayout(LayoutKind.Sequential, Pack = 4)]
+    [Serializable, StructLayout(LayoutKind.Sequential)]
     public struct MeshQuery
     {
         const int	BitShift	= 24;
@@ -63,6 +63,14 @@ namespace Chisel.Core
         public override bool Equals(object obj) { if (!(obj is MeshQuery)) return false; var type = (MeshQuery)obj; return layers == type.layers && maskAndChannels == type.maskAndChannels; }
         [EditorBrowsable(EditorBrowsableState.Never)]
         public override int GetHashCode() { var hashCode = -1385006369; hashCode = hashCode * -1521134295; hashCode = hashCode * -1521134295 + (int)layers; hashCode = hashCode * -1521134295 + (int)maskAndChannels; return hashCode; }
+        #endregion
+
+
+        #region ToString
+        public override string ToString()
+        {
+            return $"(LayerQuery: {LayerQuery}, LayerQueryMask: {LayerQueryMask}, LayerParameterIndex: {LayerParameterIndex}, UsedVertexChannels: {UsedVertexChannels})";
+        }
         #endregion
     }
 }

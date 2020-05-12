@@ -11,9 +11,9 @@ namespace Chisel.Components
 
     public sealed class ChiselSceneHierarchy
     {
-        public Scene                            Scene;
-        public ChiselModel                         DefaultModel;		// TODO: create this, but only when necessary.
-        public readonly List<ChiselHierarchyItem>  RootItems		= new List<ChiselHierarchyItem>();
+        public Scene                                Scene;
+        public ChiselModel                          DefaultModel;		// TODO: create this, but only when necessary.
+        public readonly List<ChiselHierarchyItem>   RootItems	    = new List<ChiselHierarchyItem>();
     }
 
     public sealed class ChiselHierarchyItem
@@ -22,15 +22,15 @@ namespace Chisel.Components
 
         public ChiselHierarchyItem(ChiselNode node) { Component = node; }
 
-        public ChiselHierarchyItem                 Parent;
-        public readonly List<int>               SiblingIndices      = new List<int>();
-        public readonly List<ChiselHierarchyItem>  Children            = new List<ChiselHierarchyItem>();
+        public ChiselHierarchyItem                  Parent;
+        public readonly List<int>                   SiblingIndices      = new List<int>();
+        public readonly List<ChiselHierarchyItem>   Children            = new List<ChiselHierarchyItem>();
 
-        public ChiselSceneHierarchy    sceneHierarchy;
+        public ChiselSceneHierarchy sceneHierarchy;
         public Scene                Scene;
         public Transform            Transform;
         public GameObject           GameObject;
-        public readonly ChiselNode     Component;
+        public readonly ChiselNode  Component;
         
         public ChiselModel Model
         {

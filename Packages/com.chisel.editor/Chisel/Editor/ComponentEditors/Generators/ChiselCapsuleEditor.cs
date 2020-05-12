@@ -1,7 +1,8 @@
-﻿using Chisel.Core;
+using Chisel.Core;
 using Chisel.Components;
 using UnityEditor;
 using UnityEngine;
+using Unity.Mathematics;
 
 namespace Chisel.Editors
 {
@@ -9,7 +10,7 @@ namespace Chisel.Editors
     [CanEditMultipleObjects]
     public sealed class ChiselCapsuleEditor : ChiselGeneratorEditor<ChiselCapsule>
     {
-        [MenuItem("GameObject/Chisel/" + ChiselCapsule.kNodeTypeName, false, 0)]
+        [MenuItem("GameObject/Chisel/Create/" + ChiselCapsule.kNodeTypeName, false, 0)]
         static void CreateAsGameObject(MenuCommand menuCommand) { CreateAsGameObjectMenuCommand(menuCommand, ChiselCapsule.kNodeTypeName); }
 
         const float kLineDash					= 2.0f;
@@ -20,9 +21,6 @@ namespace Chisel.Editors
 
         static void DrawOutline(ChiselCapsuleDefinition definition, Vector3[] vertices, LineMode lineMode)
         {
-            //var baseColor		= UnityEditor.Handles.yAxisColor;
-            //var isDisabled	= UnitySceneExtensions.Handles.disabled;
-            //var normal		= Vector3.up;
             var sides			= definition.sides;
             
             // TODO: share this logic with GenerateCapsuleVertices

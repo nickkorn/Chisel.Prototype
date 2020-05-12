@@ -6,6 +6,7 @@ using System.Linq;
 using System.Collections.Generic;
 using Chisel;
 using Chisel.Core;
+using Unity.Mathematics;
 
 namespace Chisel.Editors
 {
@@ -44,7 +45,6 @@ namespace Chisel.Editors
         {
             public bool     initialized = false;
             public Vector2  translation;
-            public Vector3  normal;
             public float    rotation;
             public Vector2  scale;
             public UVMatrix uvMatrix;
@@ -61,13 +61,16 @@ namespace Chisel.Editors
 
             var uvMatrix    = new UVMatrix(UProp.vector4Value, VProp.vector4Value);
             var state       = (UVMatrixState)EditorGUIUtility.GetStateObject(typeof(UVMatrixState), translationID);
-            if (!state.initialized)
+            if (!state.initialized || state.uvMatrix.U != uvMatrix.U || state.uvMatrix.V != uvMatrix.V)
             {
-                uvMatrix.Decompose(out state.translation, out state.normal, out state.rotation, out state.scale);
+                uvMatrix.Decompose(out state.translation, out state.rotation, out state.scale);
                 state.uvMatrix = uvMatrix;
                 state.initialized = true;
             }
 
+            var hasLabel = ChiselGUIUtility.LabelHasContent(label);
+
+            var prevIndenLevel = EditorGUI.indentLevel;
             EditorGUI.BeginProperty(position, label, property);
             {
                 EditorGUI.BeginChangeCheck();
@@ -80,30 +83,41 @@ namespace Chisel.Editors
                 var rotationContent     = (label == null) ? GUIContent.none : kRotationContent;
 
                 position.height = EditorGUI.GetPropertyHeight(SerializedPropertyType.Vector2, GUIContent.none);
-                var fieldRect = EditorGUI.PrefixLabel(position, translationID, translationContent);
-                state.translation = EditorGUI.Vector2Field(fieldRect,  GUIContent.none, state.translation);
+                var fieldRect = EditorGUI.PrefixLabel(position, translationID, !hasLabel ? GUIContent.none : translationContent);
+                EditorGUI.indentLevel = 0;
+                state.translation = EditorGUI.Vector2Field(fieldRect,  GUIContent.none,     state.translation);
+                EditorGUI.indentLevel = prevIndenLevel;
                 position.y += position.height + kSpacing;
 
                 position.height = EditorGUI.GetPropertyHeight(SerializedPropertyType.Vector2, GUIContent.none);
-                fieldRect = EditorGUI.PrefixLabel(position, scaleID, scaleContent);
-                state.scale = EditorGUI.Vector2Field(fieldRect,        GUIContent.none,       state.scale);
+                fieldRect = EditorGUI.PrefixLabel(position, scaleID, !hasLabel ? GUIContent.none : scaleContent);
+                EditorGUI.indentLevel = 0;
+                state.scale = EditorGUI.Vector2Field(fieldRect,        GUIContent.none,     state.scale);
+
+                state.scale.x = (float)Math.Max(Math.Abs(state.scale.x), UVMatrix.kMinScale) * Math.Sign(state.scale.x);
+                state.scale.y = (float)Math.Max(Math.Abs(state.scale.y), UVMatrix.kMinScale) * Math.Sign(state.scale.y);
+
+                EditorGUI.indentLevel = prevIndenLevel;
                 position.y += position.height + kSpacing;
 
                 position.height = EditorGUI.GetPropertyHeight(SerializedPropertyType.Float, GUIContent.none);
-                fieldRect = EditorGUI.PrefixLabel(position, rotationID, rotationContent);
+                fieldRect = EditorGUI.PrefixLabel(position, rotationID, !hasLabel ? GUIContent.none : rotationContent);
+                EditorGUI.indentLevel = 0;
                 state.rotation = EditorGUI.FloatField(fieldRect,       GUIContent.none,    state.rotation);
+                EditorGUI.indentLevel = prevIndenLevel;
                 position.y += position.height + kSpacing;
 
                 EditorGUI.showMixedValue = prevMixedValues;
 
                 if (EditorGUI.EndChangeCheck())
                 {
-                    uvMatrix = UVMatrix.TRS(state.translation, state.normal, state.rotation, state.scale);
-
+                    uvMatrix = UVMatrix.TRS(state.translation, state.rotation, state.scale);
                     UProp.vector4Value = uvMatrix.U;
                     VProp.vector4Value = uvMatrix.V;
+                    state.uvMatrix = uvMatrix;
                     property.serializedObject.ApplyModifiedProperties();
                 }
+
             }
             EditorGUI.EndProperty();
             /*

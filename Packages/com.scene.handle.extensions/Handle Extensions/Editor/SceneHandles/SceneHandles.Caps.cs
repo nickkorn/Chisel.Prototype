@@ -176,7 +176,7 @@ namespace UnitySceneExtensions
             
             if (circlePoints == null ||
                 circleRotatedPoints == null ||
-                circlePoints.Length != circleRotatedPoints.Length + 1)
+                circlePoints.Length + 1 != circleRotatedPoints.Length)
             {
                 const int kCircleSteps = 12;
                 
@@ -249,7 +249,8 @@ namespace UnitySceneExtensions
             }
         }
 
-        public static void NormalHandleCap(int controlID, Vector3 position, Quaternion rotation, float size, EventType eventType)
+        public readonly static CapFunction NormalHandleCap = NormalHandleCapFunction;
+        public static void NormalHandleCapFunction(int controlID, Vector3 position, Quaternion rotation, float size, EventType eventType)
         {
             switch (eventType)
             {
@@ -363,7 +364,8 @@ namespace UnitySceneExtensions
             }
         }
 
-        public static void OutlinedCircleHandleCap(int controlID, Vector3 position, Quaternion rotation, float size, EventType eventType)
+        public readonly static CapFunction OutlinedCircleHandleCap = OutlinedCircleHandleCapFunction;
+        public static void OutlinedCircleHandleCapFunction(int controlID, Vector3 position, Quaternion rotation, float size, EventType eventType)
         {
             switch (eventType)
             {
@@ -384,7 +386,8 @@ namespace UnitySceneExtensions
             }
         }
 
-        public static void OutlinedDotHandleCap(int controlID, Vector3 position, Quaternion rotation, float size, EventType eventType)
+        public readonly static CapFunction OutlinedDotHandleCap = OutlinedDotHandleCapFunction;
+        public static void OutlinedDotHandleCapFunction(int controlID, Vector3 position, Quaternion rotation, float size, EventType eventType)
         {
             switch (eventType)
             {
@@ -406,7 +409,8 @@ namespace UnitySceneExtensions
         }
 
 #if UNITY_5_6_OR_NEWER
-        public static void DotHandleCap(int controlID, Vector3 position, Quaternion rotation, float size, EventType eventType)
+        public readonly static CapFunction DotHandleCap = DotHandleCapFunction;
+        public static void DotHandleCapFunction(int controlID, Vector3 position, Quaternion rotation, float size, EventType eventType)
         {
             UnityEditor.Handles.DotHandleCap(controlID, position, rotation, size, eventType);
         }
@@ -433,7 +437,8 @@ namespace UnitySceneExtensions
 #endif
 
 #if UNITY_5_6_OR_NEWER
-        public static void CubeHandleCap(int controlID, Vector3 position, Quaternion rotation, float size, EventType eventType)
+        public readonly static CapFunction CubeHandleCap = CubeHandleCapFunction;
+        public static void CubeHandleCapFunction(int controlID, Vector3 position, Quaternion rotation, float size, EventType eventType)
         {
             UnityEditor.Handles.CubeHandleCap(controlID, position, rotation, size, eventType);
         }
@@ -459,30 +464,54 @@ namespace UnitySceneExtensions
         }
 #endif
 
-#if UNITY_5_6_OR_NEWER
-        public static void ArrowHandleCap(int controlID, Vector3 position, Quaternion rotation, float size, EventType eventType)
+        internal static bool IsHovering(int controlID, Event evt)
+        {
+            return controlID == HandleUtility.nearestControl && GUIUtility.hotControl == 0 && !viewToolActive;
+        }
+
+        internal static bool viewToolActive
+        {
+            get
+            {
+                if (GUIUtility.hotControl != 0)
+                    return false;
+
+                Event evt = Event.current;
+                bool viewShortcut = evt.type != EventType.Used && (evt.alt || evt.button == 1 || evt.button == 2);
+                return Tools.current == Tool.View || viewShortcut;
+            }
+        }
+
+#if UNITY_2020_2_OR_NEWER
+        public readonly static CapFunction ArrowHandleCap = ArrowHandleCapFunction;
+        public static void ArrowHandleCapFunction(int controlID, Vector3 position, Quaternion rotation, float size, EventType eventType)
         {
             UnityEditor.Handles.ArrowHandleCap(controlID, position, rotation, size, eventType);
         }
 #else
-        public static void ArrowHandleCap (int controlID, Vector3 position, Quaternion rotation, float size, EventType eventType) 
+        public static void ArrowHandleCap (int controlID, Vector3 position, Quaternion rotation, float size, EventType eventType)
         {
+            var hoverExtraScale     = 1.05f;
+            var coneOffset          = Vector3.zero;
             switch (eventType)
             {
                 case EventType.Layout:
+                case EventType.MouseMove:
                 {
-                    if (controlID == -1)
-                        break;
-                    var direction = rotation * Vector3.forward;
-                    UnityEngine.HandleUtility.AddControl(controlID, UnityEngine.HandleUtility.DistanceToLine(position, position + direction * size * .9f));
-                    UnityEngine.HandleUtility.AddControl(controlID, UnityEngine.HandleUtility.DistanceToCircle(position + direction * size, size * .2f));
+                    Vector3 direction = rotation * Vector3.forward;
+                    var distance = HandleUtility.DistanceToLine(position, position + (direction + coneOffset) * (size * 1.1f)) * 0.9f;
+                    HandleUtility.AddControl(controlID, distance);
+                    //HandleUtility.AddControl(controlID, HandleUtility.DistanceToCone(position + (direction + coneOffset) * size, rotation, size * .2f));
                     break;
                 }
                 case EventType.Repaint:
                 {
-                    var direction = rotation * Vector3.forward;
-                    ConeHandleCap(controlID, position + direction * size, Quaternion.LookRotation(direction), size * .2f, eventType);
-                    UnityEngine.Handles.DrawLine(position, position + direction * size * .9f);
+                    Vector3 direction = rotation * Vector3.forward;
+                    float coneSize = size * .2f;
+                    if (IsHovering(controlID, Event.current))
+                        coneSize *= hoverExtraScale;
+                    ConeHandleCap(controlID, position + (direction + coneOffset) * size, rotation, coneSize, eventType);
+                    Handles.DrawLine(position, position + (direction + coneOffset) * (size * .9f));
                     break;
                 }
             }
@@ -490,7 +519,8 @@ namespace UnitySceneExtensions
 #endif
 
 #if UNITY_5_6_OR_NEWER
-        public static void ConeHandleCap(int controlID, Vector3 position, Quaternion rotation, float size, EventType eventType)
+        public readonly static CapFunction ConeHandleCap = ConeHandleCapFunction;
+        public static void ConeHandleCapFunction(int controlID, Vector3 position, Quaternion rotation, float size, EventType eventType)
         {
             UnityEditor.Handles.ConeHandleCap(controlID, position, rotation, size, eventType);
         }
@@ -514,9 +544,10 @@ namespace UnitySceneExtensions
             }
         }
 #endif
-        
+
 #if UNITY_5_6_OR_NEWER
-        public static void RectangleHandleCap(int controlID, Vector3 position, Quaternion rotation, float size, EventType eventType)
+        public readonly static CapFunction RectangleHandleCap = RectangleHandleCapFunction;
+        public static void RectangleHandleCapFunction(int controlID, Vector3 position, Quaternion rotation, float size, EventType eventType)
         {
             UnityEditor.Handles.RectangleHandleCap(controlID, position, rotation, size, eventType);
         }

@@ -14,6 +14,7 @@ namespace Chisel.Editors
     [Serializable]
     public enum SelectionType { Replace, Additive, Subtractive };
 
+    // TODO: rewrite
     internal static class ChiselRectSelection
     {
         public static bool		Valid			{ get { return reflectionSucceeded; } }
@@ -88,21 +89,11 @@ namespace Chisel.Editors
         {
             reflectionSucceeded	= false;
 
-            var assemblies	= System.AppDomain.CurrentDomain.GetAssemblies();
-            var types		= new List<System.Type>();
-            foreach(var assembly in assemblies)
-            {
-                try
-                {
-                    types.AddRange(assembly.GetTypes());
-                }
-                catch { }
-            }
-            unityRectSelectionType		= types.FirstOrDefault(t => t.FullName == "UnityEditor.RectSelection");
+            unityRectSelectionType		= ReflectionExtensions.GetTypeByName("UnityEditor.RectSelection");
             if (unityRectSelectionType == null)
                 return; 
 
-            unityEnumSelectionType 		= types.FirstOrDefault(t => t.FullName == "UnityEditor.RectSelection+SelectionType");
+            unityEnumSelectionType 		= ReflectionExtensions.GetTypeByName("UnityEditor.RectSelection+SelectionType");
             if (unityEnumSelectionType == null)
                 return;
             
@@ -205,7 +196,6 @@ namespace Chisel.Editors
             return false;
         }
         
-
         internal static void Update(SceneView sceneView)
         {
             if (!ChiselRectSelection.Valid)
@@ -256,8 +246,16 @@ namespace Chisel.Editors
                         if (rect.width > 3 && 
                             rect.height > 3)
                         { 
-                            var frustum = ChiselCameraUtility.GetCameraSubFrustum(Camera.current, rect);
-                            
+                            var frustum         = ChiselCameraUtility.GetCameraSubFrustum(Camera.current, rect);
+                            var selectionType   = GetCurrentSelectionType();
+
+                            if (selectionType == SelectionType.Replace)
+                            {
+                                rectFoundTreeNodes.Clear();
+                                rectFoundGameObjects.Clear();
+                            }
+
+
                             // Find all the brushes (and it's gameObjects) that are inside the frustum
                             if (!ChiselSceneQuery.GetNodesInFrustum(frustum, UnityEditor.Tools.visibleLayers, ref rectFoundTreeNodes))
                             {
@@ -271,7 +269,6 @@ namespace Chisel.Editors
                             } else
                                 modified = true;
             
-                            var selectionType = GetCurrentSelectionType();
                             foreach(var treeNode in rectFoundTreeNodes)
                             {
                                 var brush = (CSGTreeBrush)treeNode;
@@ -529,15 +526,14 @@ namespace Chisel.Editors
             }
         }
         
-        
         // TODO: make selecting variants work when selecting in hierarchy/rect-select too
         public static void DoSelectionClick(SceneView sceneView, Vector2 mousePosition)
         {
-            CSGTreeBrushIntersection intersection;
-            var gameobject = ChiselClickSelectionManager.PickClosestGameObject(Event.current.mousePosition, out intersection);
-            
+            ChiselIntersection intersection;
+            var gameobject = ChiselClickSelectionManager.PickClosestGameObject(mousePosition, out intersection);
+
             // If we're a child of an operation that has a "handle as one" flag set, return that instead
-            gameobject = ChiselSceneQuery.GetContainerGameObject(gameobject); 
+            gameobject = ChiselSceneQuery.FindSelectionBase(gameobject); 
             
             var selectionType = GetCurrentSelectionType();
 
@@ -549,9 +545,10 @@ namespace Chisel.Editors
                     if (!gameobject)
                         break;
                     
-                    ChiselSyncSelection.SelectBrushVariant(intersection.brush, uniqueSelection: false);
+                    ChiselSyncSelection.SelectBrushVariant(intersection.brushIntersection.brush, uniqueSelection: false);
                     var instanceID = gameobject.GetInstanceID();
                     selectedObjectsOnClick.Add(instanceID);
+                    ChiselClickSelectionManager.ignoreSelectionChanged = true;
                     Selection.instanceIDs = selectedObjectsOnClick.ToArray();
                     break;
                 }
@@ -561,20 +558,22 @@ namespace Chisel.Editors
                         break;
                     
                     Undo.RecordObject(ChiselSyncSelection.Instance, "Deselected brush variant");
-                    ChiselSyncSelection.DeselectBrushVariant(intersection.brush);
+                    ChiselSyncSelection.DeselectBrushVariant(intersection.brushIntersection.brush);
                     // Can only deselect brush if all it's synchronized brushes have also been deselected
-                    if (!ChiselSyncSelection.IsAnyBrushVariantSelected(intersection.brush))
+                    if (!ChiselSyncSelection.IsAnyBrushVariantSelected(intersection.brushIntersection.brush))
                     {
                         var instanceID = gameobject.GetInstanceID();
                         selectedObjectsOnClick.Remove(instanceID);
                     }
+                    ChiselClickSelectionManager.ignoreSelectionChanged = true;
                     Selection.instanceIDs = selectedObjectsOnClick.ToArray();
                     return;
                 }
                 default:
                 { 
                     Undo.RecordObject(ChiselSyncSelection.Instance, "Selected brush variant");
-                    ChiselSyncSelection.SelectBrushVariant(intersection.brush, uniqueSelection: true);
+                    ChiselSyncSelection.SelectBrushVariant(intersection.brushIntersection.brush, uniqueSelection: true);
+                    ChiselClickSelectionManager.ignoreSelectionChanged = true;
                     Selection.activeGameObject = gameobject;
                     break;
                 }

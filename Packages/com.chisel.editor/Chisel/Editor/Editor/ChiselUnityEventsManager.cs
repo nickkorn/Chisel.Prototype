@@ -3,8 +3,8 @@ using Chisel.Components;
 using UnitySceneExtensions;
 using System;
 using System.Collections.Generic;
-using System.Reflection;
 using UnityEditor;
+using UnityEditor.EditorTools;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -43,31 +43,29 @@ namespace Chisel.Editors
             ChiselSurfaceSelectionManager.hoverChanged					-= OnSurfaceHoverChanged;
             ChiselSurfaceSelectionManager.hoverChanged					+= OnSurfaceHoverChanged;
 
-            // A callback to be raised when an object in the hierarchy changes.
-            // Each time an object is (or a group of objects are) created, 
-            // renamed, parented, unparented or destroyed this callback is raised.
-//			UnityEditor.EditorApplication.hierarchyWindowChanged		-= OnHierarchyWindowChanged;
-//			UnityEditor.EditorApplication.hierarchyWindowChanged		+= OnHierarchyWindowChanged;
-
             UnityEditor.EditorApplication.playModeStateChanged			-= OnPlayModeStateChanged;
             UnityEditor.EditorApplication.playModeStateChanged			+= OnPlayModeStateChanged;
 
+
+            // Triggered when changing visibility/picking in hierarchy
+            UnityEditor.SceneVisibilityManager.visibilityChanged        += OnVisibilityChanged;
+            UnityEditor.SceneVisibilityManager.pickingChanged           += OnPickingChanged;
+
+
             // Callback that is triggered after an undo or redo was executed.
-            UnityEditor.Undo.undoRedoPerformed							-= OnUndoRedoPerformed;                     
+            UnityEditor.Undo.undoRedoPerformed							-= OnUndoRedoPerformed;
             UnityEditor.Undo.undoRedoPerformed							+= OnUndoRedoPerformed;
 
             UnityEditor.Undo.postprocessModifications					-= OnPostprocessModifications;
             UnityEditor.Undo.postprocessModifications					+= OnPostprocessModifications;
+            
+            UnityEditor.Undo.willFlushUndoRecord                        -= OnWillFlushUndoRecord;
+            UnityEditor.Undo.willFlushUndoRecord                        += OnWillFlushUndoRecord;
 
-#if UNITY_2019_1_OR_NEWER
-            UnityEditor.SceneView.beforeSceneGui                        -= OnBeforeSceneGUI;
-            UnityEditor.SceneView.beforeSceneGui                        += OnBeforeSceneGUI;
             UnityEditor.SceneView.duringSceneGui                        -= OnDuringSceneGUI;
             UnityEditor.SceneView.duringSceneGui                        += OnDuringSceneGUI;
-#else
-            UnityEditor.SceneView.onSceneGUIDelegate					-= OnSceneGUI;
-            UnityEditor.SceneView.onSceneGUIDelegate					+= OnSceneGUI; 
-#endif
+
+            UnityEditor.SceneManagement.EditorSceneManager.activeSceneChangedInEditMode += OnActiveSceneChanged;
 
             ChiselNodeHierarchyManager.NodeHierarchyReset -= OnHierarchyReset;
             ChiselNodeHierarchyManager.NodeHierarchyReset += OnHierarchyReset;
@@ -84,8 +82,8 @@ namespace Chisel.Editors
             ChiselGeneratedModelMeshManager.PostReset -= OnPostResetModels;
             ChiselGeneratedModelMeshManager.PostReset += OnPostResetModels;
 
-            ChiselEditModeManager.EditModeChanged -= OnEditModeChanged;
-            ChiselEditModeManager.EditModeChanged += OnEditModeChanged;
+            EditorTools.activeToolChanged -= OnEditModeChanged;
+            EditorTools.activeToolChanged += OnEditModeChanged;
 
             ChiselClickSelectionManager.Instance.OnReset();
             ChiselOutlineRenderer.Instance.OnReset();
@@ -94,99 +92,28 @@ namespace Chisel.Editors
             ChiselGeneratorComponent.GetSelectedVariantsOfBrushOrSelf = ChiselSyncSelection.GetSelectedVariantsOfBrushOrSelf;
         }
 
+        private static void OnPickingChanged()
+        {
+            ChiselGeneratedComponentManager.OnVisibilityChanged();
+        }
+
+        private static void OnVisibilityChanged()
+        {
+            ChiselGeneratedComponentManager.OnVisibilityChanged();
+        }
+
+        private static void OnActiveSceneChanged(Scene prevScene, Scene newScene)
+        {
+            ChiselModelManager.OnActiveSceneChanged(prevScene, newScene);
+        }
+
         static void OnTransformationChanged()
         {
             ChiselOutlineRenderer.Instance.OnTransformationChanged();
         }
         
         
-        private static Type			m_annotationUtility;
-        private static PropertyInfo m_showGridPropContainer;
-
-        private static PropertyInfo m_showUnityGrid
-        {
-            get
-            {
-                if (m_showGridPropContainer == null)
-                {
-                    m_annotationUtility = Type.GetType("UnityEditor.AnnotationUtility,UnityEditor.dll");
-                    m_showGridPropContainer = m_annotationUtility.GetProperty("showGrid", BindingFlags.Static | BindingFlags.NonPublic);
-                }
-                return m_showGridPropContainer;
-            }
-        }
-
-        public static bool ShowUnityGrid
-        {
-            get
-            {
-                return (bool)m_showUnityGrid.GetValue(null, null);
-            }
-            set
-            {
-                m_showUnityGrid.SetValue(null, value, null);
-            }
-        }
-     
-        private static void GridOnSceneGUI(SceneView sceneView)
-        {
-            if (Event.current.type != EventType.Repaint)
-                return;
-
-            if (ShowUnityGrid)
-            {
-                ShowUnityGrid = false;
-                ChiselEditorSettings.Load();
-                ChiselEditorSettings.ShowGrid = false;
-                ChiselEditorSettings.Save();
-            }
-
-            if (Tools.pivotRotation == PivotRotation.Local) 
-            {
-                var activeTransform = Selection.activeTransform;
-
-                var rotation	= Tools.handleRotation;
-                var center		= (activeTransform && activeTransform.parent) ? activeTransform.parent.position : Vector3.zero;
-
-                UnitySceneExtensions.Grid.defaultGrid.GridToWorldSpace = Matrix4x4.TRS(center, rotation, Vector3.one);
-            } else
-            {
-                UnitySceneExtensions.Grid.defaultGrid.GridToWorldSpace = Matrix4x4.identity;
-            }
-
-            if (ChiselEditorSettings.ShowGrid)
-            {
-                var grid = UnitySceneExtensions.Grid.HoverGrid;
-                if (grid != null)
-                {
-                    grid.Spacing = UnitySceneExtensions.Grid.defaultGrid.Spacing;
-                } else
-                { 
-                    grid = UnitySceneExtensions.Grid.ActiveGrid;
-                }
-                grid.Render(sceneView);
-            }
-
-            if (UnitySceneExtensions.Grid.debugGrid != null)
-            {
-                UnitySceneExtensions.Grid.debugGrid.Render(sceneView);
-            }
-        }
-
-        static void OnBeforeSceneGUI(SceneView sceneView)
-        {
-            var prevSkin = GUI.skin;
-            GUI.skin = ChiselSceneGUIStyle.GetSceneSkin(); 
-            try
-            {
-                ChiselSceneGUIStyle.Update();
-                ChiselSceneBottomGUI.OnSceneGUI(sceneView);
-            }
-            finally
-            {
-                GUI.skin = prevSkin;
-            }
-        }
+       
 
         static void OnDuringSceneGUI(SceneView sceneView)
         {
@@ -194,13 +121,19 @@ namespace Chisel.Editors
             GUI.skin = ChiselSceneGUIStyle.GetSceneSkin();
             try
             {
-                var dragArea = ChiselGUIUtility.GetRectForEditorWindow(sceneView);
-                GridOnSceneGUI(sceneView);
-                ChiselEditModeGUI.OnSceneGUI(sceneView, dragArea);
+                ChiselSceneGUIStyle.Update();
+                ChiselGridSettings.GridOnSceneGUI(sceneView);
                 ChiselOutlineRenderer.Instance.OnSceneGUI(sceneView);
 
-                ChiselDragAndDropManager.Instance.OnSceneGUI(sceneView);
-                ChiselClickSelectionManager.Instance.OnSceneGUI(sceneView);
+                if (EditorWindow.mouseOverWindow == sceneView || // This helps prevent weird issues with overlapping sceneviews + avoid some performance issues with multiple sceneviews open
+                    (Event.current.type != EventType.MouseMove && Event.current.type != EventType.Layout))
+                {
+                    ChiselDragAndDropManager.Instance.OnSceneGUI(sceneView);
+                    ChiselClickSelectionManager.Instance.OnSceneGUI(sceneView);
+                }
+
+                if (Tools.current != Tool.Custom)
+                    ChiselEditToolBase.ShowDefaultOverlay();
             }
             finally
             {
@@ -208,27 +141,21 @@ namespace Chisel.Editors
             }
         }
 
-#if !UNITY_2019_1_OR_NEWER
-
-        static void OnSceneGUI(SceneView sceneView)
+        private static void OnEditModeChanged()//IChiselToolMode prevEditMode, IChiselToolMode newEditMode)
         {
-            OnBeforeSceneGUI(sceneView);
-            OnDuringSceneGUI(sceneView);
-        }
-#endif
-
-        private static void OnEditModeChanged(IChiselToolMode prevEditMode, IChiselToolMode newEditMode)
-        {
-            ChiselOutlineRenderer.Instance.OnEditModeChanged(prevEditMode, newEditMode);
+            ChiselOutlineRenderer.Instance.OnEditModeChanged();
+            if (Tools.current != Tool.Custom)
+            {
+                ChiselGeneratorManager.ActivateTool(null);
+            }
+            ChiselGeneratorManager.ActivateTool(ChiselGeneratorManager.GeneratorMode);
         }
 
         private static void OnSelectionChanged()
         {
             ChiselClickSelectionManager.Instance.OnSelectionChanged();
             ChiselOutlineRenderer.Instance.OnSelectionChanged();
-            ChiselEditModeGUI.Instance.OnSelectionChanged();
-            //Editors.ChiselManagedHierarchyView.RepaintAll();
-            //Editors.ChiselNativeHierarchyView.RepaintAll();
+            ChiselEditToolBase.NotifyOnSelectionChanged();
         }
 
         private static void OnSurfaceSelectionChanged()
@@ -257,7 +184,8 @@ namespace Chisel.Editors
             ChiselOutlineRenderer.Instance.OnReset();
             Editors.ChiselManagedHierarchyView.RepaintAll();
             Editors.ChiselInternalHierarchyView.RepaintAll();
-            SceneView.RepaintAll(); 
+            //SceneView.RepaintAll();
+            UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
         }
 
         private static void OnHierarchyReset()
@@ -266,39 +194,13 @@ namespace Chisel.Editors
             Editors.ChiselInternalHierarchyView.RepaintAll(); 
         }
 
-        /*
-        private static void OnHierarchyWindowChanged()
-        {
-            if (ChiselNodeHierarchyManager.CheckHierarchyModifications())
-            {
-                Editors.ChiselManagedHierarchyView.RepaintAll();
-                Editors.ChiselNativeHierarchyView.RepaintAll(); 
-            }
-        }
-        */
-
         private static void OnPrefabInstanceUpdated(GameObject instance)
         {
             ChiselNodeHierarchyManager.OnPrefabInstanceUpdated(instance);
         }
 
-
-#if !USE_MANAGED_CSG_IMPLEMENTATION
-        static bool loggingMethodsRegistered = false;
-#endif
-
         private static void OnEditorApplicationUpdate()
         {
-#if !USE_MANAGED_CSG_IMPLEMENTATION
-            // TODO: remove this once we've moved to managed implementation of CSG algorithm
-            if (!loggingMethodsRegistered)
-            {
-                Editors.NativeLogging.RegisterUnityMethods();
-                loggingMethodsRegistered = true;
-            }
-#endif
-
-            //Grid.HoverGrid = null;
             ChiselNodeHierarchyManager.Update();
             ChiselGeneratedModelMeshManager.UpdateModels();
             ChiselNodeEditorBase.HandleCancelEvent();
@@ -328,11 +230,17 @@ namespace Chisel.Editors
         {
             ChiselNodeHierarchyManager.UpdateAllTransformations();
             ChiselOutlineRenderer.Instance.OnTransformationChanged();
+            ChiselOutlineRenderer.OnUndoRedoPerformed();
         }
 
-        static HashSet<ChiselNode>		modifiedNodes		= new HashSet<ChiselNode>();
-        static HashSet<Transform>	processedTransforms = new HashSet<Transform>();
-        
+        static readonly HashSet<ChiselNode>	modifiedNodes		= new HashSet<ChiselNode>();
+        static readonly HashSet<Transform>	processedTransforms = new HashSet<Transform>();
+
+        private static void OnWillFlushUndoRecord()
+        {
+            ChiselModelManager.OnWillFlushUndoRecord();
+        }
+
         private static UnityEditor.UndoPropertyModification[] OnPostprocessModifications(UnityEditor.UndoPropertyModification[] modifications)
         {
             // Note: this is not always properly called 

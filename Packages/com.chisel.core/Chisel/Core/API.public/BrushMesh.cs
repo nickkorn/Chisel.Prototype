@@ -1,7 +1,10 @@
 ﻿using System;
 using System.ComponentModel;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using Unity.Mathematics;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace Chisel.Core
 {
@@ -9,7 +12,7 @@ namespace Chisel.Core
     /// <seealso cref="Chisel.Core.BrushMesh.Polygon"/>
     /// <seealso cref="Chisel.Core.BrushMesh"/>	
     [Serializable, Flags]
-    public enum SurfaceFlags : Int32
+    public enum SurfaceFlags : byte
     {
         /// <summary>The surface has no flags set</summary>
         None = 0,
@@ -19,7 +22,7 @@ namespace Chisel.Core
     }
 
     // Separate struct so that we can create a property drawer for it
-    [Serializable, StructLayout(LayoutKind.Sequential, Pack = 4)]
+    [Serializable, StructLayout(LayoutKind.Sequential)]
     public struct SmoothingGroup
     {
         public UInt32           value;
@@ -34,6 +37,9 @@ namespace Chisel.Core
     [Serializable]
     public sealed class ChiselSurface
     {
+        public const string kBrushMaterialName      = nameof(brushMaterial);
+        public const string kSurfaceDescriptionName = nameof(surfaceDescription);
+
         public ChiselBrushMaterial  brushMaterial;
         public SurfaceDescription   surfaceDescription;
     }
@@ -44,6 +50,10 @@ namespace Chisel.Core
     [Serializable]
     public struct SurfaceDescription
     {
+        public const string kSmoothingGroupName = nameof(smoothingGroup);
+        public const string kSurfaceFlagsName   = nameof(surfaceFlags);
+        public const string kUV0Name            = nameof(UV0);
+
         /// <value>The current normal smoothing group, 0 means that the surface doesn't do any smoothing</value>
         /// <remarks><note>This is only used when normals are set to be generated using the <see cref="Chisel.Core.VertexChannelFlags"/>.</note></remarks>
         public SmoothingGroup   smoothingGroup;
@@ -87,7 +97,7 @@ namespace Chisel.Core
             version = other.version;
             if (other.vertices != null)
             {
-                vertices = new Vector3[other.vertices.Length];
+                vertices = new float3[other.vertices.Length];
                 Array.Copy(other.vertices, this.vertices, other.vertices.Length);
             }
             if (other.halfEdges != null)
@@ -105,10 +115,10 @@ namespace Chisel.Core
                 polygons = new Polygon[other.polygons.Length];
                 Array.Copy(other.polygons, this.polygons, other.polygons.Length);
             }
-            if (other.surfaces != null)
+            if (other.planes != null)
             {
-                surfaces = new Surface[other.surfaces.Length];
-                Array.Copy(other.surfaces, this.surfaces, other.surfaces.Length);
+                planes = new float4[other.planes.Length];
+                Array.Copy(other.planes, this.planes, other.planes.Length);
             }
         }
 
@@ -116,7 +126,7 @@ namespace Chisel.Core
         /// <seealso cref="Chisel.Core.BrushMesh"/>
         /// <seealso cref="Chisel.Core.Surface"/>
         /// <seealso cref="Chisel.Core.ChiselSurface"/>
-        [Serializable, StructLayout(LayoutKind.Sequential, Pack = 4)]
+        [Serializable, StructLayout(LayoutKind.Sequential)]
         public struct Polygon
         {
             /// <value>The index to the first half edge that forms this <see cref="Chisel.Core.BrushMesh.Polygon"/>.</value>
@@ -137,7 +147,7 @@ namespace Chisel.Core
 
         /// <summary>Defines a half edge of a <see cref="Chisel.Core.BrushMesh"/>.</summary>
         /// <seealso cref="Chisel.Core.BrushMesh"/>
-        [Serializable, StructLayout(LayoutKind.Sequential, Pack = 4)]
+        [Serializable, StructLayout(LayoutKind.Sequential)] 
         public struct HalfEdge
         {
             /// <value>The index to the vertex of this <seealso cref="Chisel.Core.BrushMesh.HalfEdge"/>.</value>
@@ -150,28 +160,11 @@ namespace Chisel.Core
             public override string ToString() { return string.Format("{{ twinIndex = {0}, vertexIndex = {1} }}", twinIndex, vertexIndex); }
         }
 
-        /// <summary>Defines a surface of a <see cref="Chisel.Core.BrushMesh"/>, multiple polygons may share the same surface.</summary>
-        /// <seealso cref="Chisel.Core.Polygon"/>
-        /// <seealso cref="Chisel.Core.BrushMesh"/>
-        [Serializable, StructLayout(LayoutKind.Sequential, Pack = 4)]
-        public struct Surface
-        {
-            public Surface(Vector4 localPlane) { this.localPlane = localPlane; }
-            public Vector4 localPlane; // This is a Plane, but 'Plane' is not [Serializable]
-        }
-
-#if USE_MANAGED_CSG_IMPLEMENTATION
-        
         /// <value>The axis aligned bounding box of this <see cref="Chisel.Core.BrushMesh"/>.</value> 
         public Bounds		localBounds;
 
-        // TODO: add description
-        public int[][]		surfacesAroundVertex;
-
-#endif
-
         /// <value>The vertices of this <see cref="Chisel.Core.BrushMesh"/>.</value> 
-        public Vector3[]	vertices;
+        public float3[]	    vertices;
 
         /// <value>An array of <see cref="Chisel.Core.BrushMesh.HalfEdge"/> that define the edges of a <see cref="Chisel.Core.BrushMesh"/>.
         /// This array must be equal in length to <see cref="halfEdgePolygonIndices"/>s.</value>
@@ -187,6 +180,6 @@ namespace Chisel.Core
         public Polygon[]	polygons;
 
         /// <value>The surfaces of this <see cref="Chisel.Core.BrushMesh"/>.</value> 
-        public Surface[]	surfaces;
+        public float4[]	    planes;
     }
 }

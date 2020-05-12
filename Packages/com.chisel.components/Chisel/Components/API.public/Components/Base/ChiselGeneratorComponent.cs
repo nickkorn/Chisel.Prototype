@@ -38,6 +38,21 @@ namespace Chisel.Components
         public CSGTreeNode	TopNode     { get { if (!ValidNodes) return CSGTreeNode.InvalidNode; return Nodes[0]; } }
         bool                ValidNodes  { get { return (Nodes != null && Nodes.Length > 0) && Nodes[0].Valid; } }
 
+#if UNITY_EDITOR
+        public VisibilityState UpdateVisibility(UnityEditor.SceneVisibilityManager instance)
+        {
+            var resultState     = VisibilityState.Unknown;
+            var visible         = !instance.IsHidden(gameObject);
+            var pickingEnabled  = !instance.IsPickingDisabled(gameObject);
+            foreach (var node in Nodes)
+            {
+                var nodeState = CSGManager.SetBrushState(node.NodeID, visible, pickingEnabled);
+                resultState |= nodeState;
+            }
+            return resultState;
+        }
+#endif
+
         public override CSGTreeNode	GetTreeNodeByIndex(int index)
         {
             if (index < 0 || index > Nodes.Length)
@@ -50,6 +65,18 @@ namespace Chisel.Components
             UpdateGenerator();
             UpdateBrushMeshInstances();
             base.OnResetInternal();
+        }
+
+        // Will show a warning icon in hierarchy when generator has a problem (do not make this method slow, it is called a lot!)
+        public override bool HasValidState()
+        {
+            if (!ValidNodes)
+                return false;
+
+            if (ChiselGeneratedComponentManager.IsDefaultModel(hierarchyItem.Model))
+                return false;
+
+            return true;
         }
 
         //**Temporary hack to ensure that a BrushContainerAsset remains unique when duplicated so that we can control when we share a BrushContainerAsset**//
@@ -118,7 +145,7 @@ namespace Chisel.Components
             }
         }
         
-        public Vector3     PivotOffset
+        public override Vector3 PivotOffset
         {
             get
             {
@@ -137,7 +164,7 @@ namespace Chisel.Components
             }
         }
 
-        public Matrix4x4			LocalTransformation
+        public Matrix4x4 LocalTransformation
         {
             get
             {
@@ -157,14 +184,41 @@ namespace Chisel.Components
             }
         }
 
-        Matrix4x4 TopTransformation
+        internal override void UpdateTransformation()
+        {
+            // TODO: recalculate transformation based on hierarchy up to (but not including) model
+            var transform = hierarchyItem.Transform;
+            if (!transform)
+                return;
+
+            // TODO: fix this mess
+            var localToWorldMatrix = transform.localToWorldMatrix;
+            var modelTransform = ChiselNodeHierarchyManager.FindModelTransformOfTransform(transform);
+            if (modelTransform)
+                localTransformation = modelTransform.worldToLocalMatrix * localToWorldMatrix;
+            else
+                localTransformation = localToWorldMatrix;
+
+            if (!ValidNodes)
+                return;
+
+            UpdateInternalTransformation();
+        }
+
+        public Matrix4x4 LocalTransformationWithPivot
         {
             get
             {
-                var finalTransformation = localTransformation;
+                // TODO: fix this mess
+
+                var localTransformationWithPivot = transform.localToWorldMatrix;
                 if (pivotOffset.x != 0 || pivotOffset.y != 0 || pivotOffset.z != 0)
-                    finalTransformation *= Matrix4x4.TRS(pivotOffset, Quaternion.identity, Vector3.one);
-                return finalTransformation;
+                    localTransformationWithPivot *= Matrix4x4.TRS(pivotOffset, Quaternion.identity, Vector3.one);
+
+                var modelTransform = ChiselNodeHierarchyManager.FindModelTransformOfTransform(transform);
+                if (modelTransform)
+                    localTransformationWithPivot = modelTransform.worldToLocalMatrix * localTransformationWithPivot;
+                return localTransformationWithPivot;
             }
         }
 
@@ -173,7 +227,17 @@ namespace Chisel.Components
             if (!ValidNodes)
                 return;
 
-            Nodes[0].LocalTransformation = TopTransformation;
+            var localTransformationWithPivot = LocalTransformationWithPivot;
+
+            // TODO: fix this mess, branches do not have transformations
+            if (Nodes.Length == 1)
+            {
+                Nodes[0].LocalTransformation = localTransformationWithPivot;
+            } else
+            { 
+                for (int i = 1; i < Nodes.Length; i++)
+                    Nodes[i].LocalTransformation = localTransformationWithPivot;
+            }
         }
 
         public ChiselBrushContainerAsset BrushContainerAsset
@@ -277,12 +341,12 @@ namespace Chisel.Components
             if (requiredNodeLength == 0)
             {
                 Nodes = new CSGTreeNode[1];
-                Nodes[0] = CSGTreeBrush.Create(userID: instanceID, localTransformation: TopTransformation, operation: operation);
+                Nodes[0] = CSGTreeBrush.Create(userID: instanceID, operation: operation);
             } else
             if (requiredNodeLength == 1)
             {
                 Nodes = new CSGTreeNode[1];
-                Nodes[0] = CSGTreeBrush.Create(userID: instanceID, localTransformation: TopTransformation, operation: operation);
+                Nodes[0] = CSGTreeBrush.Create(userID: instanceID, operation: operation);
             } else
             {
                 Nodes = new CSGTreeNode[requiredNodeLength];
@@ -290,12 +354,12 @@ namespace Chisel.Components
                 for (int i = 0; i < requiredNodeLength - 1; i++)
                     children[i] = CSGTreeBrush.Create(userID: instanceID);
 
-                Nodes[0] = CSGTreeBranch.Create(instanceID, operation, children);
+                Nodes[0] = CSGTreeBranch.Create(instanceID, operation: operation, children: children);
                 for (int i = 1; i < Nodes.Length; i++)
                     Nodes[i] = children[i - 1];
             }
             Nodes[0].Operation = operation;
-            Nodes[0].LocalTransformation = TopTransformation;
+            UpdateInternalTransformation();
         }
 
         public override void UpdateBrushMeshInstances()
@@ -309,24 +373,6 @@ namespace Chisel.Components
             
             if (Nodes[0].Operation != operation)
                 Nodes[0].Operation = operation;
-        }
-
-        internal override void UpdateTransformation()
-        {
-            // TODO: recalculate transformation based on hierarchy up to (but not including) model
-            var transform = hierarchyItem.Transform;
-            if (!transform)
-                return;
-
-            var localToWorldMatrix = transform.localToWorldMatrix;
-            var modelTransform = ChiselNodeHierarchyManager.FindModelTransformOfTransform(transform);
-            if (modelTransform)
-                localTransformation = modelTransform.worldToLocalMatrix * localToWorldMatrix;
-            else
-                localTransformation = localToWorldMatrix;
-
-            if (ValidNodes)
-                UpdateInternalTransformation();
         }
 
         internal override void ClearTreeNodes(bool clearCaches = false)
@@ -454,7 +500,7 @@ namespace Chisel.Components
             }
         }
 
-        public override ChiselBrushMaterial FindBrushMaterial(CSGTreeBrush brush, int surfaceID)
+        public override ChiselBrushMaterial FindBrushMaterialBySurfaceIndex(CSGTreeBrush brush, int surfaceID)
         {
             if (!brushContainerAsset)
                 return null;
@@ -750,7 +796,6 @@ namespace Chisel.Components
             var topOperation        = this.operation;
             var pivotOffset         = this.pivotOffset;
             var localTransformation = this.localTransformation;
-            var nodeTypeName        = this.NodeTypeName;
             UnityEditor.Undo.DestroyObjectImmediate(this);
             topGameObject.SetActive(false);
             try
@@ -775,9 +820,9 @@ namespace Chisel.Components
                     var parentTransform = topGameObject.transform;
                     for (int i = 0; i < sourceBrushMeshes.Length; i++)
                     {
-                        var brush = ChiselComponentFactory.Create<ChiselBrush>("Brush (" + (i + 1) + ")", parentTransform);
+                        var brush = ChiselComponentFactory.Create<ChiselBrush>("Brush (" + (i + 1) + ")", parentTransform, localTransformation);
                         brush.LocalTransformation       = localTransformation;
-                        brush.PivotOffset               = pivotOffset;
+                        brush.PivotOffset               = pivotOffset; 
                         brush.Operation                 = sourceOperations[i];
                         brush.definition = new ChiselBrushDefinition
                         {

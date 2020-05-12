@@ -63,6 +63,8 @@ namespace Chisel.Core
 
         public static Material GetRenderMaterialByInstanceID(int instanceID, bool reregisterAllIfNotFound = true)
         {
+            if (instanceID == 0)
+                return ChiselMaterialManager.DefaultMaterial; 
             RenderMaterialInstance renderMaterialInstance;
             if (instanceIdToRenderMaterialLookup.TryGetValue(instanceID, out renderMaterialInstance))
                 return renderMaterialInstance.renderMaterial;
@@ -95,6 +97,9 @@ namespace Chisel.Core
 
         public static PhysicMaterial GetPhysicsMaterialByInstanceID(int instanceID, bool reregisterAllIfNotFound = true)
         {
+            if (instanceID == 0)
+                return ChiselMaterialManager.DefaultPhysicsMaterial; 
+
             PhysicsMaterialInstance physicsMaterialInstance;
             if (instanceIdToPhysicsMaterialLookup.TryGetValue(instanceID, out physicsMaterialInstance))
                 return physicsMaterialInstance.physicsMaterial;
@@ -230,6 +235,14 @@ namespace Chisel.Core
             {
                 removePhysicsMaterials.Add(instanceID);
             }
+        }
+
+        public static void OnSetDirty(ChiselBrushMaterial brushMaterial)
+        {
+            if (!registeredLookup.Contains(brushMaterial))
+                return;
+
+            OnBrushMaterialChanged?.Invoke(brushMaterial);
         }
 
         public static void OnLayerUsageFlagsChanged(ChiselBrushMaterial brushMaterial, LayerUsageFlags prevValue, LayerUsageFlags value)
