@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using Unity.Entities;
 using Unity.Mathematics;
@@ -7,7 +7,7 @@ using UnityEngine.Profiling;
 
 namespace Chisel.Core
 {
-    internal partial class BrushMeshManager
+    public partial class BrushMeshManager
     {
         static List<BrushMesh>	brushMeshes		= new List<BrushMesh>();
         static List<int>		userIDs			= new List<int>();
@@ -38,6 +38,11 @@ namespace Chisel.Core
             return userIDs[brushMeshInstanceID - 1];
         }
 
+        public static BrushMesh		GetBrushMesh			(BrushMeshInstance instance)
+        {
+            return GetBrushMesh(instance.brushMeshID);
+        }
+
         public static BrushMesh		GetBrushMesh			(Int32 brushMeshInstanceID)
         {
             if (!AssertBrushMeshIDValid(brushMeshInstanceID))
@@ -46,16 +51,6 @@ namespace Chisel.Core
             if (brushMesh == null)
                 return null;
             return brushMesh;
-        }
-
-        internal static BlobAssetReference<BrushMeshBlob> GetBrushMeshBlob(Int32 brushMeshInstanceID)
-        {
-            if (!IsBrushMeshIDValid(brushMeshInstanceID))
-                return BlobAssetReference<BrushMeshBlob>.Null;
-
-            if (!ChiselMeshLookup.Value.brushMeshBlobs.TryGetValue(brushMeshInstanceID - 1, out BlobAssetReference<BrushMeshBlob> item))
-                return BlobAssetReference<BrushMeshBlob>.Null;
-            return item;
         }
 
         public static Int32 CreateBrushMesh(Int32				 userID,
@@ -88,9 +83,11 @@ namespace Chisel.Core
                     item.Dispose();
             }
 
+            ChiselMeshLookup.Value.brushMeshUpdateList.Add(brushMeshIndex);
+            /*
             Profiler.BeginSample("BrushMeshBlob.Build");
             ChiselMeshLookup.Value.brushMeshBlobs[brushMeshIndex] = BrushMeshBlob.Build(brushMesh);
-            Profiler.EndSample();
+            Profiler.EndSample();*/
             return brushMeshID;
         }
 
@@ -125,10 +122,7 @@ namespace Chisel.Core
                 if (item.IsCreated)
                     item.Dispose();
             }
-            ChiselMeshLookup.Value.brushMeshBlobs[brushMeshIndex] = BrushMeshBlob.Build(brushMesh);
-            Profiler.BeginSample("BrushMeshBlob.Build");
-            CSGManager.NotifyBrushMeshModified(brushMeshInstanceID);
-            Profiler.EndSample();
+            ChiselMeshLookup.Value.brushMeshUpdateList.Add(brushMeshIndex);
             return true;
         }
 

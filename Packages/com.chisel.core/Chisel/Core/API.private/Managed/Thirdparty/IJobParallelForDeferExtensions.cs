@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Reflection;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
@@ -33,17 +34,38 @@ namespace Chisel.Core
             }
         }
 
-        unsafe public static JobHandle Schedule<T, U>(this T jobData, NativeList<U> list, int innerloopBatchCount, JobHandle dependsOn = new JobHandle())
+        unsafe public static JobHandle Schedule<T, U>(this T jobData, NativeList<U> list, int innerloopBatchCount, JobHandle dependsOn = default)
             where T : struct, IJobParallelFor
             where U : struct
         {
-            var scheduleParams = new JobsUtility.JobScheduleParameters(UnsafeUtility.AddressOf(ref jobData), ParallelForJobStruct<T>.Initialize(), dependsOn, ScheduleMode.Batched);
+            var scheduleParams = new JobsUtility.JobScheduleParameters(UnsafeUtility.AddressOf(ref jobData), ParallelForJobStruct<T>.Initialize(), dependsOn, ScheduleMode.Parallel);
             void* atomicSafetyHandlePtr = null;
 #if ENABLE_UNITY_COLLECTIONS_CHECKS
             var safety = NativeListUnsafeUtility.GetAtomicSafetyHandle(ref list);
             atomicSafetyHandlePtr = UnsafeUtility.AddressOf(ref safety);
 #endif
             return JobsUtility.ScheduleParallelForDeferArraySize(ref scheduleParams, innerloopBatchCount, NativeListUnsafeUtility.GetInternalListDataPtrUnchecked(ref list), atomicSafetyHandlePtr);
+        }
+    }
+
+
+
+    public static class IJobRunExtensions
+    {
+        public static JobHandle Run<T, U>(this T jobData, NativeList<U> list, int innerloopBatchCount, JobHandle dependsOn = default)
+            where T : struct, IJobParallelFor
+            where U : struct
+        {
+            for (int i = 0; i < list.Length; i++)
+                jobData.Execute(i);
+            return dependsOn;
+        }
+
+        public static JobHandle Run<T>(this T jobData, JobHandle dependsOn = default)
+            where T : struct, IJob
+        {
+            jobData.Execute();
+            return dependsOn;
         }
     }
 }

@@ -61,6 +61,19 @@ namespace Chisel.Core
                    System.Math.Abs(self.z - other.z) <= epsilon;
         }
 
+        public static Matrix4x4 ScaleFromPoint(Vector3 center, Vector3 scale)
+        {
+            return Matrix4x4.TRS(center, Quaternion.identity, Vector3.one) *
+                   Matrix4x4.TRS(Vector3.zero, Quaternion.identity, scale) *
+                   Matrix4x4.TRS(-center, Quaternion.identity, Vector3.one);
+        }
+
+        public static Matrix4x4 ScaleFromPoint(Vector3 center, Vector3 normal, float scale)
+        {
+            // TODO: take normal into account
+            return MathExtensions.ScaleFromPoint(center, new Vector3(scale, scale, scale));
+        }
+
         public static Matrix4x4 RotateAroundAxis(Vector3 center, Vector3 normal, float angle)
         {
             var rotation = Quaternion.AngleAxis(angle, normal);
@@ -376,6 +389,28 @@ namespace Chisel.Core
                 output = Quaternion.AngleAxis(w, (1.0f / w) * omega) * output;
                 output.Normalize();
             }
+        }
+
+        public static double3 ProjectPointPlane(double3 point, double4 plane)
+        {
+            var px = point.x;
+            var py = point.y;
+            var pz = point.z;
+
+            var nx = plane.x;
+            var ny = plane.y;
+            var nz = plane.z;
+
+            var ax = (px + (nx * plane.w)) * nx;
+            var ay = (py + (ny * plane.w)) * ny;
+            var az = (pz + (nz * plane.w)) * nz;
+            var dot = ax + ay + az;
+
+            var rx = px - (dot * nx);
+            var ry = py - (dot * ny);
+            var rz = pz - (dot * nz);
+
+            return new double3(rx, ry, rz);
         }
     }
 }

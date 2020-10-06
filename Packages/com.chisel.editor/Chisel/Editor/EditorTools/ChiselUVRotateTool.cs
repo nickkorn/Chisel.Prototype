@@ -7,9 +7,12 @@ using UnityEditor;
 using UnityEngine;
 using UnitySceneExtensions;
 using Chisel.Utilities;
+using UnityEditor.EditorTools;
 using UnityEditor.ShortcutManagement;
 using Snapping = UnitySceneExtensions.Snapping;
-using UnityEditor.EditorTools;
+#if !UNITY_2020_2_OR_NEWER
+using ToolManager = UnityEditor.EditorTools;
+#endif
 
 namespace Chisel.Editors
 {
@@ -22,12 +25,12 @@ namespace Chisel.Editors
         const string kToolName = "UV Rotate";
         public override string ToolName => kToolName;
 
-        public static bool IsActive() { return EditorTools.activeToolType == typeof(ChiselUVRotateTool); }
+        public static bool IsActive() { return ToolManager.activeToolType == typeof(ChiselUVRotateTool); }
 
         #region Keyboard Shortcut
         const string kEditModeShotcutName = kToolName + " Mode";
         [Shortcut(ChiselKeyboardDefaults.ShortCutEditModeBase + kEditModeShotcutName, ChiselKeyboardDefaults.SwitchToUVRotateMode, displayName = kEditModeShotcutName)]
-        public static void ActivateTool() { EditorTools.SetActiveTool<ChiselUVRotateTool>(); }
+        public static void ActivateTool() { ToolManager.SetActiveTool<ChiselUVRotateTool>(); }
         #endregion
 
         #region Activate/Deactivate
@@ -44,19 +47,21 @@ namespace Chisel.Editors
             ChiselUVToolCommon.Instance.OnDeactivate();
         }
         #endregion
+        public override SnapSettings ToolUsedSnappingModes { get { return UnitySceneExtensions.SnapSettings.AllUV; } }
 
-        #region Scene GUI
-        public override void OnSceneSettingsGUI(SceneView sceneView)
+        #region In-scene Options GUI
+        public override string OptionsTitle => $"UV Options";
+        public override void OnInSceneOptionsGUI(SceneView sceneView)
         {
             ChiselUVToolCommon.Instance.OnSceneSettingsGUI(sceneView);
         }
 
-        static readonly int kSurfaceEditModeHash		= "SurfaceEditMode".GetHashCode();
+        static readonly int kSurfaceEditModeHash		= "SurfaceRotateEditMode".GetHashCode();
         static readonly int kSurfaceRotateHash			= "SurfaceRotate".GetHashCode();
         
         public override void OnSceneGUI(SceneView sceneView, Rect dragArea)
         {
-            ChiselOptionsOverlay.AdditionalSettings = OnSceneSettingsGUI;
+            ChiselOptionsOverlay.AdditionalSettings = OnInSceneOptionsGUI;
 
             var defaultID = GUIUtility.GetControlID(kSurfaceEditModeHash, FocusType.Passive, dragArea);
             HandleUtility.AddDefaultControl(defaultID);
@@ -186,11 +191,11 @@ namespace Chisel.Editors
                             fromWorldVector = toWorldVector.normalized;
                             rotateAngle = 0;
 
-                            // We override the snapping settings to only allow snapping against vertices, 
+                            // We override the snapping settings to only allow snapping against vertices & edges, 
                             // we do this only after we have our starting vector, so that when we rotate we're not constantly
                             // snapping against the grid when we really just want to be able to snap against the current rotation step.
                             // On the other hand, we do want to be able to snap against vertices ..
-                            ChiselUVToolCommon.toolSnapOverrides = UVSnapSettings.GeometryVertices; 
+                            ChiselUVToolCommon.toolSnapOverrides = SnapSettings.UVGeometryVertices | SnapSettings.UVGeometryEdges; 
                         }
                     } else
                     {

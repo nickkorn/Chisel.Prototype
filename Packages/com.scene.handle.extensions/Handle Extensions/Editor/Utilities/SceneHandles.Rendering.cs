@@ -4,7 +4,139 @@ namespace UnitySceneExtensions
 {
     public static class HandleRendering
     {
-        static void InfiniteLine(float x, float y, float z, Axis axis)
+        public const float kPointScale = 0.05f;
+
+        #region Pivot rendering
+
+        static Vector2[] circlePoints = null;
+
+        static void SetupCirclePoints()
+        {
+            const int steps = 16;
+            circlePoints = new Vector2[steps];
+            for (int i = 0; i < steps; i++)
+            {
+                circlePoints[i] = new Vector2(
+                        (float)Mathf.Cos((i / (float)steps) * Mathf.PI * 2),
+                        (float)Mathf.Sin((i / (float)steps) * Mathf.PI * 2)
+                    );
+            }
+        }
+
+        static readonly Vector3[] linePoints = new Vector3[2];
+
+        public static void DrawCameraAlignedCircle(Vector3 position, float size, Color innerColor, Color outerColor)
+        {
+            var camera = Camera.current;
+            var right = camera.transform.right;
+            var up = camera.transform.up;
+
+            if (circlePoints == null)
+                SetupCirclePoints();
+
+            var points = new Vector3[circlePoints.Length];
+            for (int i = 0; i < circlePoints.Length; i++)
+            {
+                var circle = circlePoints[i];
+                points[i] = position + (((right * circle.x) + (up * circle.y)) * size);
+            }
+
+            //position = UnityEditor.Handles.matrix.MultiplyPoint(position);
+
+            {
+                Color c = outerColor * new Color(1, 1, 1, .5f) + (UnityEditor.Handles.lighting ? new Color(0, 0, 0, .5f) : new Color(0, 0, 0, 0)) * new Color(1, 1, 1, 0.99f);
+
+                UnityEditor.Handles.color = c;
+                for (int i = points.Length - 1, j = 0; j < points.Length; i = j, j++)
+                {
+                    linePoints[0] = points[i];
+                    linePoints[1] = points[j];
+                    UnityEditor.Handles.DrawAAPolyLine(6.0f, linePoints);
+                }
+            }
+
+            {
+                Color c = innerColor * new Color(1, 1, 1, .5f) + (UnityEditor.Handles.lighting ? new Color(0, 0, 0, .5f) : new Color(0, 0, 0, 0)) * new Color(1, 1, 1, 0.99f);
+
+                UnityEditor.Handles.color = c;
+                for (int i = points.Length - 1, j = 0; j < points.Length; i = j, j++)
+                {
+                    linePoints[0] = points[i];
+                    linePoints[1] = points[j];
+                    UnityEditor.Handles.DrawAAPolyLine(2.0f, linePoints);
+                }
+            }
+        }
+
+        public static void DrawFilledCameraAlignedCircle(Vector3 position, float size)
+        {
+            var camera = Camera.current;
+            var right = camera.transform.right;
+            var up = camera.transform.up;
+
+            if (circlePoints == null)
+                SetupCirclePoints();
+
+            var points = new Vector3[circlePoints.Length];
+            for (int i = 0; i < circlePoints.Length; i++)
+            {
+                var circle = circlePoints[i];
+                points[i] = position + (((right * circle.x) + (up * circle.y)) * size);
+            }
+
+            position = UnityEditor.Handles.matrix.MultiplyPoint(position);
+
+            Color c = UnityEditor.Handles.color * new Color(1, 1, 1, .5f) + (UnityEditor.Handles.lighting ? new Color(0, 0, 0, .5f) : new Color(0, 0, 0, 0)) * new Color(1, 1, 1, 0.99f);
+
+            var material = SceneHandleMaterialManager.CustomDotMaterial;
+            if (material && material.SetPass(0))
+            {
+                GL.Begin(GL.TRIANGLES);
+                {
+                    GL.Color(c);
+                    for (int i = 1; i < points.Length - 1; i++)
+                    {
+                        GL.Vertex(points[0]);
+                        GL.Vertex(points[i]);
+                        GL.Vertex(points[i + 1]);
+                    }
+                }
+                GL.End();
+            }
+
+            material = SceneHandleMaterialManager.SurfaceNoDepthMaterial;
+            if (material && material.SetPass(0))
+            {
+                GL.Begin(GL.LINES);
+                {
+                    GL.Color(Color.black);
+                    GL.Vertex(points[0]);
+                    for (int i = 1; i < points.Length; i++)
+                    {
+                        GL.Vertex(points[i]);
+                        GL.Vertex(points[i]);
+                    }
+                    GL.Vertex(points[0]);
+                }
+                GL.End();
+            }
+        }
+        #endregion
+
+        public static void DrawInfiniteLine(Vector3 center, Axis axis)
+        {
+            if (axis == Axis.X) center.x = 0;
+            if (axis == Axis.Y) center.y = 0;
+            if (axis == Axis.Z) center.z = 0;
+            DrawInfiniteLine(center.x, center.y, center.z, axis);
+        }
+
+        public static void RenderVertexBox(Vector3 position)
+        {
+            UnityEditor.Handles.RectangleHandleCap(-1, position, Camera.current.transform.rotation, UnityEditor.HandleUtility.GetHandleSize(position) * 0.1f, EventType.Repaint);
+        }
+
+        public static void DrawInfiniteLine(float x, float y, float z, Axis axis)
         {
             const float kLineSize		= 1000;
             const int	kLineParts		= 10;
@@ -47,16 +179,23 @@ namespace UnitySceneExtensions
             }
         }
 
+        public static void DrawIntersectionPoint(Vector3 position)
+        {
+            var rotation = Quaternion.LookRotation(Camera.current.transform.forward);
+            var size = UnityEditor.HandleUtility.GetHandleSize(position) *0.05f;
+            SceneHandles.DotHandleCap(-1, position, rotation, size, Event.current.type);
+        }
+
         public static void RenderCrossXZ(Extents3D extents, float y, Vector3 handleOrigin, SnapResult3D snapResult)
         {
-            if ((snapResult & SnapResult3D.MinX) != 0) InfiniteLine(extents.min.x, y, handleOrigin.z, Axis.Z);
-            if ((snapResult & SnapResult3D.MaxX) != 0) InfiniteLine(extents.max.x, y, handleOrigin.z, Axis.Z);
+            if ((snapResult & SnapResult3D.MinX) != 0) DrawInfiniteLine(extents.min.x, y, handleOrigin.z, Axis.Z);
+            if ((snapResult & SnapResult3D.MaxX) != 0) DrawInfiniteLine(extents.max.x, y, handleOrigin.z, Axis.Z);
 
-            if ((snapResult & SnapResult3D.MinZ) != 0) InfiniteLine(handleOrigin.x, y, extents.min.z, Axis.X);
-            if ((snapResult & SnapResult3D.MaxZ) != 0) InfiniteLine(handleOrigin.x, y, extents.max.z, Axis.X);
+            if ((snapResult & SnapResult3D.MinZ) != 0) DrawInfiniteLine(handleOrigin.x, y, extents.min.z, Axis.X);
+            if ((snapResult & SnapResult3D.MaxZ) != 0) DrawInfiniteLine(handleOrigin.x, y, extents.max.z, Axis.X);
             
-            if ((snapResult & SnapResult3D.PivotX) != 0) InfiniteLine(handleOrigin.x, y, handleOrigin.z, Axis.Z);
-            if ((snapResult & SnapResult3D.PivotZ) != 0) InfiniteLine(handleOrigin.x, y, handleOrigin.z, Axis.X);
+            if ((snapResult & SnapResult3D.PivotX) != 0) DrawInfiniteLine(handleOrigin.x, y, handleOrigin.z, Axis.Z);
+            if ((snapResult & SnapResult3D.PivotZ) != 0) DrawInfiniteLine(handleOrigin.x, y, handleOrigin.z, Axis.X);
         }
 
         public static void RenderSquareXZ(Matrix4x4 transformation, Vector3 start, Vector3 end)
@@ -132,7 +271,39 @@ namespace UnitySceneExtensions
             new Vector3( +1, +1, +1), // 6
             new Vector3( +1, -1, +1)  // 7
         };
-        
+
+
+        public static void RenderBoxMeasurements(Bounds bounds)
+        {
+            using (var drawingScope = new UnityEditor.Handles.DrawingScope(SceneHandles.measureColor))
+            {
+                if (bounds.size.y != 0)
+                    Measurements.DrawLengths(bounds);
+                else
+                {
+                    var rect = new Rect { min = new Vector2(bounds.min[0], bounds.min[2]), max = new Vector2(bounds.max[0], bounds.max[2]) };
+                    if (rect.width != 0 ||
+                        rect.height != 0)
+                        Measurements.DrawLengthsXZ(rect);
+                }
+            }
+        }
+
+        public static void RenderBoxMeasurements(Matrix4x4 transformation, Bounds bounds)
+        {
+            using (var drawingScope = new UnityEditor.Handles.DrawingScope(SceneHandles.measureColor, transformation))
+            {
+                if (bounds.size.y != 0)
+                    Measurements.DrawLengths(bounds);
+                else
+                {
+                    var rect = new Rect { min = new Vector2(bounds.min[0], bounds.min[2]), max = new Vector2(bounds.max[0], bounds.max[2]) };
+                    if (rect.width != 0 ||
+                        rect.height != 0)
+                        Measurements.DrawLengthsXZ(rect);
+                }
+            }
+        }
         
         public static void RenderBox(Matrix4x4 transformation, Bounds bounds)
         {
@@ -231,6 +402,21 @@ namespace UnitySceneExtensions
                     SceneHandles.DrawDottedLine(cylinderVertices[segments + n0], cylinderVertices[segments + n1], 1.0f);
                     SceneHandles.DrawDottedLine(cylinderVertices[           n1], cylinderVertices[segments + n1], 1.0f);
                 }
+            }
+        }
+
+
+        public static void RenderDistance(Matrix4x4 transformation, Vector3 from, Vector3 to)
+        {
+            var distance = from - to;
+            if (distance.sqrMagnitude == 0)
+                return;
+
+            using (new SceneHandles.DrawingScope(transformation))
+            {
+                SceneHandles.DrawLine(from, to);
+                SceneHandles.RenderBorderedDot(from, UnityEditor.HandleUtility.GetHandleSize(from) * HandleRendering.kPointScale);
+                SceneHandles.RenderBorderedDot(to, UnityEditor.HandleUtility.GetHandleSize(to) * HandleRendering.kPointScale);
             }
         }
 

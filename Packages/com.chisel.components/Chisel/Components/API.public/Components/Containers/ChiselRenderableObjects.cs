@@ -6,12 +6,31 @@ using System;
 using LightProbeUsage = UnityEngine.Rendering.LightProbeUsage;
 using ReflectionProbeUsage = UnityEngine.Rendering.ReflectionProbeUsage;
 using UnityEngine.Rendering;
+using UnityEngine.Profiling;
+using Unity.Jobs;
+using Unity.Collections;
 
 namespace Chisel.Components
 {
+    public class ChiselRenderObjectUpdate
+    {
+        public ChiselRenderObjects  instance;
+        public int                  contentsIndex;
+        public Material             materialOverride;
+        public bool                 meshIsModified;
+    }
+
     [Serializable]
     public class ChiselRenderObjects
     {
+        [HideInInspector] [SerializeField] internal bool invalid = false;
+        public bool Valid 
+        { 
+            get
+            {
+                return (this != null) && !invalid;
+            }
+        }
         public LayerUsageFlags  query;
         public GameObject       container;
         public Mesh             sharedMesh;
@@ -21,40 +40,55 @@ namespace Chisel.Components
         public MeshFilter       meshFilter;
         public MeshRenderer     meshRenderer;
         public Material[]       renderMaterials;
-        public readonly List<int> triangleBrushes = new List<int>();
+        public int[]            triangleBrushes = Array.Empty<int>();
+        
+        public ulong            geometryHashValue;
+        public ulong            surfaceHashValue;
+
+        public bool             debugHelperRenderer;
         [NonSerialized] public float uvLightmapUpdateTime;
 
-        private ChiselRenderObjects() { }
-        public static ChiselRenderObjects Create(string name, Transform parent, GameObjectState state, LayerUsageFlags query)
+        internal ChiselRenderObjects() { }
+        public static ChiselRenderObjects Create(string name, Transform parent, GameObjectState state, LayerUsageFlags query, bool debugHelperRenderer = false)
         {
-            var renderContainer = ChiselObjectUtility.CreateGameObject(name, parent, state);
-            var sharedMesh      = new Mesh { name = name };
-#if UNITY_EDITOR
-            var partialMesh     = new Mesh { name = name };
-            partialMesh.hideFlags = HideFlags.DontSave;
-#endif
+            var renderContainer = ChiselObjectUtility.CreateGameObject(name, parent, state, debugHelperRenderer: debugHelperRenderer);
             var meshFilter      = renderContainer.AddComponent<MeshFilter>();
             var meshRenderer    = renderContainer.AddComponent<MeshRenderer>();
             meshRenderer.enabled = false;
 
             var renderObjects = new ChiselRenderObjects
             {
-                query           = query,
-                container       = renderContainer,
-                meshFilter      = meshFilter,
-                meshRenderer    = meshRenderer,
-                sharedMesh      = sharedMesh,
-#if UNITY_EDITOR
-                partialMesh     = partialMesh,
-#endif
-                renderMaterials = new Material[0]
+                invalid             = false,            
+                query               = query,
+                container           = renderContainer,
+                meshFilter          = meshFilter,
+                meshRenderer        = meshRenderer,
+                renderMaterials     = new Material[0],
+                debugHelperRenderer = debugHelperRenderer
             };
+            renderObjects.EnsureMeshesAllocated();
             renderObjects.Initialize();
             return renderObjects;
         }
 
+
+        void EnsureMeshesAllocated()
+        {
+            if (sharedMesh == null) sharedMesh = new Mesh { name = meshFilter.gameObject.name };
+#if UNITY_EDITOR
+            if (partialMesh == null)
+            {
+                partialMesh = new Mesh { name = meshFilter.gameObject.name };
+                partialMesh.hideFlags = HideFlags.DontSave;
+            }
+#endif
+        }
+
         public void Destroy()
         {
+            if (invalid)
+                return;
+
 #if UNITY_EDITOR
             ChiselObjectUtility.SafeDestroy(partialMesh);
             partialMesh     = null;
@@ -66,6 +100,18 @@ namespace Chisel.Components
             meshFilter      = null;
             meshRenderer    = null;
             renderMaterials = null;
+            invalid = true;
+        }
+
+        public void DestroyWithUndo()
+        {
+            if (invalid)
+                return;
+#if UNITY_EDITOR
+            ChiselObjectUtility.SafeDestroyWithUndo(partialMesh);
+#endif
+            ChiselObjectUtility.SafeDestroyWithUndo(sharedMesh);
+            ChiselObjectUtility.SafeDestroyWithUndo(container, ignoreHierarchyEvents: true);
         }
 
         public void RemoveContainerFlags()
@@ -105,27 +151,49 @@ namespace Chisel.Components
         void Initialize()
         {
             meshFilter.sharedMesh       = sharedMesh;
-            meshRenderer.receiveShadows	= ((query & LayerUsageFlags.ReceiveShadows) == LayerUsageFlags.ReceiveShadows);
-            switch (query & (LayerUsageFlags.Renderable | LayerUsageFlags.CastShadows))
-            {
-                case LayerUsageFlags.None:				meshRenderer.enabled = false; break;
-                case LayerUsageFlags.Renderable:		meshRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;			break;
-                case LayerUsageFlags.CastShadows:		meshRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly;	break;
-                case LayerUsageFlags.RenderCastShadows:	meshRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;			break;
-            }
+            if (!debugHelperRenderer)
+            { 
+                meshRenderer.receiveShadows	= ((query & LayerUsageFlags.ReceiveShadows) == LayerUsageFlags.ReceiveShadows);
+                switch (query & (LayerUsageFlags.Renderable | LayerUsageFlags.CastShadows))
+                {
+                    case LayerUsageFlags.None:				meshRenderer.enabled = false; break;
+                    case LayerUsageFlags.Renderable:		meshRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;			break;
+                    case LayerUsageFlags.CastShadows:		meshRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly;	break;
+                    case LayerUsageFlags.RenderCastShadows:	meshRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;			break;
+                }
+
 #if UNITY_EDITOR
-            UnityEditor.EditorUtility.SetSelectedRenderState(meshRenderer, UnityEditor.EditorSelectedRenderState.Hidden);
+                UnityEditor.EditorUtility.SetSelectedRenderState(meshRenderer, UnityEditor.EditorSelectedRenderState.Hidden);
+                ChiselGeneratedComponentManager.SetHasLightmapUVs(sharedMesh, false);
 #endif
+            }
         }
 
         void UpdateSettings(ChiselModel model, GameObjectState state, bool meshIsModified)
         {
 #if UNITY_EDITOR
+            Profiler.BeginSample("CheckIfFullMeshNeedsToBeHidden");
             // If we need to render partial meshes (where some brushes are hidden) then we should show the full mesh
             ChiselGeneratedComponentManager.CheckIfFullMeshNeedsToBeHidden(model, this);
+            Profiler.EndSample();
             if (meshIsModified)
+            {
+                // Setting the sharedMesh to ensure the meshFilter knows it needs to be updated
+                Profiler.BeginSample("OverrideMesh");
+                meshFilter.sharedMesh = meshFilter.sharedMesh;
+                Profiler.EndSample();
+                Profiler.BeginSample("SetDirty");
+                UnityEditor.EditorUtility.SetDirty(meshFilter);
+                UnityEditor.EditorUtility.SetDirty(model);
+                Profiler.EndSample();
+                Profiler.BeginSample("SetHasLightmapUVs");
+                ChiselGeneratedComponentManager.SetHasLightmapUVs(sharedMesh, false);
+                Profiler.EndSample();
+                Profiler.BeginSample("ClearLightmapData");
                 ChiselGeneratedComponentManager.ClearLightmapData(state, this);
-#endif
+                Profiler.EndSample();
+            }
+#endif 
         }
 
         public static void UpdateProperties(ChiselModel model, MeshRenderer[] meshRenderers)
@@ -134,20 +202,31 @@ namespace Chisel.Components
                 return;
             
             var renderSettings = model.RenderSettings;
+            Profiler.BeginSample("serializedObject");
 #if UNITY_EDITOR
-            // Warning: calling new UnityEditor.SerializedObject with an empty array crashes Unity
-            using (var serializedObject = new UnityEditor.SerializedObject(meshRenderers))
-            { 
-                serializedObject.SetPropertyValue("m_ImportantGI",                      renderSettings.importantGI);
-                serializedObject.SetPropertyValue("m_PreserveUVs",                      renderSettings.optimizeUVs);
-                serializedObject.SetPropertyValue("m_IgnoreNormalsForChartDetection",   renderSettings.ignoreNormalsForChartDetection);
-                serializedObject.SetPropertyValue("m_AutoUVMaxDistance",                renderSettings.autoUVMaxDistance);
-                serializedObject.SetPropertyValue("m_AutoUVMaxAngle",                   renderSettings.autoUVMaxAngle);
-                serializedObject.SetPropertyValue("m_MinimumChartSize",                 renderSettings.minimumChartSize);
+            if (renderSettings.serializedObjectFieldsDirty)
+            {
+                renderSettings.serializedObjectFieldsDirty = false;
+                // These SerializedObject settings can *only* be modified in the inspector, 
+                //      so we should only be calling this on creation / 
+                //      when something in inspector changed.
+
+                // Warning: calling new UnityEditor.SerializedObject with an empty array crashes Unity
+                using (var serializedObject = new UnityEditor.SerializedObject(meshRenderers))
+                {
+                    serializedObject.SetPropertyValue("m_ImportantGI",                      renderSettings.ImportantGI);
+                    serializedObject.SetPropertyValue("m_PreserveUVs",                      renderSettings.OptimizeUVs);
+                    serializedObject.SetPropertyValue("m_IgnoreNormalsForChartDetection",   renderSettings.IgnoreNormalsForChartDetection);
+                    serializedObject.SetPropertyValue("m_AutoUVMaxDistance",                renderSettings.AutoUVMaxDistance);
+                    serializedObject.SetPropertyValue("m_AutoUVMaxAngle",                   renderSettings.AutoUVMaxAngle);
+                    serializedObject.SetPropertyValue("m_MinimumChartSize",                 renderSettings.MinimumChartSize);
+                }
             }
+            Profiler.EndSample();
 #endif
 
-            for(int i = 0; i < meshRenderers.Length; i++)
+            Profiler.BeginSample("meshRenderers");
+            for (int i = 0; i < meshRenderers.Length; i++)
             {
                 var meshRenderer = meshRenderers[i];
                 meshRenderer.lightProbeProxyVolumeOverride	= renderSettings.lightProbeProxyVolumeOverride;
@@ -163,69 +242,161 @@ namespace Chisel.Components
                 meshRenderer.receiveGI                      = renderSettings.receiveGI;
 #endif
             }
+            Profiler.EndSample();
         }
 
-
-
-
-
-
-        static readonly List<Material>              __foundMaterials    = new List<Material>(); // static to avoid allocations
-        static readonly List<GeneratedMeshContents> __foundContents     = new List<GeneratedMeshContents>(); // static to avoid allocations
-        public void Update(ChiselModel model, GameObjectState state, GeneratedMeshDescription[] meshDescriptions, int startIndex, int endIndex)
+        public void Clear(ChiselModel model, GameObjectState state)
         {
             bool meshIsModified = false;
-            // Retrieve the generatedMeshes and its materials, combine them into a single Unity Mesh/Material array
-            try
             {
-                for (int i = startIndex; i < endIndex; i++)
+                Profiler.BeginSample("Clear");
+                triangleBrushes = Array.Empty<int>();
+
+                if (sharedMesh.vertexCount > 0)
                 {
-                    ref var meshDescription = ref meshDescriptions[i];
-                    var generatedMeshContents = model.Node.GetGeneratedMesh(meshDescription);
-                    if (generatedMeshContents == null)
-                        continue;
-                    if (generatedMeshContents.indices.Length == 0)
-                    {
-                        generatedMeshContents.Dispose();
-                        continue;
-                    }
-                    var renderMaterial = ChiselBrushMaterialManager.GetRenderMaterialByInstanceID(meshDescription.surfaceParameter);
-                    __foundContents.Add(generatedMeshContents);
-                    __foundMaterials.Add(renderMaterial);
+                    meshIsModified = true;
+                    sharedMesh.Clear(keepVertexLayout: true);
                 }
-                triangleBrushes.Clear();
-                if (__foundContents.Count == 0)
-                {
-                    if (sharedMesh.vertexCount > 0) sharedMesh.Clear(keepVertexLayout: true);
-                } else
-                {
-                    sharedMesh.CopyFrom(__foundContents, triangleBrushes);
-#if UNITY_EDITOR
-                    ChiselGeneratedComponentManager.SetHasLightmapUVs(sharedMesh, false);
-#endif
-                }
-                if (renderMaterials != null && 
-                    renderMaterials.Length == __foundMaterials.Count)
-                {
-                    __foundMaterials.CopyTo(renderMaterials);
-                } else
-                    renderMaterials = __foundMaterials.ToArray();
+                Profiler.EndSample();
+
+                Profiler.BeginSample("SetSharedMesh");
                 if (meshFilter.sharedMesh != sharedMesh)
                 {
                     meshFilter.sharedMesh = sharedMesh;
                     meshIsModified = true;
                 }
-                meshRenderer.sharedMaterials = renderMaterials;
-                meshRenderer.enabled = sharedMesh.vertexCount > 0; 
+                Profiler.EndSample();
+
+                Profiler.BeginSample("SetMaterialsIfModified");
+                renderMaterials = Array.Empty<Material>();
+                SetMaterialsIfModified(meshRenderer, renderMaterials);
+                Profiler.EndSample();
+
+                Profiler.BeginSample("Enable");
+                var expectedEnabled = sharedMesh.vertexCount > 0;
+                if (meshRenderer.enabled != expectedEnabled)
+                    meshRenderer.enabled = expectedEnabled;
+                Profiler.EndSample();
             }
-            finally
-            {
-                for (int i = 0; i < __foundContents.Count; i++)
-                    __foundContents[i].Dispose();
-                __foundContents.Clear();
-                __foundMaterials.Clear();
-            }
+            Profiler.BeginSample("UpdateSettings");
             UpdateSettings(model, state, meshIsModified);
+            Profiler.EndSample();
+        }
+
+
+
+
+        // Retrieve the generatedMeshes and its materials, combine them into a single Unity Mesh/Material array
+        static readonly List<Mesh> s_FoundMeshes = new List<Mesh>();
+        public static void Update(ChiselModel model, GameObjectState state, List<ChiselRenderObjectUpdate> updates, ref VertexBufferContents vertexBufferContents)
+        {
+            Profiler.BeginSample("CopyToMesh");
+            var dataArray = Mesh.AllocateWritableMeshData(updates.Count);
+            s_FoundMeshes.Clear();
+            JobHandle allJobs = default;
+            for (int u = 0; u < updates.Count; u++)
+            {
+                var mesh = updates[u].instance.sharedMesh;
+                s_FoundMeshes.Add(mesh);
+                updates[u].meshIsModified = vertexBufferContents.CopyToMesh(dataArray, updates[u].contentsIndex, ref allJobs);
+            }
+            Profiler.EndSample();
+
+            Profiler.BeginSample("SetTriangleBrushes");
+            for (int u = 0; u < updates.Count; u++)
+            {
+                var instance = updates[u].instance;
+                var brushIndicesArray = vertexBufferContents.brushIndices[updates[u].contentsIndex].AsArray();
+                if (instance.triangleBrushes.Length < brushIndicesArray.Length)
+                    instance.triangleBrushes = new int[brushIndicesArray.Length];
+                NativeArray<int>.Copy(brushIndicesArray, instance.triangleBrushes, brushIndicesArray.Length);
+            }
+            Profiler.EndSample();
+
+            Profiler.BeginSample("UpdateMaterials");
+            for (int u = 0; u < updates.Count; u++)
+            {
+                var instance = updates[u].instance;
+                var contentsIndex = updates[u].contentsIndex;
+                var materialOverride = updates[u].materialOverride;
+                var startIndex = vertexBufferContents.subMeshSections[contentsIndex].startIndex;
+                var endIndex = vertexBufferContents.subMeshSections[contentsIndex].endIndex;
+                var desiredCapacity = endIndex - startIndex;
+                if (instance.renderMaterials == null || instance.renderMaterials.Length != desiredCapacity)
+                    instance.renderMaterials = new Material[desiredCapacity];
+                if (materialOverride)
+                {
+                    for (int i = 0; i < instance.renderMaterials.Length; i++)
+                        instance.renderMaterials[i] = materialOverride;
+                } else
+                {
+                    for (int i = 0; i < desiredCapacity; i++)
+                    {
+                        var meshDescription = vertexBufferContents.meshDescriptions[startIndex + i];
+                        var renderMaterial = ChiselBrushMaterialManager.GetRenderMaterialByInstanceID(meshDescription.surfaceParameter);
+
+                        instance.renderMaterials[i] = renderMaterial;
+                    }
+                }
+                instance.SetMaterialsIfModified(instance.meshRenderer, instance.renderMaterials);
+            }
+            Profiler.EndSample();
+
+            Profiler.BeginSample("Complete");
+            allJobs.Complete();
+            Profiler.EndSample();
+
+            Profiler.BeginSample("Apply");
+            Mesh.ApplyAndDisposeWritableMeshData(dataArray, s_FoundMeshes);
+            Profiler.EndSample();
+
+            Profiler.BeginSample("UpdateSettings");
+            for (int u = 0; u < updates.Count; u++)
+            {
+                var instance = updates[u].instance;
+                var contentsIndex = updates[u].contentsIndex;
+
+                if (instance.sharedMesh.subMeshCount > 0)
+                {
+                    var bounds = instance.sharedMesh.GetSubMesh(0).bounds;
+                    for (int s = 1; s < instance.sharedMesh.subMeshCount; s++)
+                        bounds.Encapsulate(instance.sharedMesh.GetSubMesh(s).bounds);
+                    instance.sharedMesh.bounds = bounds;
+                }
+
+                if (instance.meshFilter.sharedMesh != instance.sharedMesh)
+                {
+                    instance.meshFilter.sharedMesh = instance.sharedMesh;
+                    updates[u].meshIsModified = true;
+                }
+                var expectedEnabled = vertexBufferContents.positions[contentsIndex].Length > 0;
+                if (instance.meshRenderer.enabled != expectedEnabled)
+                    instance.meshRenderer.enabled = expectedEnabled;
+
+                instance.UpdateSettings(model, state, updates[u].meshIsModified);
+            }
+            Profiler.EndSample();
+        }
+
+        static List<Material> sSharedMaterials = new List<Material>();
+
+        private void SetMaterialsIfModified(MeshRenderer meshRenderer, Material[] renderMaterials)
+        {
+            meshRenderer.GetSharedMaterials(sSharedMaterials);
+            if (sSharedMaterials != null &&
+                sSharedMaterials.Count == renderMaterials.Length)
+            {
+                for (int i = 0; i < renderMaterials.Length; i++)
+                {
+                    if (renderMaterials[i] != sSharedMaterials[i])
+                        goto SetMaterials;
+                }
+                sSharedMaterials.Clear(); // prevent dangling references
+                return;
+            }
+            sSharedMaterials.Clear(); // prevent dangling references
+            SetMaterials:
+            meshRenderer.sharedMaterials = renderMaterials;
         }
 
 #if UNITY_EDITOR
@@ -235,12 +406,15 @@ namespace Chisel.Components
         static readonly List<Vector2>   sUV0            = new List<Vector2>();
         static readonly List<int>       sSrcTriangles   = new List<int>();
         static readonly List<int>       sDstTriangles   = new List<int>();
-        internal void UpdateVisibilityMesh()
+        internal void UpdateVisibilityMesh(bool showMesh)
         {
+            EnsureMeshesAllocated();
             var srcMesh = sharedMesh;
             var dstMesh = partialMesh;
 
             dstMesh.Clear(keepVertexLayout: true);
+            if (!showMesh)
+                return;
             srcMesh.GetVertices(sVertices);
             dstMesh.SetVertices(sVertices);
 
@@ -262,7 +436,7 @@ namespace Chisel.Components
                 sDstTriangles.Clear();
                 for (int i = 0; i < sSrcTriangles.Count; i += 3, n++)
                 {
-                    if (n < triangleBrushes.Count)
+                    if (n < triangleBrushes.Length)
                     { 
                         int     brushID         = triangleBrushes[n];
                         bool    isBrushVisible  = ChiselGeneratedComponentManager.IsBrushVisible(brushID);

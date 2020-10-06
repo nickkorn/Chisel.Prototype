@@ -1,50 +1,90 @@
-﻿#if DEBUG
+#if DEBUG
 //#define DEBUG_CATEGORIES // visual studio debugging bug work around
+//#define HAVE_SELF_CATEGORIES
 #endif
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 using Unity.Collections;
+using Unity.Mathematics;
 using UnityEngine;
 
 namespace Chisel.Core
 {
-    public enum CategoryGroupIndex : short
+    public enum CategoryGroupIndex : byte
     {
         First = 0,
-        Invalid = -1
+        Invalid = 255
     }
 
+    [DebuggerTypeProxy(typeof(CategoryRoutingRow.DebuggerProxy))]
     public unsafe struct CategoryRoutingRow
     {
 #if HAVE_SELF_CATEGORIES
-        const CategoryGroupIndex Invalid            = CategoryGroupIndex.Invalid;
-        const CategoryGroupIndex Inside             = (CategoryGroupIndex)CategoryIndex.Inside;
-        const CategoryGroupIndex Aligned            = (CategoryGroupIndex)CategoryIndex.Aligned;
-        const CategoryGroupIndex SelfAligned        = (CategoryGroupIndex)CategoryIndex.SelfAligned;
-        const CategoryGroupIndex SelfReverseAligned = (CategoryGroupIndex)CategoryIndex.SelfReverseAligned;
-        const CategoryGroupIndex ReverseAligned     = (CategoryGroupIndex)CategoryIndex.ReverseAligned;
-        const CategoryGroupIndex Outside            = (CategoryGroupIndex)CategoryIndex.Outside;
+        internal sealed class DebuggerProxy
+        {
+            public int inside;
+            public int aligned;
+            public int selfAligned;
+            public int selfReverseAligned;
+            public int reverseAligned;
+            public int outside;
+            public DebuggerProxy(CategoryRoutingRow v)
+            {
+                inside = (int)v[0];
+                aligned = (int)v[1];
+                selfAligned = (int)v[2];
+                selfReverseAligned = (int)v[3];
+                reverseAligned = (int)v[4];
+                outside = (int)v[5];
+            }
+        }
+#else
+        internal sealed class DebuggerProxy
+        {
+            public int inside;
+            public int aligned;
+            public int reverseAligned;
+            public int outside;
+            public DebuggerProxy(CategoryRoutingRow v)
+            {
+                inside = (int)v[0];
+                aligned = (int)v[1];
+                reverseAligned = (int)v[2];
+                outside = (int)v[3];
+            }
+        }
+#endif
 
-        public static readonly CategoryRoutingRow invalid               = new CategoryRoutingRow(Invalid, Invalid, Invalid, Invalid, Invalid, Invalid);
-        public static readonly CategoryRoutingRow identity              = new CategoryRoutingRow(Inside, Aligned, SelfAligned, SelfReverseAligned, ReverseAligned, Outside);
+#if HAVE_SELF_CATEGORIES
+        const byte Invalid            = (byte)CategoryGroupIndex.Invalid;
+        const byte Inside             = (byte)(CategoryGroupIndex)CategoryIndex.Inside;
+        const byte Aligned            = (byte)(CategoryGroupIndex)CategoryIndex.Aligned;
+        const byte SelfAligned        = (byte)(CategoryGroupIndex)CategoryIndex.SelfAligned;
+        const byte SelfReverseAligned = (byte)(CategoryGroupIndex)CategoryIndex.SelfReverseAligned;
+        const byte ReverseAligned     = (byte)(CategoryGroupIndex)CategoryIndex.ReverseAligned;
+        const byte Outside            = (byte)(CategoryGroupIndex)CategoryIndex.Outside;
+
+        public readonly static CategoryRoutingRow invalid               = new CategoryRoutingRow(Invalid, Invalid, Invalid, Invalid, Invalid, Invalid);
+        public readonly static CategoryRoutingRow identity              = new CategoryRoutingRow(Inside, Aligned, SelfAligned, SelfReverseAligned, ReverseAligned, Outside);
         public readonly static CategoryRoutingRow selfAligned           = new CategoryRoutingRow(SelfAligned, SelfAligned, SelfAligned, SelfAligned, SelfAligned, SelfAligned);
         public readonly static CategoryRoutingRow selfReverseAligned    = new CategoryRoutingRow(SelfReverseAligned, SelfReverseAligned, SelfReverseAligned, SelfReverseAligned, SelfReverseAligned, SelfReverseAligned);
         public readonly static CategoryRoutingRow outside               = new CategoryRoutingRow(Outside, Outside, Outside, Outside, Outside, Outside);
         public readonly static CategoryRoutingRow inside                = new CategoryRoutingRow(Inside, Inside, Inside, Inside, Inside, Inside);
 #else
-        const CategoryGroupIndex Invalid            = CategoryGroupIndex.Invalid;
-        const CategoryGroupIndex Inside             = (CategoryGroupIndex)CategoryIndex.Inside;
-        const CategoryGroupIndex Aligned            = (CategoryGroupIndex)CategoryIndex.Aligned;
-        const CategoryGroupIndex ReverseAligned     = (CategoryGroupIndex)CategoryIndex.ReverseAligned;
-        const CategoryGroupIndex Outside            = (CategoryGroupIndex)CategoryIndex.Outside;
+        const byte Invalid            = (byte)CategoryGroupIndex.Invalid;
+        const byte Inside             = (byte)(CategoryGroupIndex)CategoryIndex.Inside;
+        const byte Aligned            = (byte)(CategoryGroupIndex)CategoryIndex.Aligned;
+        const byte ReverseAligned     = (byte)(CategoryGroupIndex)CategoryIndex.ReverseAligned;
+        const byte Outside            = (byte)(CategoryGroupIndex)CategoryIndex.Outside;
 
-        public static readonly CategoryRoutingRow invalid               = new CategoryRoutingRow(Invalid, Invalid, Invalid, Invalid);
-        public static readonly CategoryRoutingRow identity              = new CategoryRoutingRow(Inside, Aligned, ReverseAligned, Outside);
+        public readonly static CategoryRoutingRow invalid               = new CategoryRoutingRow(Invalid, Invalid, Invalid, Invalid);
+        public readonly static CategoryRoutingRow identity              = new CategoryRoutingRow(Inside, Aligned, ReverseAligned, Outside);
         public readonly static CategoryRoutingRow selfAligned           = new CategoryRoutingRow(Aligned, Aligned, Aligned, Aligned);
         public readonly static CategoryRoutingRow selfReverseAligned    = new CategoryRoutingRow(ReverseAligned, ReverseAligned, ReverseAligned, ReverseAligned);
         public readonly static CategoryRoutingRow outside               = new CategoryRoutingRow(Outside, Outside, Outside, Outside);
@@ -54,6 +94,7 @@ namespace Chisel.Core
         public const int Length = (int)CategoryIndex.LastCategory + 1;
 
         // Is PolygonGroupIndex instead of int, but C# doesn't like that
+#if HAVE_SELF_CATEGORIES
 #if !DEBUG_CATEGORIES
         fixed int	destination[Length];
 #else
@@ -82,20 +123,13 @@ namespace Chisel.Core
         }
         IntArray   destination;
 #endif
+#else
+        fixed byte destination[Length];
+#endif
 
-        #region Operation tables
-        //static class OperationTables
-        //{
+        #region Operation tables            
 #if HAVE_SELF_CATEGORIES
-            //const CategoryGroupIndex Inside             = (CategoryGroupIndex)CategoryIndex.Inside;
-            //const CategoryGroupIndex Aligned            = (CategoryGroupIndex)CategoryIndex.Aligned;
-            //const CategoryGroupIndex SelfAligned        = (CategoryGroupIndex)CategoryIndex.SelfAligned;
-            //const CategoryGroupIndex SelfReverseAligned = (CategoryGroupIndex)CategoryIndex.SelfReverseAligned;
-            //const CategoryGroupIndex ReverseAligned     = (CategoryGroupIndex)CategoryIndex.ReverseAligned;
-            //const CategoryGroupIndex Outside            = (CategoryGroupIndex)CategoryIndex.Outside;
-
-            // TODO: Burst might support reading this directly now?
-            public static readonly CategoryGroupIndex[] OperationTables = 
+            public static readonly byte[] kOperationTables = // NOTE: burst supports static readonly tables like this
             {
                 // Additive set operation on polygons: output = (left-node || right-node)
                 // Defines final output from combination of categorization of left and right node
@@ -164,16 +198,14 @@ namespace Chisel.Core
             public const int OperationStride    = 6 * 6;
             public const int RowStride          = 6;
 #else
-            public readonly static CategoryGroupIndex[] OperationTables =
-            //public static readonly CategoryRoutingRow[][] RegularOperationTables = new[]
+        public readonly static byte[] kOperationTables = // NOTE: burst supports static readonly tables like this
             {
+                // Regular Operation Tables
                 // Additive set operation on polygons: output = (left-node || right-node)
-                // Defines final output from combination of categorization of left and right node
-                //new CategoryRoutingRow[] // Additive Operation
-                //{
-                    //             	        right node                                                              |
-                    //             	        inside            aligned           reverse-aligned   outside           |     left-node       
-                    //----------------------------------------------------------------------------------------------------------------------------
+                // 
+                //  right node                                                              | Additive Operation
+                //  inside            aligned           reverse-aligned   outside           |     left-node       
+                //-----------------------------------------------------------------------------------------------
                     Inside,           Inside,           Inside,           Inside            , // inside
                     Inside,           Aligned,          Inside,           Aligned           , // aligned
                     Inside,           Inside,           ReverseAligned,   ReverseAligned    , // reverse-aligned
@@ -181,12 +213,10 @@ namespace Chisel.Core
                 //},
 
                 // Subtractive set operation on polygons: output = !(!left-node || right-node)
-                // Defines final output from combination of categorization of left and right node
-                //new CategoryRoutingRow[] // Subtractive Operation
-                //{
-	                //             	        right node                                                              |
-	                //             	        inside            aligned           reverse-aligned   outside           |     left-node       
-	                //----------------------------------------------------------------------------------------------------------------------------
+                //
+                //  right node                                                              | Subtractive Operation
+                //  inside            aligned           reverse-aligned   outside           |     left-node       
+                //-----------------------------------------------------------------------------------------------
                     Outside,          ReverseAligned,   Aligned,          Inside            , // inside
                     Outside,          Outside,          Aligned,          Aligned           , // aligned
                     Outside,          ReverseAligned,   Outside,          ReverseAligned    , // reverse-aligned
@@ -194,53 +224,42 @@ namespace Chisel.Core
                 //},
 
                 // Common set operation on polygons: output = !(!left-node || !right-node)
-                // Defines final output from combination of categorization of left and right node
-                //new CategoryRoutingRow[] // Intersection Operation
-                //{
-                    //             	        right node                                                              |
-                    //             	        inside            aligned           reverse-aligned   outside           |     left-node       
-                    //----------------------------------------------------------------------------------------------------------------------------
+                //
+                //  right node                                                              | Intersection Operation
+                //  inside            aligned           reverse-aligned   outside           |     left-node       
+                //-----------------------------------------------------------------------------------------------
                     Inside,           Aligned,          ReverseAligned,   Outside           , // inside
                     Aligned,          Aligned,          Outside,          Outside           , // aligned
 	                ReverseAligned,   Outside,          ReverseAligned,   Outside           , // reverse-aligned
                     Outside,          Outside,          Outside,          Outside           , // outside
                 //},
 
-                // Additive set operation on polygons: output = (left-node || right-node)
-                // Defines final output from combination of categorization of left and right node
-                //new CategoryRoutingRow[] // AdditiveKeepInside Operation
-                //{
-	                //             	        right node                                                              |
-	                //             	        inside            aligned           reverse-aligned   outside           |     left-node       
-	                //----------------------------------------------------------------------------------------------------------------------------
-	                Inside,           Inside,           Inside,           Inside            , // inside
-                    Inside,           Aligned,          Inside,           Aligned           , // aligned
-                    Inside,           Inside,           ReverseAligned,   ReverseAligned    , // reverse-aligned
-                    Inside,           Aligned,          ReverseAligned,   Outside           , // outside
+	            //  right node                                                              |
+                //  inside            aligned           reverse-aligned   outside           |     left-node       
+                //-----------------------------------------------------------------------------------------------
+	                Invalid,          Invalid,          Invalid,          Invalid           , // inside
+                    Invalid,          Invalid,          Invalid,          Invalid           , // aligned
+                    Invalid,          Invalid,          Invalid,          Invalid           , // reverse-aligned
+                    Invalid,          Invalid,          Invalid,          Invalid           , // outside
                 //}
-            //};
-            //public static readonly CategoryRoutingRow[][] RemoveOverlappingOperationTables = new[]
-            //{
+            
+                // Remove Overlapping Tables
                 // Additive set operation on polygons: output = (left-node || right-node)
-                // Defines final output from combination of categorization of left and right node
-                //new CategoryRoutingRow[] // Additive Operation
-                //{
-	                //             	        right node                                                              |
-	                //             	        inside            aligned           reverse-aligned   outside           |     left-node       
-	                //----------------------------------------------------------------------------------------------------------------------------
+                //
+	            //  right node                                                              | Additive Operation
+                //  inside            aligned           reverse-aligned   outside           |     left-node       
+                //-----------------------------------------------------------------------------------------------
 	                Inside,           Inside,           Inside,           Inside            , // inside
-                    Inside,           Outside,          Inside,           Aligned           , // aligned
-                    Inside,           Inside,           Outside,          ReverseAligned    , // reverse-aligned
-                    Inside,           Outside,          Outside,          Outside           , // outside
+                    Inside,           Inside,           Inside,           Aligned           , // aligned
+                    Inside,           Inside,           Inside,           ReverseAligned    , // reverse-aligned
+                    Inside,           Inside,           Inside,           Outside           , // outside
                 //},
 
                 // Subtractive set operation on polygons: output = !(!left-node || right-node)
-                // Defines final output from combination of categorization of left and right node
-                //new CategoryRoutingRow[] // Subtractive Operation
-                //{
-	                //             	        right node                                                              |
-	                //             	        inside            aligned           reverse-aligned   outside           |     left-node       
-	                //----------------------------------------------------------------------------------------------------------------------------
+                //
+	            //  right node                                                              | Subtractive Operation
+                //  inside            aligned           reverse-aligned   outside           |     left-node       
+                //-----------------------------------------------------------------------------------------------
                     Outside,          Outside,          Outside,          Inside            , // inside
                     Outside,          Outside,          Outside,          Aligned           , // aligned
                     Outside,          Outside,          Outside,          ReverseAligned    , // reverse-aligned
@@ -248,29 +267,23 @@ namespace Chisel.Core
                 //}, 
 
                 // Common set operation on polygons: output = !(!left-node || !right-node)
-                // Defines final output from combination of categorization of left and right node
-                //new CategoryRoutingRow[] // Intersection Operation
-                //{
-	                //             	        right node                                                              |
-	                //             	        inside            aligned           reverse-aligned   outside           |     left-node       
-	                //----------------------------------------------------------------------------------------------------------------------------
+                //
+	            //  right node                                                              | Subtractive Operation
+                //  inside            aligned           reverse-aligned   outside           |     left-node       
+                //-----------------------------------------------------------------------------------------------
 	                Inside,           Outside,          Outside,          Outside           , // inside
                     Aligned,          Outside,          Outside,          Outside           , // aligned
                     ReverseAligned,   Outside,          Outside,          Outside           , // reverse-aligned
                     Outside,          Outside,          Outside,          Outside           , // outside
                 //},
 
-                // Additive set operation on polygons: output = (left-node || right-node)
-                // Defines final output from combination of categorization of left and right node
-                //new CategoryRoutingRow[] // AdditiveKeepInside Operation
-                //{
-	                //             	        right node                                                              |
-	                //             	        inside            aligned           reverse-aligned   outside           |     left-node       
-	                //----------------------------------------------------------------------------------------------------------------------------
-	                Inside,           Inside,           Inside,           Inside            , // inside
-                    Inside,           Outside,          Outside,          Inside            , // aligned
-                    Inside,           Outside,          Outside,          Inside            , // reverse-aligned
-                    Inside,           Inside,           Inside,           Outside           , // outside
+	            //  right node                                                              |
+                //  inside            aligned           reverse-aligned   outside           |     left-node       
+                //-----------------------------------------------------------------------------------------------
+	                Invalid,          Invalid,          Invalid,          Invalid           , // inside
+                    Invalid,          Invalid,          Invalid,          Invalid           , // aligned
+                    Invalid,          Invalid,          Invalid,          Invalid           , // reverse-aligned
+                    Invalid,          Invalid,          Invalid,          Invalid           , // outside
                 //}
             };
 
@@ -280,10 +293,13 @@ namespace Chisel.Core
             public const int RowStride               = 4;
 #endif
         //}
-        #endregion
+#endregion
 
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public CategoryRoutingRow(int operationIndex, CategoryIndex left, in CategoryRoutingRow right)
         {
+#if HAVE_SELF_CATEGORIES
 #if DEBUG_CATEGORIES
             destination = new IntArray();
 #endif
@@ -292,138 +308,190 @@ namespace Chisel.Core
             {
                 var row     = (int)left;
                 var column  = (int)right[i];
-                destination[(int)i] = (int)OperationTables[operationOffset + (row * RowStride) + column];
+                destination[(int)i] = kOperationTables[operationOffset + (row * RowStride) + column];
             }
+#else
+            
+            var operationOffset = operationIndex * OperationStride + ((int)left * RowStride);
+            destination[0] = kOperationTables[(int)(operationOffset + (int)right.destination[0])];
+            destination[1] = kOperationTables[(int)(operationOffset + (int)right.destination[1])];
+            destination[2] = kOperationTables[(int)(operationOffset + (int)right.destination[2])];
+            destination[3] = kOperationTables[(int)(operationOffset + (int)right.destination[3])];
+#endif
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static CategoryRoutingRow operator +(CategoryRoutingRow a, int offset)
         {
+#if HAVE_SELF_CATEGORIES
             var newRow = new CategoryRoutingRow();
 #if DEBUG_CATEGORIES
             newRow.destination = new IntArray();
 #endif
             for (int i = 0; i < Length; i++)
                 newRow.destination[(int)i] = (int)a[i] + offset;
-
             return newRow;
+#else
+            var newRow = new CategoryRoutingRow();
+            newRow.destination[0] = (byte)(a.destination[0] + offset);
+            newRow.destination[1] = (byte)(a.destination[1] + offset);
+            newRow.destination[2] = (byte)(a.destination[2] + offset);
+            newRow.destination[3] = (byte)(a.destination[3] + offset);
+            return newRow;
+#endif
         }
 
 #if HAVE_SELF_CATEGORIES
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public CategoryRoutingRow(CategoryGroupIndex inside, CategoryGroupIndex aligned, CategoryGroupIndex selfAligned, CategoryGroupIndex selfReverseAligned, CategoryGroupIndex reverseAligned, CategoryGroupIndex outside)
         {
 #if DEBUG_CATEGORIES
             destination = new IntArray();
 #endif
-            destination[(int)CategoryIndex.Inside]              = (int)inside;
-            destination[(int)CategoryIndex.Aligned]             = (int)aligned;
-            destination[(int)CategoryIndex.SelfAligned]         = (int)selfAligned;
-            destination[(int)CategoryIndex.SelfReverseAligned]  = (int)selfReverseAligned;
-            destination[(int)CategoryIndex.ReverseAligned]      = (int)reverseAligned;
-            destination[(int)CategoryIndex.Outside]             = (int)outside;
+            destination[(int)CategoryIndex.Inside]              = (byte)inside;
+            destination[(int)CategoryIndex.Aligned]             = (byte)aligned;
+            destination[(int)CategoryIndex.SelfAligned]         = (byte)selfAligned;
+            destination[(int)CategoryIndex.SelfReverseAligned]  = (byte)selfReverseAligned;
+            destination[(int)CategoryIndex.ReverseAligned]      = (byte)reverseAligned;
+            destination[(int)CategoryIndex.Outside]             = (byte)outside;
         }
-
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public CategoryRoutingRow(CategoryGroupIndex value)
         {
 #if DEBUG_CATEGORIES
             destination = new IntArray();
 #endif
-            destination[(int)CategoryIndex.Inside]              = (int)value;
-            destination[(int)CategoryIndex.Aligned]             = (int)value;
-            destination[(int)CategoryIndex.SelfAligned]         = (int)value;
-            destination[(int)CategoryIndex.SelfReverseAligned]  = (int)value;
-            destination[(int)CategoryIndex.ReverseAligned]      = (int)value;
-            destination[(int)CategoryIndex.Outside]             = (int)value;
+            destination[(int)CategoryIndex.Inside]              = (byte)value;
+            destination[(int)CategoryIndex.Aligned]             = (byte)value;
+            destination[(int)CategoryIndex.SelfAligned]         = (byte)value;
+            destination[(int)CategoryIndex.SelfReverseAligned]  = (byte)value;
+            destination[(int)CategoryIndex.ReverseAligned]      = (byte)value;
+            destination[(int)CategoryIndex.Outside]             = (byte)value;
         }
 #else
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        CategoryRoutingRow(byte inside, byte aligned, byte reverseAligned, byte outside)
+        {
+#if HAVE_SELF_CATEGORIES
+#if DEBUG_CATEGORIES
+            destination = new IntArray();
+#endif
+            destination[(int)CategoryIndex.Inside]              = inside;
+            destination[(int)CategoryIndex.Aligned]             = aligned;
+            destination[(int)CategoryIndex.ReverseAligned]      = reverseAligned;
+            destination[(int)CategoryIndex.Outside]             = outside;
+#else
+            destination[0] = inside;
+            destination[1] = aligned;
+            destination[2] = reverseAligned;
+            destination[3] = outside;
+#endif
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public CategoryRoutingRow(CategoryGroupIndex inside, CategoryGroupIndex aligned, CategoryGroupIndex reverseAligned, CategoryGroupIndex outside)
         {
+#if HAVE_SELF_CATEGORIES
 #if DEBUG_CATEGORIES
             destination = new IntArray();
 #endif
-            destination[(int)CategoryIndex.Inside]              = (int)inside;
-            destination[(int)CategoryIndex.Aligned]             = (int)aligned;
-            destination[(int)CategoryIndex.ReverseAligned]      = (int)reverseAligned;
-            destination[(int)CategoryIndex.Outside]             = (int)outside;
+            destination[(int)CategoryIndex.Inside]              = (byte)inside;
+            destination[(int)CategoryIndex.Aligned]             = (byte)aligned;
+            destination[(int)CategoryIndex.ReverseAligned]      = (byte)reverseAligned;
+            destination[(int)CategoryIndex.Outside]             = (byte)outside;
+#else
+            destination[0] = (byte)inside;
+            destination[1] = (byte)aligned;
+            destination[2] = (byte)reverseAligned;
+            destination[3] = (byte)outside;
+#endif
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public CategoryRoutingRow(CategoryGroupIndex value)
         {
+#if HAVE_SELF_CATEGORIES
 #if DEBUG_CATEGORIES
             destination = new IntArray();
 #endif
-            destination[(int)CategoryIndex.Inside]              = (int)value;
-            destination[(int)CategoryIndex.Aligned]             = (int)value;
-            destination[(int)CategoryIndex.ReverseAligned]      = (int)value;
-            destination[(int)CategoryIndex.Outside]             = (int)value;
+            destination[(int)CategoryIndex.Inside]              = (byte)value;
+            destination[(int)CategoryIndex.Aligned]             = (byte)value;
+            destination[(int)CategoryIndex.ReverseAligned]      = (byte)value;
+            destination[(int)CategoryIndex.Outside]             = (byte)value;
+#else
+            destination[0] = (byte)value;
+            destination[1] = (byte)value;
+            destination[2] = (byte)value;
+            destination[3] = (byte)value;
+#endif
         }
 #endif
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool AreAllTheSame()
         {
+#if HAVE_SELF_CATEGORIES
             for (var i = 1; i < Length; i++) { if (destination[i - 1] != destination[i]) return false; }
             return true;
+#else
+            return destination[0] == destination[1] &&
+                   destination[1] == destination[2] &&
+                   destination[2] == destination[3];
+#endif
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool AreAllValue(int value)
         {
+#if HAVE_SELF_CATEGORIES
             for (var i = 0; i < Length; i++) { if (destination[i] != value) return false; }
             return true;
+#else
+            return (destination[0] == value &&
+                    destination[1] == value &&
+                    destination[2] == value &&
+                    destination[3] == value);
+#endif
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Equals(CategoryRoutingRow other)
         {
+#if HAVE_SELF_CATEGORIES
             for (var i = 0; i < Length; i++) { if (other.destination[i] != destination[i]) return false; }
             return true;
+#else
+            return (destination[0] == other.destination[0] &&
+                    destination[1] == other.destination[1] &&
+                    destination[2] == other.destination[2] &&
+                    destination[3] == other.destination[3]);
+#endif
         }
-
+        /*
+        // Can't use this b/c Burst bug w/ using an indexer with an enum as index
         public CategoryGroupIndex this[CategoryIndex index]
         {
-            get { return (CategoryGroupIndex)destination[(int)index]; }
-            set { destination[(int)index] = (int)value; }
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get { return (CategoryGroupIndex)destination[(int)index]; } 
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            set { destination[(int)index] = (byte)value; } 
         }
 
         public CategoryGroupIndex this[CategoryGroupIndex index]
         {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get { return (CategoryGroupIndex)destination[(int)index]; }
-            set { destination[(int)index] = (int)value; }
-        }
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            set { destination[(int)index] = (byte)value; } 
+        }*/
 
         public CategoryGroupIndex this[int index]
         {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get { return (CategoryGroupIndex)destination[index]; }
-            set { destination[index] = (int)value; }
-        }
-
-        public override string ToString()
-        {
-            return ToString(lastNode: false);
-        }
-
-        public string ToString(bool lastNode)
-        {
-#if HAVE_SELF_CATEGORIES
-            var inside              = (int)destination[(int)CategoryIndex.Inside];
-            var aligned             = (int)destination[(int)CategoryIndex.Aligned];
-            var selfAligned         = (int)destination[(int)CategoryIndex.SelfAligned];
-            var selfReverseAligned  = (int)destination[(int)CategoryIndex.SelfReverseAligned];
-            var reverseAligned      = (int)destination[(int)CategoryIndex.ReverseAligned];
-            var outside             = (int)destination[(int)CategoryIndex.Outside];
-
-            if (lastNode)
-                return $"({(CategoryIndex)inside}, {(CategoryIndex)aligned}, {(CategoryIndex)selfAligned}, {(CategoryIndex)selfReverseAligned}, {(CategoryIndex)reverseAligned}, {(CategoryIndex)outside})";
-            else
-                return $"({(int)inside,3}, {(int)aligned}, {(int)selfAligned}, {(int)selfReverseAligned}, {(int)reverseAligned}, {(int)outside})";
-#else
-            var inside              = (int)destination[(int)CategoryIndex.Inside];
-            var aligned             = (int)destination[(int)CategoryIndex.Aligned];
-            var reverseAligned      = (int)destination[(int)CategoryIndex.ReverseAligned];
-            var outside             = (int)destination[(int)CategoryIndex.Outside];
-            
-            if (lastNode)
-                return $"({(CategoryIndex)inside}, {(CategoryIndex)aligned}, {(CategoryIndex)reverseAligned}, {(CategoryIndex)outside})";
-            else
-                return $"({(int)inside}, {(int)aligned}, {(int)reverseAligned}, {(int)outside})";
-#endif
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            set { destination[index] = (byte)value; }
         }
     }
 }

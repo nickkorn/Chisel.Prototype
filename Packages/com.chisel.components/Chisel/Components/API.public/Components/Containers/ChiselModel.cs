@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using System.Collections;
 using Chisel.Core;
 using System.Collections.Generic;
@@ -6,6 +6,7 @@ using System;
 using LightProbeUsage = UnityEngine.Rendering.LightProbeUsage;
 using ReflectionProbeUsage = UnityEngine.Rendering.ReflectionProbeUsage;
 using UnityEngine.Rendering;
+using UnityEngine.Profiling;
 
 namespace Chisel.Components
 {
@@ -104,15 +105,36 @@ namespace Chisel.Components
         public ReceiveGI						receiveGI						= ReceiveGI.LightProbes;
 
 #if UNITY_EDITOR
-    	public UnityEditor.LightmapParameters   lightmapParameters				= null;		// TODO: figure out how to apply this, safely, using SerializedObject
-        public bool								importantGI						= false;
-        public bool								optimizeUVs                     = false;	// "Preserve UVs"
-        public bool								ignoreNormalsForChartDetection  = false;
-        public float							scaleInLightmap                 = 1.0f;
-        public float							autoUVMaxDistance				= 0.5f;
-        public float							autoUVMaxAngle					= 89;
-        public int								minimumChartSize				= 4;
+        // SerializedObject access Only
+        [SerializeField] 
+        UnityEditor.LightmapParameters      lightmapParameters				= null;		// TODO: figure out how to apply this, safely, using SerializedObject
+        [SerializeField] 
+        bool								importantGI						= false;
+        [SerializeField] 
+        bool								optimizeUVs                     = false;	// "Preserve UVs"
+        [SerializeField] 
+        bool								ignoreNormalsForChartDetection  = false;
+        [SerializeField] 
+        float							    autoUVMaxDistance				= 0.5f;
+        [SerializeField] 
+        float							    autoUVMaxAngle					= 89;
+        [SerializeField]
+        int								    minimumChartSize				= 4;
+
+        [NonSerialized]
+        internal bool serializedObjectFieldsDirty = true;
+        public void SetDirty() { serializedObjectFieldsDirty = true; }
+        public UnityEditor.LightmapParameters   LightmapParameters				{ get { return lightmapParameters; } set { lightmapParameters = value; serializedObjectFieldsDirty = true; } }
+        public bool								ImportantGI						{ get { return importantGI; } set { importantGI = value; serializedObjectFieldsDirty = true; } }
+        public bool								OptimizeUVs                     { get { return optimizeUVs; } set { optimizeUVs = value; serializedObjectFieldsDirty = true; } }
+        public bool								IgnoreNormalsForChartDetection  {get { return ignoreNormalsForChartDetection; } set { ignoreNormalsForChartDetection = value; serializedObjectFieldsDirty = true; } }
+        public float							AutoUVMaxDistance				{get { return autoUVMaxDistance; } set { autoUVMaxDistance = value; serializedObjectFieldsDirty = true; } }
+        public float							AutoUVMaxAngle					{get { return autoUVMaxAngle; } set { autoUVMaxAngle = value; serializedObjectFieldsDirty = true; } }
+        public int								MinimumChartSize				{get { return minimumChartSize; } set { minimumChartSize = value; serializedObjectFieldsDirty = true; } }
+        // SerializedObject access Only
+
         public bool								stitchLightmapSeams				= false;
+        public float							scaleInLightmap                 = 1.0f;
 #endif
 
         public void Reset()
@@ -163,7 +185,7 @@ namespace Chisel.Components
         public SerializableUnwrapParam          UVGenerationSettings    { get { return uvGenerationSettings; } internal set { uvGenerationSettings = value; } }
         public bool                 IsInitialized               { get { return initialized; } }
         public override int         NodeID                      { get { return Node.NodeID; } }
-        public override bool        CanHaveChildNodes           { get { return !SkipThisNode; } }
+        public override bool        CanHaveChildNodes           { get { return IsActive; } }
 
         // TODO: put all bools in flags (makes it harder to work with in the ModelEditor though)
         public bool                 CreateRenderComponents      = true;
@@ -175,12 +197,13 @@ namespace Chisel.Components
         public ChiselGeneratedRenderSettings      renderSettings;
         public SerializableUnwrapParam            uvGenerationSettings;
 
-        
-        [HideInInspector] public CSGTree                    Node;
+        public bool IsDefaultModel { get; internal set; } = false;
 
-        [HideInInspector] bool                              initialized = false;
+        [HideInInspector] public CSGTree                Node;
 
-        [HideInInspector] public ChiselModelGeneratedObjects generated;
+        [HideInInspector] bool                          initialized = false;
+
+        [HideInInspector] public ChiselGeneratedObjects generated;
 
 
         public override void OnInitialize()
@@ -190,7 +213,7 @@ namespace Chisel.Components
                 generated.Destroy();
 
             if (generated == null)
-                generated = ChiselModelGeneratedObjects.Create(this);
+                generated = ChiselGeneratedObjects.Create(gameObject);
 
             if (colliderSettings == null)
             {
@@ -226,6 +249,11 @@ namespace Chisel.Components
             }
 #endif
 
+            // Legacy solution
+            if (!IsDefaultModel &&
+                name == ChiselGeneratedComponentManager.kGeneratedDefaultModelName)
+                IsDefaultModel = true;
+
             initialized = true;
         }
 
@@ -237,7 +265,7 @@ namespace Chisel.Components
         internal override CSGTreeNode[] CreateTreeNodes()
         {
             if (Node.Valid)
-                Debug.LogWarning("ChiselModel already has a treeNode, but trying to create a new one?", this);
+                Debug.LogWarning($"{nameof(ChiselModel)} already has a treeNode, but trying to create a new one?", this);
             var userID = GetInstanceID();
             Node = CSGTree.Create(userID: userID);
             return new CSGTreeNode[] { Node };
@@ -248,14 +276,16 @@ namespace Chisel.Components
         {
             if (!Node.Valid)
             {
-                Debug.LogWarning("SetChildren called on a ChiselModel that isn't properly initialized", this);
+                Debug.LogWarning($"SetChildren called on a {nameof(ChiselModel)} that isn't properly initialized", this);
                 return;
             }
-            if (!Node.SetChildren(childNodes.ToArray()))
+            if (childNodes.Count == 0)
+                return;
+            if (!Node.SetChildren(childNodes))
                 Debug.LogError("Failed to assign list of children to tree node");
         }
 
-        internal override void CollectChildNodesForParent(List<CSGTreeNode> childNodes)
+        public override void CollectCSGTreeNodes(List<CSGTreeNode> childNodes)
         {
             // No parent can hold a model as a child, so we don't add anything
         }
@@ -267,6 +297,8 @@ namespace Chisel.Components
             if (!Node.Valid)
                 return false;
             // A model makes no sense without any children
+            if (hierarchyItem != null)
+                return (hierarchyItem.Children.Count > 0);
             return (transform.childCount > 0);
         }
 
@@ -274,8 +306,11 @@ namespace Chisel.Components
 
         protected override void OnCleanup()
         {
-            ChiselGeneratedComponentManager.RemoveContainerFlags(this);
-            generated.Destroy();
+            if (generated != null)
+            {
+                if (!this && generated.generatedDataContainer)
+                    generated.DestroyWithUndo();
+            }
         }
 
         public override int GetAllTreeBrushCount()
@@ -299,43 +334,48 @@ namespace Chisel.Components
                 var child = hierarchyItem.Children[c];
                 if (!child.Component)
                     continue;
-                var assetBounds = child.Component.CalculateBounds();
-                if (assetBounds.size.sqrMagnitude == 0)
+                var childBounds = child.Component.CalculateBounds();
+                if (childBounds.size.sqrMagnitude == 0)
                     continue;
                 if (!haveBounds)
                 {
-                    bounds = assetBounds;
+                    bounds = childBounds;
                     haveBounds = true;
                 } else
-                    bounds.Encapsulate(assetBounds);
+                    bounds.Encapsulate(childBounds);
+            }
+            return bounds;
+        }
+
+        // TODO: cache this
+        public override Bounds CalculateBounds(Matrix4x4 transformation)
+        {
+            var bounds = ChiselHierarchyItem.EmptyBounds;
+            var haveBounds = false;
+            for (int c = 0; c < hierarchyItem.Children.Count; c++)
+            {
+                var child = hierarchyItem.Children[c];
+                if (!child.Component)
+                    continue;
+                var childBounds = child.Component.CalculateBounds(transformation);
+                if (childBounds.size.sqrMagnitude == 0)
+                    continue;
+                if (!haveBounds)
+                {
+                    bounds = childBounds;
+                    haveBounds = true;
+                } else
+                    bounds.Encapsulate(childBounds);
             }
             return bounds;
         }
 
 #if UNITY_EDITOR
-        public void Update()
+        MaterialPropertyBlock materialPropertyBlock;
+        // TODO: move to ChiselGeneratedComponentManager
+        static void RenderChiselRenderObjects(ChiselRenderObjects[] renderables, MaterialPropertyBlock materialPropertyBlock, Matrix4x4 matrix, int layer, Camera camera)
         {
-            if (generated == null)
-                return;
-
-            generated.UpdateVisibilityMeshes();
-
-            // TODO: figure out why this can happen
-            Debug.Assert(generated.visibilityState != VisibilityState.Unknown, "Unknown Visibility state");
-            if (generated.visibilityState != VisibilityState.Mixed)
-                return;
-
-            // When we toggle visibility on brushes in the editor hierarchy, we want to render a different mesh
-            // but still have the same lightmap, and keep lightmap support.
-            // We do this by setting forceRenderingOff to true on all MeshRenderers.
-            // This makes them behave like before, except that they don't render. This means they are still 
-            // part of things such as lightmap generation. At the same time we use Graphics.DrawMesh to
-            // render the sub-mesh with the exact same settings as the MeshRenderer.
-
-            var layer   = gameObject.layer; 
-            var matrix  = transform.localToWorldMatrix;
-            var camera  = Camera.current;
-            foreach (var renderable in generated.renderables)
+            foreach (var renderable in renderables)
             {
                 if (renderable == null)
                     continue;
@@ -348,19 +388,46 @@ namespace Chisel.Components
                 if (!meshRenderer || !meshRenderer.enabled || !meshRenderer.forceRenderingOff)
                     continue;
 
-                var properties = new MaterialPropertyBlock();
-                meshRenderer.GetPropertyBlock(properties);
+                meshRenderer.GetPropertyBlock(materialPropertyBlock);
 
                 var castShadows             = (ShadowCastingMode)meshRenderer.shadowCastingMode;
                 var receiveShadows          = (bool)meshRenderer.receiveShadows;
                 var probeAnchor             = (Transform)meshRenderer.probeAnchor;
                 var lightProbeUsage         = (LightProbeUsage)meshRenderer.lightProbeUsage;
                 var lightProbeProxyVolume   = meshRenderer.lightProbeProxyVolumeOverride == null ? null : meshRenderer.lightProbeProxyVolumeOverride.GetComponent<LightProbeProxyVolume>();
-                    
+                
                 for (int submeshIndex = 0; submeshIndex < mesh.subMeshCount; submeshIndex++)
-                    Graphics.DrawMesh(mesh, matrix, renderable.renderMaterials[submeshIndex], layer, camera, submeshIndex, properties, castShadows, receiveShadows, probeAnchor, lightProbeUsage, lightProbeProxyVolume);
+                {
+                    Graphics.DrawMesh(mesh, matrix, renderable.renderMaterials[submeshIndex], layer, camera, submeshIndex, materialPropertyBlock, castShadows, receiveShadows, probeAnchor, lightProbeUsage, lightProbeProxyVolume);
+                }
             }
         }
+
+        // TODO: move to ChiselGeneratedComponentManager
+        public void OnRenderModel(Camera camera, DrawModeFlags helperStateFlags)
+        {
+            if (VisibilityState != VisibilityState.Mixed)
+                return;
+
+            // When we toggle visibility on brushes in the editor hierarchy, we want to render a different mesh
+            // but still have the same lightmap, and keep lightmap support.
+            // We do this by setting forceRenderingOff to true on all MeshRenderers.
+            // This makes them behave like before, except that they don't render. This means they are still 
+            // part of things such as lightmap generation. At the same time we use Graphics.DrawMesh to
+            // render the sub-mesh with the exact same settings as the MeshRenderer.
+            if (materialPropertyBlock == null)
+                materialPropertyBlock = new MaterialPropertyBlock();
+
+            var layer   = gameObject.layer; 
+            var matrix  = transform.localToWorldMatrix;
+            if ((helperStateFlags & DrawModeFlags.HideRenderables) == DrawModeFlags.None)
+                RenderChiselRenderObjects(generated.renderables, materialPropertyBlock, matrix, layer, camera);
+            if ((helperStateFlags & ~DrawModeFlags.HideRenderables) != DrawModeFlags.None)
+                RenderChiselRenderObjects(generated.debugHelpers, materialPropertyBlock, matrix, layer, camera);
+        }
+
+        public VisibilityState VisibilityState { get { return generated.visibilityState; } }
+
 #endif
     }
 }

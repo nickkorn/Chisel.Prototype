@@ -52,3 +52,10 @@ ProjectSettings/
 *.lib
 
 Packages/com\.chisel\.core/Chisel/Core/API\.private/Native/Plugin/x64/Chisel\[TEST\]\.exp\.meta
+/Packages/com.aeternumgames.chisel.import.source
+
+UserSettings/EditorUserSettings.asset
+/Assets/Experiments
+/Assets/Experiments.meta
+
+Packages/packages-lock.json

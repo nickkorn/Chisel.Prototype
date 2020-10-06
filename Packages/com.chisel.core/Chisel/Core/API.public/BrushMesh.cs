@@ -87,9 +87,10 @@ namespace Chisel.Core
     [Serializable]
     public sealed partial class BrushMesh
     {
-        public const int CurrentVersion = 1;
-
-        public int version = 0;
+        const int kLatestVersion = 1;
+        [HideInInspector]
+        [SerializeField] int version = kLatestVersion;  // Serialization will overwrite the version number 
+                                                        // new instances will have the latest version
 
         public BrushMesh() { }
         public BrushMesh(BrushMesh other)
@@ -159,9 +160,6 @@ namespace Chisel.Core
             [EditorBrowsable(EditorBrowsableState.Never)]
             public override string ToString() { return string.Format("{{ twinIndex = {0}, vertexIndex = {1} }}", twinIndex, vertexIndex); }
         }
-
-        /// <value>The axis aligned bounding box of this <see cref="Chisel.Core.BrushMesh"/>.</value> 
-        public Bounds		localBounds;
 
         /// <value>The vertices of this <see cref="Chisel.Core.BrushMesh"/>.</value> 
         public float3[]	    vertices;

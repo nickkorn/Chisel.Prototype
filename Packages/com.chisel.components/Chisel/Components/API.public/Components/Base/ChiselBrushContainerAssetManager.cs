@@ -1,8 +1,9 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using Chisel.Core;
 using UnityEngine.Profiling;
+using System.Linq;
 
 namespace Chisel.Components
 {
@@ -10,8 +11,8 @@ namespace Chisel.Components
  
     public static class ChiselBrushContainerAssetManager
     {
-        public static event OnBrushContainerAssetDelegate OnBrushMeshInstanceChanged;
-        public static event OnBrushContainerAssetDelegate OnBrushMeshInstanceDestroyed;
+        public static event OnBrushContainerAssetDelegate   OnBrushMeshInstanceChanged;
+        public static event OnBrushContainerAssetDelegate   OnBrushMeshInstanceDestroyed;
 
         static readonly HashSet<ChiselBrushContainerAsset>  registeredLookup        = new HashSet<ChiselBrushContainerAsset>();
 
@@ -22,8 +23,8 @@ namespace Chisel.Components
         static readonly List<ChiselBrushContainerAsset>     updateQueue             = new List<ChiselBrushContainerAsset>();
 
         // Dictionaries used to keep track which surfaces are used by which brushMeshes, which is necessary to update the right brushMeshes when a used brushMaterial has been changed
-        static readonly Dictionary<ChiselBrushContainerAsset, HashSet<ChiselBrushMaterial>> brushMeshSurfaces  = new Dictionary<ChiselBrushContainerAsset, HashSet<ChiselBrushMaterial>>();
-        static readonly Dictionary<ChiselBrushMaterial, HashSet<ChiselBrushContainerAsset>> surfaceBrushMeshes = new Dictionary<ChiselBrushMaterial, HashSet<ChiselBrushContainerAsset>>();
+        static readonly Dictionary<ChiselBrushContainerAsset, List<ChiselBrushMaterial>>    brushMeshSurfaces  = new Dictionary<ChiselBrushContainerAsset, List<ChiselBrushMaterial>>();
+        static readonly Dictionary<ChiselBrushMaterial, List<ChiselBrushContainerAsset>>    surfaceBrushMeshes = new Dictionary<ChiselBrushMaterial, List<ChiselBrushContainerAsset>>();
         
 
         static ChiselBrushContainerAssetManager()
@@ -38,6 +39,8 @@ namespace Chisel.Components
             ChiselBrushMaterialManager.OnBrushMaterialsReset += OnChiselBrushMaterialsReset;
         }
 
+        static List<ChiselBrushContainerAsset>  sRemoveChiselBrushContainerAsset   = new List<ChiselBrushContainerAsset>();
+        static List<ChiselBrushMaterial>        sRemoveChiselBrushMaterial         = new List<ChiselBrushMaterial>();
         static void Clear()
         {
             registeredLookup        .Clear();
@@ -48,28 +51,56 @@ namespace Chisel.Components
             updateQueueLookup       .Clear();
             updateQueue             .Clear();
 
-            brushMeshSurfaces		.Clear();
-            surfaceBrushMeshes		.Clear(); 
+            if (sRemoveChiselBrushContainerAsset.Capacity < brushMeshSurfaces.Count)
+                sRemoveChiselBrushContainerAsset.Capacity = brushMeshSurfaces.Count;
+            foreach (var item in brushMeshSurfaces)
+            {
+                if (item.Key == null)
+                {
+                    sRemoveChiselBrushContainerAsset.Add(item.Key);
+                    continue;
+                }
+                item.Value.Clear();
+            }
+            foreach (var item in sRemoveChiselBrushContainerAsset)
+                brushMeshSurfaces.Remove(item);
+            sRemoveChiselBrushContainerAsset.Clear();
 
+            if (sRemoveChiselBrushMaterial.Capacity < surfaceBrushMeshes.Count)
+                sRemoveChiselBrushMaterial.Capacity = surfaceBrushMeshes.Count;
+            foreach (var item in surfaceBrushMeshes)
+            {
+                if (item.Key == null)
+                {
+                    sRemoveChiselBrushMaterial.Add(item.Key);
+                    continue;
+                }
+                item.Value.Clear();
+            }
+            foreach (var item in sRemoveChiselBrushMaterial)
+                surfaceBrushMeshes.Remove(item);
+            sRemoveChiselBrushMaterial.Clear();
         }
 
+        static readonly List<ChiselBrushContainerAsset>     s_NodeBrushes       = new List<ChiselBrushContainerAsset>();
+        static readonly HashSet<ChiselBrushContainerAsset>  s_UsedContainers    = new HashSet<ChiselBrushContainerAsset>();
         public static void Reset()
         {
             Clear();
-            var usedContainers  = new HashSet<ChiselBrushContainerAsset>();
+            s_UsedContainers.Clear();
             var chiselNodes     = Resources.FindObjectsOfTypeAll<ChiselNode>();
             foreach (var chiselNode in chiselNodes)
             {
-                var usedAssets = chiselNode.GetUsedGeneratedBrushes();
-                if (usedAssets == null)
+                s_NodeBrushes.Clear();
+                if (!chiselNode.GetUsedGeneratedBrushes(s_NodeBrushes))
                     continue;
-                foreach(var asset in usedAssets)
-                    usedContainers.Add(asset);
+                foreach(var asset in s_NodeBrushes)
+                    s_UsedContainers.Add(asset);
             }
             var brushContainerAssets = Resources.FindObjectsOfTypeAll<ChiselBrushContainerAsset>();
             foreach (var brushContainerAsset in brushContainerAssets)
             {
-                if (!usedContainers.Contains(brushContainerAsset))
+                if (!s_UsedContainers.Contains(brushContainerAsset))
                 {
 #if UNITY_EDITOR
                     var path = UnityEditor.AssetDatabase.GetAssetPath(brushContainerAsset);
@@ -202,8 +233,9 @@ namespace Chisel.Components
         {
             if (!brushContainerAsset || !registeredLookup.Contains(brushContainerAsset))
                 return;
-            
-            updateQueue.Add(brushContainerAsset);
+
+            if (updateQueueLookup.Add(brushContainerAsset)) 
+                updateQueue.Add(brushContainerAsset);
         }
 
         static void OnChiselBrushMaterialsReset()
@@ -216,29 +248,33 @@ namespace Chisel.Components
             if (brushMaterial == null)
                 return;
 
-            HashSet<ChiselBrushContainerAsset> brushContainerAssets;
-            if (!surfaceBrushMeshes.TryGetValue(brushMaterial, out brushContainerAssets))
+            if (!surfaceBrushMeshes.TryGetValue(brushMaterial, out var brushContainerAssets))
                 return;
             
             foreach (var brushContainerAsset in brushContainerAssets)
             {
                 if (brushContainerAsset)
-                    updateQueue.Add(brushContainerAsset);
+                {
+                    if (updateQueueLookup.Add(brushContainerAsset))
+                        updateQueue.Add(brushContainerAsset);
+                }
             }
         }
 
         static void OnChiselBrushMaterialRemoved(ChiselBrushMaterial brushMaterial)
         {
-            HashSet<ChiselBrushContainerAsset> brushContainerAssets;
-            if (surfaceBrushMeshes.TryGetValue(brushMaterial, out brushContainerAssets))
+            if (surfaceBrushMeshes.TryGetValue(brushMaterial, out var brushContainerAssets))
             {
                 foreach (var brushContainerAsset in brushContainerAssets)
                 {
-                    if (brushMeshSurfaces.TryGetValue(brushContainerAsset, out HashSet<ChiselBrushMaterial> uniqueSurfaces))
+                    if (brushMeshSurfaces.TryGetValue(brushContainerAsset, out var uniqueSurfaces))
                     {
                         uniqueSurfaces.Remove(brushMaterial);
                         if (brushContainerAsset)
-                            updateQueue.Add(brushContainerAsset);
+                        {
+                            if (updateQueueLookup.Add(brushContainerAsset))
+                                updateQueue.Add(brushContainerAsset);
+                        }
                     }
                 } 
             }
@@ -265,8 +301,8 @@ namespace Chisel.Components
         {
             if (brushMesh == null)
                 return;
-            HashSet<ChiselBrushMaterial> uniqueSurfaces;
-            if (brushMeshSurfaces.TryGetValue(brushContainerAsset, out uniqueSurfaces))
+            Profiler.BeginSample("uniqueSurfaces");
+            if (brushMeshSurfaces.TryGetValue(brushContainerAsset, out var uniqueSurfaces))
             {
                 // Remove previously set surfaces for this brushMesh
                 foreach (var brushMaterial in uniqueSurfaces)
@@ -274,14 +310,18 @@ namespace Chisel.Components
                     if (Equals(null, brushMaterial))
                         continue;
 
-                    HashSet<ChiselBrushContainerAsset> surfaceGeneratedBrushes;
-                    if (surfaceBrushMeshes.TryGetValue(brushMaterial, out surfaceGeneratedBrushes))
+                    if (surfaceBrushMeshes.TryGetValue(brushMaterial, out var surfaceGeneratedBrushes))
                         surfaceGeneratedBrushes.Remove(brushContainerAsset);
                 }
                 uniqueSurfaces.Clear();
             } else
-                uniqueSurfaces = new HashSet<ChiselBrushMaterial>();
+            {
+                uniqueSurfaces = new List<ChiselBrushMaterial>();
+                brushMeshSurfaces[brushContainerAsset] = uniqueSurfaces;
+            }
+            Profiler.EndSample();
 
+            Profiler.BeginSample("polygons");
             var polygons = brushMesh.polygons;
             if (polygons != null)
             {
@@ -295,34 +335,50 @@ namespace Chisel.Components
                     if (Equals(null, brushMaterial))
                         continue;
 
+                    // We've already processed this material in this loop
+                    if (uniqueSurfaces.Contains(brushMaterial))
+                        continue;
+
                     // Add current surfaces of this brushMesh
-                    if (uniqueSurfaces.Add(brushMaterial))
+                    Profiler.BeginSample("uniqueSurfaces.Add");
+                    uniqueSurfaces.Add(brushMaterial);
+                    Profiler.EndSample();
+                    
+                    if (!surfaceBrushMeshes.TryGetValue(brushMaterial, out var brushContainerAssets))
                     {
-                        HashSet<ChiselBrushContainerAsset> brushContainerAssets;
-                        if (!surfaceBrushMeshes.TryGetValue(brushMaterial, out brushContainerAssets))
-                        {
-                            brushContainerAssets = new HashSet<ChiselBrushContainerAsset>();
-                            surfaceBrushMeshes[brushMaterial] = brushContainerAssets;
-                        }
+                        Profiler.BeginSample("brushContainerAssets");
+                        brushContainerAssets = new List<ChiselBrushContainerAsset>();
+                        Profiler.EndSample();
+                        Profiler.BeginSample("surfaceBrushMeshes.Set");
+                        surfaceBrushMeshes.Add(brushMaterial, brushContainerAssets);
+                        Profiler.EndSample();
+                        Profiler.BeginSample("brushContainerAssets.Add");
                         brushContainerAssets.Add(brushContainerAsset);
+                        Profiler.EndSample();
+                    } else
+                    {
+                        if (!brushContainerAssets.Contains(brushContainerAsset))
+                        {
+                            Profiler.BeginSample("brushContainerAssets.Add");
+                            brushContainerAssets.Add(brushContainerAsset);
+                            Profiler.EndSample();
+                        }
                     }
                 }
             }
-            brushMeshSurfaces[brushContainerAsset] = uniqueSurfaces;
+            Profiler.EndSample();
         }
 
         static void RemoveSurfaces(ChiselBrushContainerAsset brushContainerAsset)
         {
             // NOTE: brushContainerAsset is likely destroyed at this point, it can still be used as a lookup key however.
             
-            HashSet<ChiselBrushMaterial> uniqueSurfaces;
-            if (brushMeshSurfaces.TryGetValue(brushContainerAsset, out uniqueSurfaces))
+            if (brushMeshSurfaces.TryGetValue(brushContainerAsset, out var uniqueSurfaces))
             {
                 // Remove previously set surfaces for this brushMesh
                 foreach (var brushMaterial in uniqueSurfaces)
                 {
-                    HashSet<ChiselBrushContainerAsset> brushContainerAssets;
-                    if (surfaceBrushMeshes.TryGetValue(brushMaterial, out brushContainerAssets))
+                    if (surfaceBrushMeshes.TryGetValue(brushMaterial, out var brushContainerAssets))
                         brushContainerAssets.Remove(brushContainerAsset);
                 }
                 uniqueSurfaces.Clear();
@@ -330,6 +386,8 @@ namespace Chisel.Components
             brushMeshSurfaces.Remove(brushContainerAsset);
         }
 
+
+        static HashSet<int> modifiedBrushMeshes = new HashSet<int>();
         public static void Update()
         {
             if (unregisterQueue.Count == 0 &&
@@ -362,7 +420,7 @@ namespace Chisel.Components
 
             unregisterQueue.Clear();
             unregisterQueueLookup.Clear();
-            
+            modifiedBrushMeshes.Clear();
             for (int i = 0; i < updateQueue.Count; i++)
             {
                 var brushContainerAsset = updateQueue[i];
@@ -373,20 +431,33 @@ namespace Chisel.Components
                 {
                     if (!brushContainerAsset.HasInstances)
                     {
+                        Profiler.BeginSample("CreateInstances");
                         brushContainerAsset.CreateInstances();
+                        Profiler.EndSample();
                     } else
                     {
                         //UnregisterAllSurfaces(brushContainerAsset); // TODO: should we?
-                        brushContainerAsset.UpdateInstances();
+                        Profiler.BeginSample("UpdateInstances");
+                        brushContainerAsset.UpdateInstances(modifiedBrushMeshes);
+                        Profiler.EndSample();
                     }
 
+                    Profiler.BeginSample("RegisterAllSurfaces");
                     RegisterAllSurfaces(brushContainerAsset);
+                    Profiler.EndSample();
+                    Profiler.BeginSample("UpdateSurfaces");
                     UpdateSurfaces(brushContainerAsset);
+                    Profiler.EndSample();
                 }
                 catch (Exception ex)
                 {
                     Debug.LogException(ex);
                 }
+            }
+
+            if (modifiedBrushMeshes.Count > 0)
+            {
+                CSGManager.NotifyBrushMeshModified(modifiedBrushMeshes);
             }
 
             Profiler.BeginSample("OnBrushMeshInstanceChanged");

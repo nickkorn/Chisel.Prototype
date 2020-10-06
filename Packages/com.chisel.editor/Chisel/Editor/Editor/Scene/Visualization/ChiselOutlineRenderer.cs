@@ -313,10 +313,14 @@ namespace Chisel.Editors
                 
                 foreach (var outline in foundBrushOutlines)
                 {
+                    if (brushOutlines.ContainsKey(outline))
+                        continue;
+
                     if (!outline.brush.Valid ||
                         outline.brush.BrushMesh == BrushMeshInstance.InvalidInstance)
                         continue;
                     
+                    // TODO: should only re-create the wireframe when the brush has changed it's hashes
                     var wireframe = ChiselWireframe.CreateWireframe(outline.brush);
                     brushOutlines[outline] = wireframe;
                 }
@@ -434,6 +438,7 @@ namespace Chisel.Editors
         public static void DrawContinuousLines(Vector3[] points, int startIndex, int length, Color color, LineMode lineMode = LineMode.NoZTest, float thickness = 1.0f, float dashSize = 0.0f) { HandleRenderer.DrawContinuousLines(points, startIndex, length, color, lineMode, thickness, dashSize); }
         public static void DrawContinuousLines(Vector3[] points, int startIndex, int length, LineMode lineMode = LineMode.NoZTest, float thickness = 1.0f, float dashSize = 0.0f) { HandleRenderer.DrawContinuousLines(points, startIndex, length, lineMode, thickness, dashSize); }
 
+        public static void DrawLineLoop(Matrix4x4 transformation, List<Vector3> points, Color color, LineMode lineMode = LineMode.NoZTest, float thickness = 1.0f, float dashSize = 0.0f) { HandleRenderer.DrawLineLoop(transformation, points, 0, points.Count, color, lineMode, thickness, dashSize); }
         public static void DrawLineLoop(Matrix4x4 transformation, Vector3[] points, int startIndex, int length, Color color, LineMode lineMode = LineMode.NoZTest, float thickness = 1.0f, float dashSize = 0.0f) { HandleRenderer.DrawLineLoop(transformation, points, startIndex, length, color, lineMode, thickness, dashSize); }
         public static void DrawLineLoop(Matrix4x4 transformation, Vector3[] points, int startIndex, int length, LineMode lineMode = LineMode.NoZTest, float thickness = 1.0f, float dashSize = 0.0f) { HandleRenderer.DrawLineLoop(transformation, points, startIndex, length, lineMode, thickness, dashSize); }
         public static void DrawLineLoop(Vector3[] points, int startIndex, int length, Color color, LineMode lineMode = LineMode.NoZTest, float thickness = 1.0f, float dashSize = 0.0f) { HandleRenderer.DrawLineLoop(points, startIndex, length, color, lineMode, thickness, dashSize); }

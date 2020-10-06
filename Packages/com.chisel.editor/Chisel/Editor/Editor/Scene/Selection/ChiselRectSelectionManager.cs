@@ -172,7 +172,7 @@ namespace Chisel.Editors
                 var foundObjects = selectedObjects;
 
                 RemoveGeneratedMeshesFromArray(ref foundObjects);
-
+                
                 if (foundObjects.Length != selectedObjects.Length)
                     Selection.objects = foundObjects;
             }
@@ -406,13 +406,18 @@ namespace Chisel.Editors
                     Event.current.Use();
                     break;
                 }
-
                 case EventType.KeyUp:
                 {
                     if (hotControl == 0 &&
-                        Event.current.keyCode == UnityEngine.KeyCode.Escape)
+                        Event.current.keyCode == ChiselKeyboardDefaults.kCancelKey)
                     {
-                        Selection.activeTransform = null;
+                        if (GUIUtility.hotControl == 0 && // make sure we're not actively doing anything
+                            Tools.current != Tool.Custom)
+                        {
+                            // This deselects everything and disables all tool modes
+                            Selection.activeTransform = null;
+                            Event.current.Use();
+                        }
                     }
                     break;
                 }
@@ -433,6 +438,8 @@ namespace Chisel.Editors
                     for (int sceneIndex = 0; sceneIndex < SceneManager.sceneCount; sceneIndex++)
                     {
                         var scene = SceneManager.GetSceneAt(sceneIndex);
+                        if (!scene.isLoaded)
+                            continue;
                         foreach (var gameObject in scene.GetRootGameObjects())
                         {
                             foreach (var transform in gameObject.GetComponentsInChildren<Transform>())
@@ -447,7 +454,7 @@ namespace Chisel.Editors
                     var foundObjects = transforms.ToArray();
                         
                     RemoveGeneratedMeshesFromArray(ref foundObjects);
-                        
+
                     Selection.objects = foundObjects;
 
                     Event.current.Use();
@@ -532,7 +539,7 @@ namespace Chisel.Editors
             ChiselIntersection intersection;
             var gameobject = ChiselClickSelectionManager.PickClosestGameObject(mousePosition, out intersection);
 
-            // If we're a child of an operation that has a "handle as one" flag set, return that instead
+            // If we're a child of an composite that has a "handle as one" flag set, return that instead
             gameobject = ChiselSceneQuery.FindSelectionBase(gameobject); 
             
             var selectionType = GetCurrentSelectionType();

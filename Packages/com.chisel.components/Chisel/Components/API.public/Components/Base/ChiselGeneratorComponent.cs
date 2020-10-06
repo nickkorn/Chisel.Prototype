@@ -4,6 +4,7 @@ using Chisel.Core;
 using System.Collections.Generic;
 using System;
 using System.Linq;
+using UnityEngine.Profiling;
 
 namespace Chisel.Components
 {
@@ -12,40 +13,42 @@ namespace Chisel.Components
     {
         public const string kDefinitionName = nameof(definition);
 
-        [SerializeField] public DefinitionType definition = new DefinitionType();
+        public DefinitionType definition = new DefinitionType();
 
         protected override void OnResetInternal()           { definition.Reset(); base.OnResetInternal(); }
         protected override void OnValidateInternal()        { definition.Validate(); base.OnValidateInternal(); }
-        protected override void UpdateGeneratorInternal()   { brushContainerAsset.Generate(definition); }
+        protected override bool UpdateGeneratorInternal()   { return brushContainerAsset.Generate(definition); }
     }
 
     public abstract class ChiselGeneratorComponent : ChiselNode
     {
         // This ensures names remain identical, or a compile error occurs.
-        public const string kOperationFieldName         = nameof(operation);
+        public const string kOperationFieldName = nameof(operation);
 
         // This ensures names remain identical, or a compile error occurs.
-        public const string kBrushContainerAssetName    = nameof(brushContainerAsset);
+        public const string kBrushContainerAssetName = nameof(brushContainerAsset);
 
 
         [HideInInspector] CSGTreeNode[] Nodes = new CSGTreeNode[] { new CSGTreeBrush() };
 
-        [SerializeField,HideInInspector] protected CSGOperationType		operation;		    // NOTE: do not rename, name is directly used in editors
-        [SerializeField,HideInInspector] protected ChiselBrushContainerAsset brushContainerAsset;	// NOTE: do not rename, name is directly used in editors
-        [SerializeField,HideInInspector] protected Matrix4x4			localTransformation = Matrix4x4.identity;
-        [SerializeField,HideInInspector] protected Vector3				pivotOffset			= Vector3.zero;
+        [SerializeField, HideInInspector] protected CSGOperationType operation;		    // NOTE: do not rename, name is directly used in editors
+        [SerializeField, HideInInspector] protected ChiselBrushContainerAsset brushContainerAsset;	// NOTE: do not rename, name is directly used in editors
+        [SerializeField, HideInInspector] protected Matrix4x4 localTransformation = Matrix4x4.identity;
+        [SerializeField, HideInInspector] protected Vector3 pivotOffset = Vector3.zero;
 
-        public CSGTreeNode	TopNode     { get { if (!ValidNodes) return CSGTreeNode.InvalidNode; return Nodes[0]; } }
-        bool                ValidNodes  { get { return (Nodes != null && Nodes.Length > 0) && Nodes[0].Valid; } }
+        public CSGTreeNode TopNode { get { if (!ValidNodes) return CSGTreeNode.InvalidNode; return Nodes[0]; } }
+        bool ValidNodes { get { return (Nodes != null && Nodes.Length > 0) && Nodes[0].Valid; } }
 
 #if UNITY_EDITOR
         public VisibilityState UpdateVisibility(UnityEditor.SceneVisibilityManager instance)
         {
-            var resultState     = VisibilityState.Unknown;
-            var visible         = !instance.IsHidden(gameObject);
-            var pickingEnabled  = !instance.IsPickingDisabled(gameObject);
+            var resultState = VisibilityState.Unknown;
+            var visible = !instance.IsHidden(gameObject);
+            var pickingEnabled = !instance.IsPickingDisabled(gameObject);
             foreach (var node in Nodes)
             {
+                if (!node.Valid)
+                    continue;
                 var nodeState = CSGManager.SetBrushState(node.NodeID, visible, pickingEnabled);
                 resultState |= nodeState;
             }
@@ -53,13 +56,13 @@ namespace Chisel.Components
         }
 #endif
 
-        public override CSGTreeNode	GetTreeNodeByIndex(int index)
+        public override CSGTreeNode GetTreeNodeByIndex(int index)
         {
             if (index < 0 || index > Nodes.Length)
                 return CSGTreeNode.InvalidNode;
             return Nodes[index];
         }
-        
+
         protected override void OnResetInternal()
         {
             UpdateGenerator();
@@ -81,28 +84,20 @@ namespace Chisel.Components
 
         //**Temporary hack to ensure that a BrushContainerAsset remains unique when duplicated so that we can control when we share a BrushContainerAsset**//
         #region HandleDuplication
-#if UNITY_EDITOR
-        [SerializeField, HideInInspector] protected int instanceID = 0;
-        [SerializeField, HideInInspector] protected int genGuidHashCode = 0;
-#endif
         void HandleDuplication()
         {
 #if UNITY_EDITOR
             {
-                var currentInstanceID = this.GetInstanceID();
-                if (instanceID == 0) { instanceID = currentInstanceID; genGuidHashCode = Guid.NewGuid().GetHashCode(); }
-                else if (instanceID != currentInstanceID)
+                if (brushContainerAsset == null)
+                    return;
+                if (brushContainerAsset.owner == null)
                 {
-                    var prevObject = UnityEditor.EditorUtility.InstanceIDToObject(instanceID) as ChiselGeneratorComponent;
-                    // if our stored instanceID is the same as an existing generator and has the same guid, 
-                    // we can assume we've been duplicated
-                    if (prevObject && prevObject.genGuidHashCode == genGuidHashCode)
-                    {
-                        if (prevObject.brushContainerAsset == brushContainerAsset)
-                            brushContainerAsset = Instantiate(brushContainerAsset);
-                        genGuidHashCode = Guid.NewGuid().GetHashCode();
-                    }
-                    instanceID = currentInstanceID;
+                    brushContainerAsset.owner = this;
+                } else
+                if (brushContainerAsset.owner != this)
+                {
+                    brushContainerAsset = Instantiate(brushContainerAsset);
+                    brushContainerAsset.owner = this;
                 }
             }
 #endif
@@ -115,7 +110,10 @@ namespace Chisel.Components
             HandleDuplication();
 
             if (!ValidNodes)
+            {
+                ChiselNodeHierarchyManager.RebuildTreeNodes(this);
                 return;
+            }
 
             UpdateGenerator();
             UpdateBrushMeshInstances();
@@ -124,7 +122,7 @@ namespace Chisel.Components
             base.OnValidateInternal();
         }
 
-        public CSGOperationType     Operation
+        public CSGOperationType Operation
         {
             get
             {
@@ -144,8 +142,8 @@ namespace Chisel.Components
                 ChiselNodeHierarchyManager.NotifyContentsModified(this);
             }
         }
-        
-        public override Vector3 PivotOffset
+
+        public Vector3 PivotOffset
         {
             get
             {
@@ -156,11 +154,11 @@ namespace Chisel.Components
                 if (value == pivotOffset)
                     return;
                 pivotOffset = value;
-                
+
                 UpdateInternalTransformation();
 
                 // Let the hierarchy manager know that this node has moved, so we can regenerate meshes
-                ChiselNodeHierarchyManager.UpdateTreeNodeTranformation(this);
+                ChiselNodeHierarchyManager.UpdateTreeNodeTransformation(this);
             }
         }
 
@@ -180,11 +178,11 @@ namespace Chisel.Components
                 UpdateInternalTransformation();
 
                 // Let the hierarchy manager know that this node has moved, so we can regenerate meshes
-                ChiselNodeHierarchyManager.UpdateTreeNodeTranformation(this);
+                ChiselNodeHierarchyManager.UpdateTreeNodeTransformation(this);
             }
         }
 
-        internal override void UpdateTransformation()
+        public override void UpdateTransformation()
         {
             // TODO: recalculate transformation based on hierarchy up to (but not including) model
             var transform = hierarchyItem.Transform;
@@ -203,6 +201,30 @@ namespace Chisel.Components
                 return;
 
             UpdateInternalTransformation();
+        }
+
+        public Matrix4x4 PivotTransformation
+        {
+            get
+            {
+                // TODO: fix this mess
+
+                if (pivotOffset.x != 0 || pivotOffset.y != 0 || pivotOffset.z != 0)
+                    return Matrix4x4.TRS(pivotOffset, Quaternion.identity, Vector3.one);
+                return Matrix4x4.identity;
+            }
+        }
+
+        public Matrix4x4 InversePivotTransformation
+        {
+            get
+            {
+                // TODO: fix this mess
+
+                if (pivotOffset.x != 0 || pivotOffset.y != 0 || pivotOffset.z != 0)
+                    return Matrix4x4.TRS(-pivotOffset, Quaternion.identity, Vector3.one);
+                return Matrix4x4.identity;
+            }
         }
 
         public Matrix4x4 LocalTransformationWithPivot
@@ -261,6 +283,8 @@ namespace Chisel.Components
 
         int RequiredNodeLength(BrushMeshInstance[] instances)
         {
+            if (!brushContainerAsset || brushContainerAsset.SubMeshCount == 0)
+                return 0;
             return (instances == null || instances.Length == 0) ? 0 : ((instances.Length == 1) ? 1 : instances.Length + 1);
         }
 
@@ -278,16 +302,23 @@ namespace Chisel.Components
                 instances = brushContainerAsset ? brushContainerAsset.Instances : null;
             }
 
+            if (instances == null)
+            {
+                if (Nodes != null && Nodes.Length > 0)
+                    ChiselNodeHierarchyManager.RebuildTreeNodes(this);
+                return false;
+            }
+
             var requiredNodeLength	= RequiredNodeLength(instances);
+            if (requiredNodeLength == 0 &&
+                Nodes != null && Nodes.Length > 0)
+            {
+                ChiselNodeHierarchyManager.RebuildTreeNodes(this);
+                return false;
+            }
             
             if (Nodes != null && Nodes.Length == requiredNodeLength)
             {
-                if (Nodes.Length == 0)
-                {
-                    var brush = (CSGTreeBrush)Nodes[0];
-                    brush.BrushMesh = BrushMeshInstance.InvalidInstance;
-                    brush.Operation = CSGOperationType.Additive;
-                } else
                 if (Nodes.Length == 1)
                 {
                     var brush = (CSGTreeBrush)TopNode;
@@ -306,7 +337,7 @@ namespace Chisel.Components
             } else
             {
                 bool needRebuild = (Nodes != null && instances != null && instances.Length > 0) && Nodes.Length != requiredNodeLength;
-                if (Nodes.Length <= 1)
+                if (Nodes.Length == 1)
                 {
                     var brush = (CSGTreeBrush)TopNode;
                     if (brush.BrushMesh != BrushMeshInstance.InvalidInstance)
@@ -340,13 +371,14 @@ namespace Chisel.Components
 
             if (requiredNodeLength == 0)
             {
-                Nodes = new CSGTreeNode[1];
-                Nodes[0] = CSGTreeBrush.Create(userID: instanceID, operation: operation);
+                Nodes = new CSGTreeNode[0];
+                //Nodes[0] = CSGTreeBrush.Create(userID: instanceID, operation: operation);
             } else
             if (requiredNodeLength == 1)
             {
                 Nodes = new CSGTreeNode[1];
                 Nodes[0] = CSGTreeBrush.Create(userID: instanceID, operation: operation);
+                Nodes[0].Operation = operation;
             } else
             {
                 Nodes = new CSGTreeNode[requiredNodeLength];
@@ -357,8 +389,8 @@ namespace Chisel.Components
                 Nodes[0] = CSGTreeBranch.Create(instanceID, operation: operation, children: children);
                 for (int i = 1; i < Nodes.Length; i++)
                     Nodes[i] = children[i - 1];
+                Nodes[0].Operation = operation;
             }
-            Nodes[0].Operation = operation;
             UpdateInternalTransformation();
         }
 
@@ -387,14 +419,20 @@ namespace Chisel.Components
                 Debug.LogWarning(this.GetType().Name + " already has a treeNode, but trying to create a new one?", this);
             
             
+            Profiler.BeginSample("UpdateGenerator");
             UpdateGenerator();
-            UpdateBrushMeshInstances();
+            Profiler.EndSample();
 
+            Profiler.BeginSample("GenerateAllTreeNodes");
             GenerateAllTreeNodes();
+            Profiler.EndSample();
 
-            InitializeBrushMeshInstances();
+            if (Nodes.Length ==  0)
+                return Nodes;
             
+            Profiler.BeginSample("UpdateInternalTransformation");
             UpdateInternalTransformation();
+            Profiler.EndSample();
 
 
             if (Nodes[0].Operation != operation)
@@ -419,14 +457,20 @@ namespace Chisel.Components
             }
         }
 
-        internal override void CollectChildNodesForParent(List<CSGTreeNode> childNodes)
+        public override void CollectCSGTreeNodes(List<CSGTreeNode> childNodes)
         {
-            childNodes.Add(TopNode);
+            if (Nodes.Length > 0)
+                childNodes.Add(TopNode);
         }
 
-        public override ChiselBrushContainerAsset[] GetUsedGeneratedBrushes()
+        public override bool GetUsedGeneratedBrushes(List<ChiselBrushContainerAsset> usedBrushes)
         {
-            return new ChiselBrushContainerAsset[] { brushContainerAsset };
+            if (brushContainerAsset == null ||
+                brushContainerAsset.BrushMeshes == null ||
+                brushContainerAsset.BrushMeshes.Length == 0)
+                return false;
+            usedBrushes.Add(brushContainerAsset);
+            return true;
         }
 
         // TODO: clean this up
@@ -441,25 +485,62 @@ namespace Chisel.Components
             var modelMatrix		= ChiselNodeHierarchyManager.FindModelTransformMatrixOfTransform(hierarchyItem.Transform);
             var bounds			= ChiselHierarchyItem.EmptyBounds;
 
-            var foundBrushes = new HashSet<CSGTreeBrush>();
+            var foundBrushes    = new HashSet<CSGTreeBrush>();
             GetAllTreeBrushes(foundBrushes, false);
             foreach (var brush in foundBrushes)
             {
-                var transformation = modelMatrix * brush.NodeToTreeSpaceMatrix;
-                var assetBounds = brushContainerAsset.CalculateBounds(transformation);
-                var magnitude = assetBounds.size.sqrMagnitude;
+                if (!brush.Valid)
+                    continue;
+                var transformation  = modelMatrix * brush.NodeToTreeSpaceMatrix;
+                var childBounds     = brushContainerAsset.CalculateBounds(transformation);
+                var magnitude       = childBounds.size.sqrMagnitude;
                 if (float.IsInfinity(magnitude) ||
                     float.IsNaN(magnitude))
                 {
                     var center = transformation.GetColumn(3);
-                    assetBounds = new Bounds(center, Vector3.zero);
+                    childBounds = new Bounds(center, Vector3.zero);
                 }
-                if (assetBounds.size.sqrMagnitude != 0)
+                if (childBounds.size.sqrMagnitude != 0)
                 {
                     if (bounds.size.sqrMagnitude == 0)
-                        bounds = assetBounds;
+                        bounds = childBounds;
                     else
-                        bounds.Encapsulate(assetBounds);
+                        bounds.Encapsulate(childBounds);
+                }
+            }
+
+            return bounds;
+        }
+        
+        public override Bounds CalculateBounds(Matrix4x4 boundsTransformation)
+        {
+            if (!brushContainerAsset)
+                return ChiselHierarchyItem.EmptyBounds;
+
+            var modelMatrix		= ChiselNodeHierarchyManager.FindModelTransformMatrixOfTransform(hierarchyItem.Transform);
+            var bounds			= ChiselHierarchyItem.EmptyBounds;
+
+            var foundBrushes    = new HashSet<CSGTreeBrush>();
+            GetAllTreeBrushes(foundBrushes, false);
+            foreach (var brush in foundBrushes)
+            {
+                if (!brush.Valid)
+                    continue;
+                var transformation  = modelMatrix * brush.NodeToTreeSpaceMatrix * boundsTransformation;
+                var childBounds     = brushContainerAsset.CalculateBounds(transformation);
+                var magnitude       = childBounds.size.sqrMagnitude;
+                if (float.IsInfinity(magnitude) ||
+                    float.IsNaN(magnitude))
+                {
+                    var center = transformation.GetColumn(3);
+                    childBounds = new Bounds(center, Vector3.zero);
+                }
+                if (childBounds.size.sqrMagnitude != 0)
+                {
+                    if (bounds.size.sqrMagnitude == 0)
+                        bounds = childBounds;
+                    else
+                        bounds.Encapsulate(childBounds);
                 }
             }
 
@@ -468,6 +549,9 @@ namespace Chisel.Components
         
         public override int GetAllTreeBrushCount()
         {
+            if (brushContainerAsset == null ||
+                brushContainerAsset.SubMeshCount == 0)
+                return 0;
             if (Nodes.Length > 1)
                 return Nodes.Length - 1;
             return Nodes.Length;
@@ -476,6 +560,8 @@ namespace Chisel.Components
         // Get all brushes directly contained by this CSGNode (not its children)
         public override void GetAllTreeBrushes(HashSet<CSGTreeBrush> foundBrushes, bool ignoreSynchronizedBrushes)
         {
+            if (brushContainerAsset.SubMeshCount == 0)
+                return;
             if (Nodes.Length > 1)
             {
 #if UNITY_EDITOR
@@ -770,16 +856,27 @@ namespace Chisel.Components
         public virtual void UpdateGenerator()
         {
             // BrushMeshes of generators must always be unique
-            if (!brushContainerAsset ||
-                !ChiselBrushContainerAssetManager.IsBrushMeshUnique(brushContainerAsset))
-                brushContainerAsset = ChiselBrushContainerAsset.Create("Generated " + NodeTypeName);
+            Profiler.BeginSample("ChiselBrushContainerAsset.Create");
+            try
+            {
+                if (!brushContainerAsset ||
+                    !ChiselBrushContainerAssetManager.IsBrushMeshUnique(brushContainerAsset))
+                    brushContainerAsset = ChiselBrushContainerAsset.Create("Generated " + NodeTypeName);
+            }
+            finally { Profiler.EndSample(); }
 
-            UpdateGeneratorInternal();
+            Profiler.BeginSample("UpdateGeneratorInternal");
+            try { UpdateGeneratorInternal(); }
+            finally { Profiler.EndSample(); }
 
-            UpdateBrushMeshInstances();
+            brushContainerAsset.SetDirty();
+
+            Profiler.BeginSample("UpdateBrushMeshInstances");
+            try { UpdateBrushMeshInstances(); }
+            finally { Profiler.EndSample(); }
         }
 
-        protected abstract void UpdateGeneratorInternal();
+        protected abstract bool UpdateGeneratorInternal();
 
 #if UNITY_EDITOR
         public override bool ConvertToBrushes()
@@ -814,9 +911,9 @@ namespace Chisel.Components
                     // TODO: create surfacedefinition
                 } else
                 {
-                    groupName = "Converted " + NodeTypeName + " to Multiple Brushes";
-                    var operationComponent = ChiselComponentFactory.AddComponent<ChiselOperation>(topGameObject);
-                    operationComponent.Operation = topOperation;
+                    groupName = $"Converted {NodeTypeName} to Multiple Brushes";
+                    var compositeComponent = ChiselComponentFactory.AddComponent<ChiselComposite>(topGameObject);
+                    compositeComponent.Operation = topOperation;
                     var parentTransform = topGameObject.transform;
                     for (int i = 0; i < sourceBrushMeshes.Length; i++)
                     {

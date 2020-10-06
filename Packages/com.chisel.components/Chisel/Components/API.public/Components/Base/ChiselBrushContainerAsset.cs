@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using Chisel.Core;
+using UnityEngine.Profiling;
 
 namespace Chisel.Components
 {
@@ -22,20 +23,36 @@ namespace Chisel.Components
 
         [SerializeField] private ChiselBrushContainer brushContainer;
         [NonSerialized] private BrushMeshInstance[] instances;
-        
+        [SerializeField] internal ChiselNode owner;
+
         public bool					Empty			{ get { return brushContainer.Empty; } }
         public int					SubMeshCount	{ get { return brushContainer.Count; } }
         public BrushMesh[]	        BrushMeshes		{ get { return brushContainer.brushMeshes; } }
         public CSGOperationType[]	Operations		{ get { return brushContainer.operations; } }
         public BrushMeshInstance[]	Instances		{ get { if (HasInstances) return instances; return null; } }
         
-        public void Generate(IChiselGenerator generator)
+        public bool Generate(IChiselGenerator generator)
         {
-            if (!generator.Generate(ref brushContainer))
-                brushContainer.Reset();
+            Profiler.BeginSample("Generate");
+            try
+            {
+                if (!generator.Generate(ref brushContainer))
+                {
+                    Profiler.BeginSample("Reset");
+                    brushContainer.Reset();
+                    Profiler.EndSample();
+                    return false;
+                }
+            }
+            finally { Profiler.EndSample(); }
+            Profiler.BeginSample("CalculatePlanes");
             CalculatePlanes();
+            Profiler.EndSample();
             SetDirty();
+            Profiler.BeginSample("NotifyContentsModified");
             ChiselBrushContainerAssetManager.NotifyContentsModified(this);
+            Profiler.EndSample();
+            return true;
         }
 
         public bool SetSubMeshes(BrushMesh[] brushMeshes)
@@ -58,12 +75,20 @@ namespace Chisel.Components
 
         internal void CreateInstances()
         {
-            DestroyInstances();
-            if (Empty) return;
+            if (Empty)
+            {
+                DestroyInstances();
+                return;
+            }
 
             if (instances == null ||
                 instances.Length != brushContainer.brushMeshes.Length)
+            {
+                DestroyInstances();
                 instances = new BrushMeshInstance[brushContainer.brushMeshes.Length];
+                for (int i = 0; i < brushContainer.brushMeshes.Length; i++)
+                    instances[i] = BrushMeshInstance.InvalidInstance;
+            }
 
             var userID = GetInstanceID();
             for (int i = 0; i < instances.Length; i++)
@@ -73,10 +98,15 @@ namespace Chisel.Components
                     !brushMesh.Validate(logErrors: true))
                 {
                     brushMesh.Clear();
-                    instances[i] = BrushMeshInstance.InvalidInstance;
                 } else
-                { 
-                    instances[i] = BrushMeshInstance.Create(brushMesh, userID: userID);
+                {
+                    if (instances[i] == BrushMeshInstance.InvalidInstance)
+                    {
+                        instances[i] = BrushMeshInstance.Create(brushMesh, userID: userID);
+                    } else
+                    {
+                        instances[i].Set(brushMesh, false);
+                    }
                 }
             }
         }
@@ -92,7 +122,32 @@ namespace Chisel.Components
                 ref var brushMesh = ref brushContainer.brushMeshes[i];
                 if (!brushMesh.Validate(logErrors: true))
                     brushMesh.Clear();
-                instances[i].Set(brushMesh);
+                Profiler.BeginSample("instance.Set");
+                instances[i].Set(brushMesh, notifyBrushMeshNotified: false);
+                Profiler.EndSample();
+                Profiler.BeginSample("CSGManager.NotifyBrushMeshModified");
+                CSGManager.NotifyBrushMeshModified(instances[i].BrushMeshID);
+                Profiler.EndSample();
+            }
+        }
+
+        internal void UpdateInstances(HashSet<int> modifiedBrushMeshes)
+        {
+            if (instances == null) return;
+            if (Empty) { DestroyInstances(); return; }
+            if (instances.Length != brushContainer.brushMeshes.Length) { CreateInstances(); return; }
+
+            for (int i = 0; i < instances.Length; i++)
+            {
+                ref var brushMesh = ref brushContainer.brushMeshes[i];
+                if (modifiedBrushMeshes.Add(instances[i].BrushMeshID))
+                {
+                    if (!brushMesh.Validate(logErrors: true))
+                        brushMesh.Clear();
+                    Profiler.BeginSample("instance.Set");
+                    instances[i].Set(brushMesh, notifyBrushMeshNotified: false);
+                    Profiler.EndSample();
+                }
             }
         }
 
@@ -195,7 +250,7 @@ namespace Chisel.Components
 
         public static ChiselBrushContainerAsset Create(string name)
         {
-            var brushContainerAsset = UnityEngine.ScriptableObject.CreateInstance<ChiselBrushContainerAsset>();
+            var brushContainerAsset = UnityEngine.ScriptableObject.CreateInstance(typeof(ChiselBrushContainerAsset)) as ChiselBrushContainerAsset;
             brushContainerAsset.name = name;
             return brushContainerAsset;
         }

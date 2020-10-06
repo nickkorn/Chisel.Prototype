@@ -1,4 +1,4 @@
-﻿using Chisel.Core;
+using Chisel.Core;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -7,8 +7,12 @@ using UnityEditor;
 using UnityEditor.EditorTools;
 using UnityEditor.ShortcutManagement;
 using UnityEngine;
+using UnitySceneExtensions;
 using UnityObject = UnityEngine.Object;
- 
+#if !UNITY_2020_2_OR_NEWER
+using ToolManager = UnityEditor.EditorTools;
+#endif
+
 namespace Chisel.Editors
 {
     [EditorTool("Chisel " + kToolName + " Tool")]
@@ -17,20 +21,16 @@ namespace Chisel.Editors
         public const string kToolName = "Create";
         public override string ToolName => kToolName;
 
-        public override GUIContent Content
-        {
-            get 
-            {
-                return ChiselGeneratorManager.GeneratorMode.Content;
-            } 
-        }
+        public override SnapSettings ToolUsedSnappingModes { get { return UnitySceneExtensions.SnapSettings.AllGeometry; } }
 
-        public static bool IsActive() { return EditorTools.activeToolType == typeof(ChiselCreateTool); }
+        public override GUIContent Content { get { return ChiselGeneratorManager.GeneratorMode.Content; } }
+
+        public static bool IsActive() { return ToolManager.activeToolType == typeof(ChiselCreateTool); }
         
         #region Keyboard Shortcut
         const string kEditModeShotcutName = kToolName + " Mode";
         [Shortcut(ChiselKeyboardDefaults.ShortCutEditModeBase + kEditModeShotcutName, ChiselKeyboardDefaults.SwitchToCreateEditMode, displayName = kEditModeShotcutName)]
-        public static void ActivateTool() { EditorTools.SetActiveTool<ChiselCreateTool>(); }
+        public static void ActivateTool() { ToolManager.SetActiveTool<ChiselCreateTool>(); }
 
         public static void DeactivateTool(bool selectNode = false)
         {
@@ -38,18 +38,18 @@ namespace Chisel.Editors
                 return;
             // Unity has unreliable events
             ChiselGeneratorManager.GeneratorMode.OnDeactivate();
-            EditorTools.RestorePreviousPersistentTool();
+            ToolManager.RestorePreviousPersistentTool();
             if (!IsActive())
                 return;
 
-            if (selectNode && ChiselOptionsOverlay.HaveNodesInSelection())
+            if (selectNode && ChiselToolsOverlay.HaveNodesInSelection())
             {
                 ChiselEditGeneratorTool.ActivateTool();
                 if (!IsActive())
                     return;
             }
 
-            EditorTools.RestorePreviousTool();
+            ToolManager.RestorePreviousTool();
             if (!IsActive())
                 return;
 
@@ -78,15 +78,31 @@ namespace Chisel.Editors
             DeactivateTool(selectNode: true);
         }
 
-        public override void OnSceneSettingsGUI(SceneView sceneView)
+        #region In-scene Options GUI
+        public override string OptionsTitle => $"{ChiselGeneratorManager.GeneratorMode.ToolName} Options";
+        public override void OnInSceneOptionsGUI(SceneView sceneView)
         {
             ChiselGeneratorManager.GeneratorMode.OnSceneSettingsGUI(sceneView);
         }
+        #endregion
 
         public virtual void Cancel()
         {
-            DeactivateTool();
-            GUIUtility.ExitGUI();
+            var generatorMode = ChiselGeneratorManager.GeneratorMode;
+            if (generatorMode == null)
+                return;
+            
+            if (!generatorMode.IsGenerating)
+            {
+                DeactivateTool();
+                GUIUtility.ExitGUI();
+            } else
+            {
+                if (generatorMode != null)
+                    generatorMode.Reset();
+                Undo.RevertAllInCurrentGroup();
+                GUIUtility.ExitGUI();
+            }
         }
 
         public override void OnSceneGUI(SceneView sceneView, Rect dragArea)
@@ -99,13 +115,15 @@ namespace Chisel.Editors
             {
                 case EventType.KeyDown:
                 {
-                    if (Event.current.keyCode == KeyCode.Escape)
+                    if (Event.current.keyCode == ChiselKeyboardDefaults.kCancelKey)
+                    {
                         Event.current.Use();
+                    }
                     break;
                 }
                 case EventType.KeyUp:
                 {
-                    if (Event.current.keyCode == KeyCode.Escape)
+                    if (Event.current.keyCode == ChiselKeyboardDefaults.kCancelKey)
                     {
                         Cancel();
                         Event.current.Use();
@@ -114,11 +132,10 @@ namespace Chisel.Editors
                 }
             }
 
-            ChiselOptionsOverlay.AdditionalSettings = OnSceneSettingsGUI;
-            ChiselOptionsOverlay.SetTitle($"Create {generatorMode.ToolName}");
-            generatorMode.ShowSceneGUI(sceneView, dragArea);
 
-            /// TODO: pressing escape when not in the middle of creation something, should cancel this edit mode instead
+
+            ChiselOptionsOverlay.AdditionalSettings = OnInSceneOptionsGUI;
+            generatorMode.ShowSceneGUI(sceneView, dragArea);
         }
     }
 }

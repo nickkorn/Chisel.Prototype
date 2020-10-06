@@ -7,6 +7,7 @@ using Chisel.Core;
 using Chisel.Components;
 using UnityEngine.Rendering;
 using System.Collections.Generic;
+using UnityEngine.Profiling;
 
 namespace Chisel.Editors
 {
@@ -87,14 +88,14 @@ namespace Chisel.Editors
         static readonly GUIContent RenderingLayerMaskStyle                = new GUIContent("Rendering Layer Mask", "Mask that can be used with SRP DrawRenderers command to filter renderers outside of the normal layering system.");
         static readonly GUIContent StaticBatchingWarningContents          = new GUIContent("This model is statically batched and uses an instanced shader at the same time. Instancing will be disabled in such a case. Consider disabling static batching if you want it to be instanced.");
         static readonly GUIContent NoNormalsNoLightmappingContents        = new GUIContent("VertexChannels is set to not have any normals. Normals are needed for lightmapping.");
-        static readonly GUIContent LightmapInfoBoxContents                = new GUIContent("To enable generation of lightmaps for this Model, please enable the 'Lightmap Static' property.");
+        //static readonly GUIContent LightmapInfoBoxContents                = new GUIContent("To enable generation of lightmaps for this Model, please enable the 'Lightmap Static' property.");
         static readonly GUIContent ClampedPackingResolutionContents       = new GUIContent("Object's size in the realtime lightmap has reached the maximum size. Try dividing large brushes into smaller pieces.");
         static readonly GUIContent UVOverlapContents                      = new GUIContent("This model has overlapping UVs. This is caused by Unity's own code.");
         static readonly GUIContent ClampedSizeContents                    = new GUIContent("Object's size in lightmap has reached the max atlas size.", "If you need higher resolution for this object, try dividing large brushes into smaller pieces or set higher max atlas size via the LightmapEditorSettings class.");
         static readonly GUIContent IsTriggerContents                      = new GUIContent("Is Trigger", "Is this model a trigger? Triggers are only supported on convex models.");
         static readonly GUIContent ConvextContents                        = new GUIContent("Convex", "Create a convex collider for this model?");
         static readonly GUIContent VertexChannelMaskContents              = new GUIContent("Vertex Channel Mask", "Select which vertex channels will be used in the generated meshes");
-        static readonly GUIContent SkinWidthContents                      = new GUIContent("Skin Width", "How far out to inflate the mesh when building collision mesh.");
+        //static readonly GUIContent SkinWidthContents                      = new GUIContent("Skin Width", "How far out to inflate the mesh when building collision mesh.");
         static readonly GUIContent CookingOptionsContents                 = new GUIContent("Cooking Options", "Options affecting the result of the mesh processing by the physics engine.");
         static readonly GUIContent DefaultModelContents                   = new GUIContent("This model is the default model, all nodes that are not part of a model are automatically added to this model.");
         static readonly GUIContent StitchLightmapSeamsContents            = new GUIContent("Stitch Seams", "When enabled, seams in baked lightmaps will get smoothed.");
@@ -164,7 +165,7 @@ namespace Chisel.Editors
         SerializedProperty convexProp;
         SerializedProperty isTriggerProp;
         SerializedProperty cookingOptionsProp;
-        SerializedProperty skinWidthProp;
+        //SerializedProperty skinWidthProp;
 
         bool showLighting;
         bool showProbes;
@@ -176,17 +177,23 @@ namespace Chisel.Editors
         bool showUnwrapParams;
 
 
-        delegate bool LightmapParametersGUIDelegate(SerializedProperty prop, GUIContent content);
         delegate float GetCachedMeshSurfaceAreaDelegate(MeshRenderer meshRenderer);
         delegate bool HasClampedResolutionDelegate(Renderer renderer);
         delegate bool HasUVOverlapsDelegate(Renderer renderer);
         delegate bool HasInstancingDelegate(Shader s);
 
-#if UNITY_2020_1_OR_NEWER
+#if UNITY_2020_2_OR_NEWER
+        delegate void LightmapParametersGUIDelegate(SerializedProperty prop, GUIContent content);
+        static LightmapParametersGUIDelegate	LightmapParametersGUI   = ReflectionExtensions.CreateDelegate<LightmapParametersGUIDelegate>("UnityEditor.SharedLightingSettingsEditor", "LightmapParametersGUI");
+        static HasClampedResolutionDelegate     HasClampedResolution    = typeof(Lightmapping).CreateDelegate<HasClampedResolutionDelegate>("HasClampedResolution");
+        static HasUVOverlapsDelegate            HasUVOverlaps           = typeof(Lightmapping).CreateDelegate<HasUVOverlapsDelegate>("HasUVOverlaps");
+#elif UNITY_2020_1_OR_NEWER
+        delegate bool LightmapParametersGUIDelegate(SerializedProperty prop, GUIContent content);
         static LightmapParametersGUIDelegate	LightmapParametersGUI   = ReflectionExtensions.CreateDelegate<LightmapParametersGUIDelegate>("UnityEditor.SharedLightingSettingsEditor", "LightmapParametersGUI");
         static HasClampedResolutionDelegate     HasClampedResolution    = typeof(Lightmapping).CreateDelegate<HasClampedResolutionDelegate>("HasClampedResolution");
         static HasUVOverlapsDelegate            HasUVOverlaps           = typeof(Lightmapping).CreateDelegate<HasUVOverlapsDelegate>("HasUVOverlaps");
 #else
+        delegate bool LightmapParametersGUIDelegate(SerializedProperty prop, GUIContent content);
         static LightmapParametersGUIDelegate    LightmapParametersGUI   = ReflectionExtensions.CreateDelegate<LightmapParametersGUIDelegate>("UnityEditor.LightingSettingsInspector", "LightmapParametersGUI");
         static HasClampedResolutionDelegate     HasClampedResolution    = typeof(LightmapEditorSettings).CreateDelegate<HasClampedResolutionDelegate>("HasClampedResolution");
         static HasUVOverlapsDelegate            HasUVOverlaps           = typeof(LightmapEditorSettings).CreateDelegate<HasUVOverlapsDelegate>("HasUVOverlaps");
@@ -242,7 +249,7 @@ namespace Chisel.Editors
             convexProp          = serializedObject.FindProperty($"{ChiselModel.kColliderSettingsName}.{ChiselGeneratedColliderSettings.kConvexName}");
             isTriggerProp       = serializedObject.FindProperty($"{ChiselModel.kColliderSettingsName}.{ChiselGeneratedColliderSettings.kIsTriggerName}");
             cookingOptionsProp  = serializedObject.FindProperty($"{ChiselModel.kColliderSettingsName}.{ChiselGeneratedColliderSettings.kCookingOptionsName}");
-            skinWidthProp       = serializedObject.FindProperty($"{ChiselModel.kColliderSettingsName}.{ChiselGeneratedColliderSettings.kSkinWidthName}");
+            //skinWidthProp     = serializedObject.FindProperty($"{ChiselModel.kColliderSettingsName}.{ChiselGeneratedColliderSettings.kSkinWidthName}");
 
             gameObjectsSerializedObject = new SerializedObject(serializedObject.targetObjects.Select(t => ((Component)t).gameObject).ToArray());
             staticEditorFlagsProp = gameObjectsSerializedObject.FindProperty("m_StaticEditorFlags");
@@ -258,7 +265,7 @@ namespace Chisel.Editors
                     modelTarget.OnInitialize();
             }
 
-            ChiselEditGeneratorTool.OnEditSettingsGUI = OnEditSettingsGUI;
+            ChiselEditGeneratorTool.OnEditSettingsGUI = null;// OnEditSettingsGUI;
             ChiselEditGeneratorTool.CurrentEditorName = "Model";
         }
 
@@ -328,7 +335,11 @@ namespace Chisel.Editors
         {
             get
             {
-                return Lightmapping.realtimeGI || (Lightmapping.bakedGI && Lightmapping.lightingSettings.lightmapper == (LightingSettings.Lightmapper)0) || IsPrefabAsset;
+                if (Lightmapping.realtimeGI || IsPrefabAsset)
+                    return true;
+                if (!Lightmapping.TryGetLightingSettings(out LightingSettings lightingSettings))
+                    return false;
+                return lightingSettings.lightmapper == (LightingSettings.Lightmapper)0;
             }
         }
 
@@ -336,7 +347,13 @@ namespace Chisel.Editors
         {
             get
             {
-                return (Lightmapping.bakedGI && Lightmapping.lightingSettings.lightmapper != (LightingSettings.Lightmapper)0) || IsPrefabAsset;
+                if (IsPrefabAsset)
+                    return true;
+                if (!Lightmapping.bakedGI)
+                    return false;
+                if (!Lightmapping.TryGetLightingSettings(out LightingSettings lightingSettings))
+                    return false;
+                return lightingSettings.lightmapper != (LightingSettings.Lightmapper)0;
             }
         }
 
@@ -350,12 +367,15 @@ namespace Chisel.Editors
                 var model = target as ChiselModel;
                 if (!model)
                     continue;
-                var renderables = model.generated.renderables;
+                var renderables = model.generated?.renderables;
+                if (renderables == null)
+                    continue;
                 for (int r = 0; r < renderables.Length; r++)
                 {
-                    if (renderables[r] == null)
+                    var renderable = renderables[r];
+                    if (renderable == null || !renderable.Valid)
                         continue;
-                    var meshRenderer = renderables[r].meshRenderer;
+                    var meshRenderer = renderable.meshRenderer;
                     if (!meshRenderer)
                         continue;
                     largestSurfaceArea = Mathf.Max(largestSurfaceArea, GetCachedMeshSurfaceArea(meshRenderer));
@@ -375,12 +395,15 @@ namespace Chisel.Editors
                 var model = target as ChiselModel;
                 if (!model)
                     continue;
-                var renderables = model.generated.renderables;
+                var renderables = model.generated?.renderables;
+                if (renderables == null)
+                    continue;
                 for (int r = 0; r < renderables.Length; r++)
                 {
-                    if (renderables[r] == null)
+                    var renderable = renderables[r];
+                    if (renderable == null || !renderable.Valid)
                         continue;
-                    var meshRenderer = renderables[r].meshRenderer;
+                    var meshRenderer = renderable.meshRenderer;
                     if (!meshRenderer)
                         continue;
                     if (HasClampedResolution(meshRenderer))
@@ -399,12 +422,15 @@ namespace Chisel.Editors
                 var model = target as ChiselModel;
                 if (!model)
                     continue;
-                var renderables = model.generated.renderables;
+                var renderables = model.generated?.renderables;
+                if (renderables == null)
+                    continue;
                 for (int r = 0; r < renderables.Length; r++)
                 {
-                    if (renderables[r] == null)
+                    var renderable = renderables[r];
+                    if (renderable == null || !renderable.Valid)
                         continue;
-                    var meshRenderer = renderables[r].meshRenderer;
+                    var meshRenderer = renderable.meshRenderer;
                     if (!meshRenderer)
                         continue;
                     if (HasUVOverlaps(meshRenderer))
@@ -421,13 +447,21 @@ namespace Chisel.Editors
             foreach (var target in targets)
             {
                 var model = target as ChiselModel;
-                if (!model || model.generated == null)
+                if (!model)
                     continue;
-                var renderComponents = model.generated.renderMaterials;
-                foreach (var material in renderComponents)
+                var renderables = model.generated?.renderables;
+                if (renderables == null)
+                    continue;
+                foreach (var renderable in renderables)
                 {
-                    if (material != null && material.enableInstancing && material.shader != null && HasInstancing(material.shader))
-                        return true;
+                    if (renderable == null ||
+                        renderable.renderMaterials == null)
+                        continue;
+                    foreach (var material in renderable.renderMaterials)
+                    {
+                        if (material != null && material.enableInstancing && material.shader != null && HasInstancing(material.shader))
+                            return true;
+                    }
                 }
             }
             return false;
@@ -631,12 +665,33 @@ namespace Chisel.Editors
             return lightmapScaleValue;
         }
 
+        // To be used by internal code when just reading settings, not settings them
+        static LightingSettings GetLightingSettingsOrDefaultsFallback()
+        {
+            LightingSettings lightingSettings;
+            try
+            {
+                lightingSettings = Lightmapping.lightingSettings;
+            }
+            catch 
+            {
+                lightingSettings = null;
+            }
+
+            if (lightingSettings != null)
+                return lightingSettings;
+
+            return Lightmapping.lightingSettingsDefaults;
+        }
+
         void ShowClampedSizeInLightmapGUI(float lightmapScale)
         {
+            var lightingSettings = GetLightingSettingsOrDefaultsFallback();
+
             var cachedSurfaceArea = GetLargestCachedMeshSurfaceAreaForTargets(defaultValue: 1.0f);
-            var sizeInLightmap = Mathf.Sqrt(cachedSurfaceArea) * Lightmapping.lightingSettings.lightmapResolution * lightmapScale;
+            var sizeInLightmap = Mathf.Sqrt(cachedSurfaceArea) * lightingSettings.lightmapResolution * lightmapScale;
             
-            if (sizeInLightmap > Lightmapping.lightingSettings.lightmapMaxSize)
+            if (sizeInLightmap > lightingSettings.lightmapMaxSize)
                 EditorGUILayout.HelpBox(ClampedSizeContents.text, MessageType.Info);
         }
 
@@ -802,7 +857,6 @@ namespace Chisel.Editors
             EditorGUI.showMixedValue = renderingLayerMaskProp.hasMultipleDifferentValues;
 
             var model		= (ChiselModel)target;
-            var renderer	= target;
             var mask		= (int)model.RenderSettings.renderingLayerMask;
 
             EditorGUI.BeginChangeCheck();
@@ -827,10 +881,6 @@ namespace Chisel.Editors
             }
             EditorGUI.showMixedValue = false;
         }
-
-        delegate Texture2D GetHelpIconDelegate(MessageType type);
-
-        GetHelpIconDelegate GetHelpIcon = ReflectionExtensions.CreateDelegate<GetHelpIconDelegate>(typeof(EditorGUIUtility), "GetHelpIcon");
 
         void MeshRendererLightingGUI()
         {
@@ -865,7 +915,7 @@ namespace Chisel.Editors
                 {
                     EditorGUILayout.BeginHorizontal(EditorStyles.helpBox); 
                     var messageContents = needLightmapRebuild ? NeedsLightmapBuildContents : NeedsLightmapRebuildContents;
-                    GUILayout.Label(EditorGUIUtility.TrTextContent(messageContents.text, GetHelpIcon(MessageType.Warning)), EditorStyles.wordWrappedLabel);
+                    GUILayout.Label(EditorGUIUtility.TrTextContent(messageContents.text, ChiselEditorUtility.GetHelpIcon(MessageType.Warning)), EditorStyles.wordWrappedLabel);
                     GUILayout.Space(3);
                     var buttonContents = needLightmapRebuild ? ForceBuildUVsContents : ForceRebuildUVsContents;
                     if (GUILayout.Button(buttonContents, GUILayout.ExpandWidth(false)))
@@ -1007,86 +1057,94 @@ namespace Chisel.Editors
 
         public override void OnInspectorGUI()
         {
-            CheckForTransformationChanges(serializedObject);
+            Profiler.BeginSample("OnInspectorGUI");
+            try
+            { 
+                CheckForTransformationChanges(serializedObject);
             
-            var oldShowGenerationSettings   = showGenerationSettings;
-            var oldShowColliderSettings     = showColliderSettings;
+                var oldShowGenerationSettings   = showGenerationSettings;
+                var oldShowColliderSettings     = showColliderSettings;
 
-            if (gameObjectsSerializedObject != null) gameObjectsSerializedObject.Update();
-            if (serializedObject != null) serializedObject.Update();
+                if (gameObjectsSerializedObject != null) gameObjectsSerializedObject.Update();
+                if (serializedObject != null) serializedObject.Update();
 
-            if (IsDefaultModel())
-                EditorGUILayout.HelpBox(DefaultModelContents.text, MessageType.Warning);
+                if (IsDefaultModel())
+                    EditorGUILayout.HelpBox(DefaultModelContents.text, MessageType.Warning);
 
-            bool hasNoChildren = false;
-            foreach (var target in serializedObject.targetObjects)
-            {
-                var operation = target as ChiselModel;
-                if (!operation)
-                    continue;
-                if (operation.transform.childCount == 0)
+                bool hasNoChildren = false;
+                foreach (var target in serializedObject.targetObjects)
                 {
-                    hasNoChildren = true;
-                }
-            }
-            if (hasNoChildren)
-            {
-                EditorGUILayout.HelpBox(kModelHasNoChildren, MessageType.Warning, true);
-            }
-
-            EditorGUI.BeginChangeCheck();
-            {
-                showGenerationSettings = EditorGUILayout.BeginFoldoutHeaderGroup(showGenerationSettings, GenerationSettingsContent);
-                if (showGenerationSettings)
-                {
-                    EditorGUI.indentLevel++;
-                    EditorGUILayout.PropertyField(createColliderComponentsProp, CreateColliderComponentsContents);
-                    EditorGUILayout.PropertyField(createRenderComponentsProp, CreateRenderComponentsContents);
-
-                    EditorGUI.BeginDisabledGroup(!createRenderComponentsProp.boolValue);
+                    var model = target as ChiselModel;
+                    if (!model)
+                        continue;
+                    if (model.transform.childCount == 0)
                     {
-                        RenderGenerationSettingsGUI();
+                        hasNoChildren = true;
                     }
-                    EditorGUI.EndDisabledGroup();
-                    EditorGUI.indentLevel--;
                 }
-                EditorGUILayout.EndFoldoutHeaderGroup();
-
-                if (createRenderComponentsProp.boolValue)
+                if (hasNoChildren)
                 {
-                    MeshRendererLightingGUI();
+                    EditorGUILayout.HelpBox(kModelHasNoChildren, MessageType.Warning, true);
                 }
 
-                if (createColliderComponentsProp.boolValue)
+                EditorGUI.BeginChangeCheck();
                 {
-                    showColliderSettings = EditorGUILayout.BeginFoldoutHeaderGroup(showColliderSettings, ColliderSettingsContent);
-                    if (showColliderSettings)
+                    showGenerationSettings = EditorGUILayout.BeginFoldoutHeaderGroup(showGenerationSettings, GenerationSettingsContent);
+                    if (showGenerationSettings)
                     {
                         EditorGUI.indentLevel++;
-                        EditorGUILayout.PropertyField(convexProp, ConvextContents);
-                        using (new EditorGUI.DisabledScope(!convexProp.boolValue))
+                        EditorGUILayout.PropertyField(createColliderComponentsProp, CreateColliderComponentsContents);
+                        EditorGUILayout.PropertyField(createRenderComponentsProp, CreateRenderComponentsContents);
+
+                        EditorGUI.BeginDisabledGroup(!createRenderComponentsProp.boolValue);
                         {
-                            EditorGUILayout.PropertyField(isTriggerProp, IsTriggerContents);
+                            RenderGenerationSettingsGUI();
                         }
-                        {
-                            ChiselEditorUtility.EnumFlagsField(CookingOptionsContents, cookingOptionsProp, typeof(MeshColliderCookingOptions), EditorStyles.popup);
-                        }
+                        EditorGUI.EndDisabledGroup();
                         EditorGUI.indentLevel--;
                     }
                     EditorGUILayout.EndFoldoutHeaderGroup();
+
+                    if (createRenderComponentsProp.boolValue)
+                    {
+                        MeshRendererLightingGUI();
+                    }
+
+                    if (createColliderComponentsProp.boolValue)
+                    {
+                        showColliderSettings = EditorGUILayout.BeginFoldoutHeaderGroup(showColliderSettings, ColliderSettingsContent);
+                        if (showColliderSettings)
+                        {
+                            EditorGUI.indentLevel++;
+                            EditorGUILayout.PropertyField(convexProp, ConvextContents);
+                            using (new EditorGUI.DisabledScope(!convexProp.boolValue))
+                            {
+                                EditorGUILayout.PropertyField(isTriggerProp, IsTriggerContents);
+                            }
+                            {
+                                ChiselEditorUtility.EnumFlagsField(CookingOptionsContents, cookingOptionsProp, typeof(MeshColliderCookingOptions), EditorStyles.popup);
+                            }
+                            EditorGUI.indentLevel--;
+                        }
+                        EditorGUILayout.EndFoldoutHeaderGroup();
+                    }
                 }
-            }
-            if (EditorGUI.EndChangeCheck())
-            {
-                if (gameObjectsSerializedObject != null)
-                    gameObjectsSerializedObject.ApplyModifiedProperties();
-                if (serializedObject != null)
-                    serializedObject.ApplyModifiedProperties();
-                ForceUpdateNodeContents(serializedObject); 
-            }
+                if (EditorGUI.EndChangeCheck())
+                {
+                    if (gameObjectsSerializedObject != null)
+                        gameObjectsSerializedObject.ApplyModifiedProperties();
+                    if (serializedObject != null)
+                        serializedObject.ApplyModifiedProperties();
+                    ForceUpdateNodeContents(serializedObject); 
+                }
             
-            if (showGenerationSettings  != oldShowGenerationSettings) SessionState.SetBool(kDisplayGenerationSettingsKey, showGenerationSettings);
-            if (showColliderSettings    != oldShowColliderSettings  ) SessionState.SetBool(kDisplayColliderSettingsKey, showColliderSettings);
+                if (showGenerationSettings  != oldShowGenerationSettings) SessionState.SetBool(kDisplayGenerationSettingsKey, showGenerationSettings);
+                if (showColliderSettings    != oldShowColliderSettings  ) SessionState.SetBool(kDisplayColliderSettingsKey, showColliderSettings);
+            }
+            finally
+            { 
+                Profiler.EndSample();
+            }
         }
     }
 }

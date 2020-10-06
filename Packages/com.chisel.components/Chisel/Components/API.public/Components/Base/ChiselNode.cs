@@ -15,7 +15,7 @@ namespace Chisel.Components
         public const string kDocumentationExtension = ".html";
 
         public abstract string NodeTypeName { get; }
-
+        /*
         public virtual Vector3 PivotOffset
         {
             get
@@ -24,7 +24,7 @@ namespace Chisel.Components
             }
             set { }
         }
-
+        */
         public ChiselNode()			{ hierarchyItem = new ChiselHierarchyItem(this); ChiselNodeHierarchyManager.Register(this); }
         protected void OnDestroy()	{ ChiselNodeHierarchyManager.Unregister(this); OnCleanup(); }
         public void OnValidate()	{ OnValidateInternal(); }
@@ -49,10 +49,17 @@ namespace Chisel.Components
 
 
         public abstract Bounds CalculateBounds();
+        public abstract Bounds CalculateBounds(Matrix4x4 transformation);
 
         public bool EncapsulateBounds(ref Bounds outBounds)
         {
             hierarchyItem.EncapsulateBounds(ref outBounds);
+            return true;
+        }
+
+        public bool EncapsulateBounds(ref Bounds outBounds, Matrix4x4 transformation)
+        {
+            hierarchyItem.EncapsulateBounds(ref outBounds, transformation);
             return true;
         }
 
@@ -76,7 +83,7 @@ namespace Chisel.Components
     
         public bool				Dirty					{ get { return ChiselNodeHierarchyManager.IsNodeDirty(this); } }
         public virtual int		NodeID					{ get { return CSGTreeNode.InvalidNode.NodeID; } }
-        internal virtual bool	SkipThisNode			{ get { return !isActiveAndEnabled; } }
+        internal virtual bool	IsActive			    { get { return isActiveAndEnabled; } }
 
         // Can this Node contain child CSGNodes?
         public virtual bool		CanHaveChildNodes		{ get { return false; } }
@@ -94,14 +101,14 @@ namespace Chisel.Components
 
         internal abstract CSGTreeNode[] CreateTreeNodes();
         internal abstract void			ClearTreeNodes(bool clearCaches = false);
-        internal virtual void			UpdateTransformation() { }
+        public virtual void			    UpdateTransformation() { }
         public virtual void				UpdateBrushMeshInstances() { }
 
         internal virtual void SetChildren(List<CSGTreeNode> childNodes) { }
 
-        internal virtual void CollectChildNodesForParent(List<CSGTreeNode> childNodes) { }
+        public virtual void CollectCSGTreeNodes(List<CSGTreeNode> childNodes) { }
 
-        public virtual ChiselBrushContainerAsset[] GetUsedGeneratedBrushes() { return null; }
+        public virtual bool GetUsedGeneratedBrushes(List<ChiselBrushContainerAsset> usedBrushes) { return false; }
         
         public abstract int GetAllTreeBrushCount();
 
@@ -121,7 +128,7 @@ namespace Chisel.Components
         public virtual SurfaceReference FindSurfaceReference(CSGTreeBrush brush, int surfaceID)
         {
             return null;
-        }
+        }   
 
         public virtual SurfaceReference[] GetAllSurfaceReferences(CSGTreeBrush brush)
         {

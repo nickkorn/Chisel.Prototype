@@ -1,4 +1,4 @@
-﻿using Chisel.Core;
+using Chisel.Core;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -12,7 +12,7 @@ namespace Chisel.Components
     public sealed class ChiselSceneHierarchy
     {
         public Scene                                Scene;
-        public ChiselModel                          DefaultModel;		// TODO: create this, but only when necessary.
+        public ChiselModel                          DefaultModel;	// TODO: create this, but only when necessary.
         public readonly List<ChiselHierarchyItem>   RootItems	    = new List<ChiselHierarchyItem>();
     }
 
@@ -32,6 +32,7 @@ namespace Chisel.Components
         public GameObject           GameObject;
         public readonly ChiselNode  Component;
         
+        // TODO: should cache this instead
         public ChiselModel Model
         {
             get
@@ -83,6 +84,23 @@ namespace Chisel.Components
             }
         }
 
+        // TODO: Move bounds handling code to separate class, keep this clean
+        public Bounds CalculateBounds(Matrix4x4 transformation)
+        {
+            var gridBounds = new Bounds();
+            if (Component)
+            {
+                if (!Transform)
+                    Transform = Component.transform;
+                gridBounds = Component.CalculateBounds(transformation);
+            }
+
+            // TODO: make this non-iterative
+            for (int i = 0; i < Children.Count; i++)
+                Children[i].EncapsulateBounds(ref gridBounds, transformation);
+            return gridBounds;
+        }
+
         public void		EncapsulateBounds(ref Bounds outBounds)
         {
             UpdateBounds();
@@ -98,6 +116,23 @@ namespace Chisel.Components
                 }
                 if (outBounds.size.sqrMagnitude == 0) outBounds = ChildBounds;
                 else								  outBounds.Encapsulate(ChildBounds);
+            }
+        }
+        
+        public void		EncapsulateBounds(ref Bounds outBounds, Matrix4x4 transformation)
+        {
+            var gridBounds = CalculateBounds(transformation);
+            if (gridBounds.size.sqrMagnitude != 0)
+            {
+                float magnitude = gridBounds.size.sqrMagnitude;
+                if (float.IsInfinity(magnitude) ||
+                    float.IsNaN(magnitude))
+                {
+                    var center = LocalToWorldMatrix.GetColumn(3);
+                    gridBounds = new Bounds(center, Vector3.zero);
+                }
+                if (outBounds.size.sqrMagnitude == 0) outBounds = gridBounds;
+                else								  outBounds.Encapsulate(gridBounds);
             }
         }
 

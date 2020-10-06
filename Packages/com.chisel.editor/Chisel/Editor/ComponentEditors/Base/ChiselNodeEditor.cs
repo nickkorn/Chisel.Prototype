@@ -1,20 +1,26 @@
-﻿
+
 using UnityEngine;
 using UnityEditor;
-using UnityEditor.SceneManagement;
 using System;
 using System.Linq;
 using System.Collections.Generic;
-using Chisel;
 using Chisel.Core;
 using Chisel.Components;
+using SceneHandles = UnitySceneExtensions.SceneHandles;
+using ControlState = UnitySceneExtensions.ControlState;
+using HandleRendering = UnitySceneExtensions.HandleRendering;
 using UnityEditor.EditorTools;
+using Grid = UnitySceneExtensions.Grid;
+using UnityEngine.Profiling;
+#if !UNITY_2020_2_OR_NEWER
+using ToolManager = UnityEditor.EditorTools;
+#endif
 
 namespace Chisel.Editors
 {
     public abstract class ChiselNodeEditorBase : Editor
     {
-        const string kDefaultOperationName = "Operation";
+        const string kDefaultCompositeName = "Composite";
 
         // Ugly hack around stupid Unity issue
         static bool delayedUndoAllChanges = false;
@@ -35,7 +41,8 @@ namespace Chisel.Editors
 
         static void SetMenuOperation(MenuCommand menuCommand, CSGOperationType operationType)
         {
-            var gameObject = (menuCommand.context as GameObject) ?? Selection.activeGameObject;
+            var context     = (menuCommand.context as GameObject);
+            var gameObject  = (context == null) ? Selection.activeGameObject : context;
             if (!gameObject)
                 return;
 
@@ -45,84 +52,77 @@ namespace Chisel.Editors
                 Undo.RecordObject(generator, "Modified Operation");
                 generator.Operation = operationType;
             }
-            var operation = gameObject.GetComponent<ChiselOperation>();
-            if (operation && operation.Operation != operationType)
+            var composite = gameObject.GetComponent<ChiselComposite>();
+            if (composite && composite.Operation != operationType)
             {
                 Undo.RecordObject(generator, "Modified Operation");
-                operation.Operation = operationType;
+                composite.Operation = operationType;
             }
         }
 
         static bool MenuValidateOperation(MenuCommand menuCommand)
         {
-            var gameObject = (menuCommand.context as GameObject) ?? Selection.activeGameObject;
+            var context     = (menuCommand.context as GameObject);
+            var gameObject  = (context == null) ? Selection.activeGameObject : context;
             if (!gameObject)
                 return false;
 
             return gameObject.GetComponent<ChiselGeneratorComponent>() ||
-                    gameObject.GetComponent<ChiselOperation>();
+                    gameObject.GetComponent<ChiselComposite>();
         }
 
-        [MenuItem("GameObject/Chisel/Set operation/" + nameof(CSGOperationType.Additive), false, -1)] static void SetAdditiveOperation(MenuCommand menuCommand) { SetMenuOperation(menuCommand, CSGOperationType.Additive); }
-        [MenuItem("GameObject/Chisel/Set operation/" + nameof(CSGOperationType.Additive), true)] static bool ValidateAdditiveOperation(MenuCommand menuCommand) { return MenuValidateOperation(menuCommand); }
-        [MenuItem("GameObject/Chisel/Set operation/" + nameof(CSGOperationType.Subtractive), false, -1)] static void SetSubtractiveOperation(MenuCommand menuCommand) { SetMenuOperation(menuCommand, CSGOperationType.Subtractive); }
-        [MenuItem("GameObject/Chisel/Set operation/" + nameof(CSGOperationType.Subtractive), true)] static bool ValidateSubtractiveOperation(MenuCommand menuCommand) { return MenuValidateOperation(menuCommand); }
-        [MenuItem("GameObject/Chisel/Set operation/" + nameof(CSGOperationType.Intersecting), false, -1)] static void SetIntersectingOperation(MenuCommand menuCommand) { SetMenuOperation(menuCommand, CSGOperationType.Intersecting); }
-        [MenuItem("GameObject/Chisel/Set operation/" + nameof(CSGOperationType.Intersecting), true)] static bool ValidateIntersectingOperation(MenuCommand menuCommand) { return MenuValidateOperation(menuCommand); }
+        [MenuItem("GameObject/Chisel/Set operation/" + nameof(CSGOperationType.Additive), false, -1)] protected static void SetAdditiveOperation(MenuCommand menuCommand) { SetMenuOperation(menuCommand, CSGOperationType.Additive); }
+        [MenuItem("GameObject/Chisel/Set operation/" + nameof(CSGOperationType.Additive), true)] protected static bool ValidateAdditiveOperation(MenuCommand menuCommand) { return MenuValidateOperation(menuCommand); }
+        [MenuItem("GameObject/Chisel/Set operation/" + nameof(CSGOperationType.Subtractive), false, -1)] protected static void SetSubtractiveOperation(MenuCommand menuCommand) { SetMenuOperation(menuCommand, CSGOperationType.Subtractive); }
+        [MenuItem("GameObject/Chisel/Set operation/" + nameof(CSGOperationType.Subtractive), true)] protected static bool ValidateSubtractiveOperation(MenuCommand menuCommand) { return MenuValidateOperation(menuCommand); }
+        [MenuItem("GameObject/Chisel/Set operation/" + nameof(CSGOperationType.Intersecting), false, -1)] protected static void SetIntersectingOperation(MenuCommand menuCommand) { SetMenuOperation(menuCommand, CSGOperationType.Intersecting); }
+        [MenuItem("GameObject/Chisel/Set operation/" + nameof(CSGOperationType.Intersecting), true)] protected static bool ValidateIntersectingOperation(MenuCommand menuCommand) { return MenuValidateOperation(menuCommand); }
 
 
 
-        [MenuItem("GameObject/Group in Operation", false, -1)]
-        static void EncapsulateInOperation(MenuCommand menuCommand)
+        [MenuItem("GameObject/Group in Composite", false, -1)]
+        protected static void EncapsulateInComposite(MenuCommand menuCommand)
         {
+            if (!ValidateEncapsulateInComposite(menuCommand))
+                return;
+            
             var gameObjects = Selection.gameObjects;
-            if (gameObjects == null ||
-                gameObjects.Length <= 1)
-                return;
-
-            for (int i = 0; i < gameObjects.Length; i++)
-            {
-                if (gameObjects[i].GetComponent<ChiselGeneratorComponent>() ||
-                    gameObjects[i].GetComponent<ChiselOperation>())
-                    continue;
-                return;
-            }
 
             // TODO: sort gameObjects by their siblingIndex / hierarchy position
-            
+
             var childTransform      = gameObjects[0].transform;
             var childSiblingIndex   = childTransform.GetSiblingIndex();
             var childParent         = childTransform.parent;
 
-            var operation           = ChiselComponentFactory.Create<ChiselOperation>(kDefaultOperationName, childParent);
-            var operationGameObject = operation.gameObject;
-            var operationTransform  = operation.transform;
-            operationTransform.SetSiblingIndex(childSiblingIndex);
-            Undo.RegisterCreatedObjectUndo(operationGameObject, "Create " + operationGameObject.name);
+            var composite           = ChiselComponentFactory.Create<ChiselComposite>(kDefaultCompositeName, childParent);
+            var compositeGameObject = composite.gameObject;
+            var compositeTransform  = composite.transform;
+            compositeTransform.SetSiblingIndex(childSiblingIndex);
+            Undo.RegisterCreatedObjectUndo(compositeGameObject, "Create " + compositeGameObject.name);
             
             for (int i = 0; i < gameObjects.Length; i++)
-                Undo.SetTransformParent(gameObjects[i].transform, operationTransform, "Moved GameObject under Operation");
+                Undo.SetTransformParent(gameObjects[i].transform, compositeTransform, "Moved GameObject under Composite");
 
-            Selection.activeObject = operationGameObject;
+            Selection.activeObject = compositeGameObject;
 
-            // This forces the operation to be opened when we create it
-            EditorGUIUtility.PingObject(operationGameObject);
+            // This forces the composite to be opened when we create it
+            EditorGUIUtility.PingObject(compositeGameObject);
             for (int i = 0; i < gameObjects.Length; i++)
                 EditorGUIUtility.PingObject(gameObjects[i]);
         }
 
-        [MenuItem("GameObject/Group in Operation", true)]
-        static bool ValidateEncapsulateInOperation(MenuCommand menuCommand)
+        [MenuItem("GameObject/Group in Composite", true)]
+        protected static bool ValidateEncapsulateInComposite(MenuCommand menuCommand)
         {
             var gameObjects = Selection.gameObjects;
             if (gameObjects == null ||
-                gameObjects.Length == 1)
+                gameObjects.Length < 1)
                 return false;
 
             for (int i = 0; i < gameObjects.Length; i++)
             {
                 if (gameObjects[i].GetComponent<ChiselGeneratorComponent>() ||
-                    gameObjects[i].GetComponent<ChiselOperation>())
+                    gameObjects[i].GetComponent<ChiselComposite>())
                     continue;
                 return false;
             }
@@ -152,14 +152,75 @@ namespace Chisel.Editors
             return bounds;
         }
 
+        public static Vector3[] CalculateGridBounds(ChiselNode[] targetNodes)
+        {
+            if (targetNodes == null)
+                return new[] { Vector3.zero };
+
+            var worldToGridSpace = Grid.ActiveGrid.WorldToGridSpace;
+            var gridToWorldSpace = Grid.ActiveGrid.GridToWorldSpace;
+            var bounds = new Bounds();
+            foreach (var node in targetNodes)
+            {
+                if (!node)
+                    continue;
+
+                node.EncapsulateBounds(ref bounds, worldToGridSpace);
+            }
+
+            if (bounds.extents.sqrMagnitude == 0)
+                return new[] { Vector3.zero };
+
+            var min = bounds.min;
+            var max = bounds.max;
+            var points = new[]
+            {
+                Vector3.zero,
+                gridToWorldSpace.MultiplyPoint(new Vector3(min.x, min.y, min.z)),
+                gridToWorldSpace.MultiplyPoint(new Vector3(max.x, min.y, min.z)),
+                gridToWorldSpace.MultiplyPoint(new Vector3(min.x, max.y, min.z)),
+                gridToWorldSpace.MultiplyPoint(new Vector3(max.x, max.y, min.z)),
+                gridToWorldSpace.MultiplyPoint(new Vector3(min.x, min.y, max.z)),
+                gridToWorldSpace.MultiplyPoint(new Vector3(max.x, min.y, max.z)),
+                gridToWorldSpace.MultiplyPoint(new Vector3(min.x, max.y, max.z)),
+                gridToWorldSpace.MultiplyPoint(new Vector3(max.x, max.y, max.z)),
+            };
+            
+            return points;
+        }
+
+        static Vector3[]    selectionBoundPoints;
+        static bool         gridBoundsDirty = true;
+
+        void ResetGridBounds()
+        {
+            gridBoundsDirty = true;
+        }
+
+        void UpdateGridBounds()
+        {
+            if (!gridBoundsDirty)
+                return;
+            selectionBoundPoints = CalculateGridBounds(targetNodes);
+            gridBoundsDirty = false;
+        }
+
+        protected void OnShapeChanged()
+        {
+            ResetGridBounds();
+        }
+
         public static void ForceUpdateNodeContents(SerializedObject serializedObject)
         {
             serializedObject.ApplyModifiedProperties();
             foreach (var target in serializedObject.targetObjects)
             {
-                var node = target as ChiselNode;
+                var node = target as ChiselModel;
                 if (!node)
                     continue;
+#if UNITY_EDITOR
+                node.RenderSettings.SetDirty();
+#endif
                 ChiselNodeHierarchyManager.NotifyContentsModified(node);
                 node.SetDirty();
             }
@@ -174,15 +235,18 @@ namespace Chisel.Editors
             T component;
             // If we use the command object on a gameobject in the hierarchy, choose that gameobject
             // Otherwise: choose the activeModel (if available)
-            var parentGameObject    = (menuCommand.context as GameObject) ?? ChiselModelManager.ActiveModel?.gameObject;
-            var parentTransform     = parentGameObject?.transform;
+            var context             = (menuCommand.context as GameObject);
+            var parentGameObject    = (context != null) ? context : (ChiselModelManager.ActiveModel != null) ? ChiselModelManager.ActiveModel.gameObject : null;
+            var parentTransform     = (parentGameObject == null) ? null : parentGameObject.transform;
 
             // If we used the command object on a generator, choose it's parent to prevent us from 
             // adding a generator as a child to a generator
             if (parentTransform &&
                 parentTransform.GetComponent<ChiselGeneratorComponent>())
+            {
                 parentTransform = parentTransform.parent;
-
+                parentGameObject = (parentTransform == null) ? null : parentTransform.gameObject;
+            }
 
             // Create the gameobject
             if (parentTransform)
@@ -191,7 +255,7 @@ namespace Chisel.Editors
                 component = ChiselComponentFactory.Create<T>(name);
 
             var gameObject  = component.gameObject;
-            GameObjectUtility.SetParentAndAlign(gameObject, parentTransform?.gameObject);
+            GameObjectUtility.SetParentAndAlign(gameObject, parentGameObject);
             Undo.RegisterCreatedObjectUndo(gameObject, "Create " + gameObject.name);
 
 
@@ -303,7 +367,7 @@ namespace Chisel.Editors
         }
 
         static HashSet<ChiselNode> modifiedNodes = new HashSet<ChiselNode>();
-        public static void CheckForTransformationChanges(SerializedObject serializedObject)
+        public void CheckForTransformationChanges(SerializedObject serializedObject)
         {
             if (Event.current.type == EventType.Layout)
             {
@@ -313,9 +377,10 @@ namespace Chisel.Editors
                     var node = target as ChiselNode;
                     if (!node)
                         continue;
+
                     var transform = node.transform;
 
-                    // TODO: probably not a good idea to use matrices for this, since it calculates this all the way up the transformation tree
+                    // TODO: probably not a good idea to use these matrices for this, since it calculates this all the way up the transformation tree
                     var curLocalToWorldMatrix = transform.localToWorldMatrix;
                     var oldLocalToWorldMatrix = node.hierarchyItem.LocalToWorldMatrix;
                     if (curLocalToWorldMatrix.m00 != oldLocalToWorldMatrix.m00 ||
@@ -347,6 +412,7 @@ namespace Chisel.Editors
                 if (modifiedNodes.Count > 0)
                 {
                     ChiselNodeHierarchyManager.NotifyTransformationChanged(modifiedNodes);
+                    ResetGridBounds(); // TODO: should only do this when rotating, not when moving
                 }
             }
         }
@@ -356,9 +422,9 @@ namespace Chisel.Editors
 
 
         // TODO: put somewhere else
-        static GUILayoutOption kHeaderHeight = GUILayout.Height(22.0f);
-        internal static void ConvertIntoBrushesButton(SerializedObject serializedObject)
+        internal static void ConvertIntoBrushesButton(Rect rect, SerializedObject serializedObject)
         {
+            rect.height = 22;
             bool singular = false;
             bool multiple = false;
             foreach (var targetObject in serializedObject.targetObjects)
@@ -372,12 +438,12 @@ namespace Chisel.Editors
             }
             if (multiple)
             {
-                if (!GUILayout.Button(convertToBrushesContent, kHeaderHeight))
+                if (!GUI.Button(rect, convertToBrushesContent))
                     return;
             } else
             if (singular)
             {
-                if (!GUILayout.Button(convertToBrushContent, kHeaderHeight))
+                if (!GUI.Button(rect, convertToBrushContent))
                     return;
             } else
                 return;
@@ -396,29 +462,70 @@ namespace Chisel.Editors
                 EditorGUIUtility.ExitGUI();
         }
 
-        public static void ShowOperationChoices(SerializedProperty operationProp)
-        {
-            EditorGUILayout.BeginHorizontal();
-            ChiselOperationGUI.ShowOperationChoicesInternal(operationProp);
-            EditorGUILayout.EndHorizontal();
-        }
-
         public void ShowInspectorHeader(SerializedProperty operationProp)
         {
-            GUILayout.BeginHorizontal();
-            ChiselOperationGUI.ShowOperationChoicesInternal(operationProp);
-            if (typeof(T) != typeof(ChiselBrush)) ConvertIntoBrushesButton(serializedObject);
-            GUILayout.EndHorizontal();
+            GUILayout.Space(3);
+            const float kBottomPadding = 3;
+            var rect = EditorGUILayout.GetControlRect(hasLabel: false, height: EditorGUIUtility.singleLineHeight + kBottomPadding);
+            rect.yMax -= kBottomPadding;
+            var buttonRect = rect;
+            buttonRect.xMax -= ChiselCompositeGUI.GetOperationChoicesInternalWidth(showAuto: false);
+            if (typeof(T) != typeof(ChiselBrush))
+            {
+                ConvertIntoBrushesButton(buttonRect, serializedObject);
+                ChiselCompositeGUI.ShowOperationChoicesInternal(rect, operationProp, showLabel: false);
+            } else
+            {
+                ChiselCompositeGUI.ShowOperationChoicesInternal(rect, operationProp, showLabel: true);
+            }
         }
 
         protected abstract void OnEditSettingsGUI(SceneView sceneView);
 
-        public override void OnInspectorGUI()
+        ChiselNode[] targetNodes;
+
+
+        protected virtual void InitInspector()
         {
-            CheckForTransformationChanges(serializedObject);
-            ShowDefaultModelMessage(serializedObject.targetObjects);
+            targetNodes = new ChiselNode[targets.Length];
+            for (int i = 0; i < targets.Length; i++)
+                targetNodes[i] = targets[i] as ChiselNode;
+            ResetGridBounds();
+
+            Grid.GridModified -= OnGridModified;
+            Grid.GridModified += OnGridModified;
+
+            ChiselNodeHierarchyManager.NodeHierarchyModified -= OnNodeHierarchyModified;
+            ChiselNodeHierarchyManager.NodeHierarchyModified += OnNodeHierarchyModified;
         }
 
+        protected virtual void ShutdownInspector()
+        {
+            Grid.GridModified -= OnGridModified;
+            ChiselNodeHierarchyManager.NodeHierarchyModified -= OnNodeHierarchyModified;
+        }
+
+        private void OnNodeHierarchyModified()
+        {
+            ResetGridBounds();
+            //Repaint();
+        }
+
+        private void OnGridModified()
+        {
+            ResetGridBounds();
+            Repaint();
+        }
+
+        public override void OnInspectorGUI()
+        {
+            Profiler.BeginSample("OnInspectorGUI");
+            CheckForTransformationChanges(serializedObject);
+            ShowDefaultModelMessage(serializedObject.targetObjects);
+            Profiler.EndSample();
+        }
+
+        static SceneHandles.PositionHandleIDs s_HandleIDs = new SceneHandles.PositionHandleIDs();
         static void OnMoveTool()
         {
             var position = Tools.handlePosition;
@@ -426,7 +533,9 @@ namespace Chisel.Editors
 
             EditorGUI.BeginChangeCheck();
             // TODO: make this work with bounds!
-            var newPosition = UnitySceneExtensions.SceneHandles.PositionHandle(position, rotation);
+            SceneHandles.Initialize(ref s_HandleIDs);
+            selectionBoundPoints[0] = position;
+            var newPosition = SceneHandles.PositionHandle(ref s_HandleIDs, selectionBoundPoints, position, rotation)[0];
             if (EditorGUI.EndChangeCheck())
             {
                 var delta = newPosition - position;
@@ -436,10 +545,20 @@ namespace Chisel.Editors
                     MoveTransformsTo(transforms, delta);
                 }
             }
+
+            if ((s_HandleIDs.combinedState & ControlState.Hot) == ControlState.Hot)
+            {
+                var handleSize = UnityEditor.HandleUtility.GetHandleSize(s_HandleIDs.originalPosition);
+                SceneHandles.RenderBorderedCircle(s_HandleIDs.originalPosition, handleSize * 0.05f);
+                var newHandleSize = UnityEditor.HandleUtility.GetHandleSize(newPosition);
+                HandleRendering.DrawCameraAlignedCircle(newPosition, newHandleSize * 0.1f, Color.white, Color.black);
+            }
         }
 
         protected void OnDefaultSceneTools()
         {
+            UpdateGridBounds();
+
             // TODO: somehow make snapped controls work with *any* transform
             switch (Tools.current)
             {
@@ -524,8 +643,12 @@ namespace Chisel.Editors
         protected void ResetDefaultInspector()
         {
             definitionSerializedProperty = null;
+            position = Vector2.zero;
             children.Clear();
         }
+
+        // Note: name is the same for every generator, but is hidden inside a generic class, hence the use of ChiselBrushDefinition
+        const string kDefinitionName = ChiselDefinedGeneratorComponent<ChiselBrushDefinition>.kDefinitionName;
 
         List<SerializedProperty> children = new List<SerializedProperty>();
         SerializedProperty definitionSerializedProperty;
@@ -538,7 +661,7 @@ namespace Chisel.Editors
             {
                 do
                 {
-                    if (iterator.name == "definition") // TODO: use ChiselDefinedGeneratorComponent<DefinitionType>.kDefinitionName somehow
+                    if (iterator.name == kDefinitionName)
                     {
                         definitionSerializedProperty = iterator.Copy();
                         break;
@@ -578,6 +701,9 @@ namespace Chisel.Editors
             InSceneSettingsContext = true;
             try
             {
+                if (serializedObject == null ||
+                    !serializedObject.targetObject)
+                    return;
                 serializedObject.Update();
                 EditorGUI.BeginChangeCheck();
                 {
@@ -600,26 +726,43 @@ namespace Chisel.Editors
 
 
         protected virtual void ResetInspector() { ResetDefaultInspector(); } 
-        protected virtual void InitInspector() { InitDefaultInspector(); }
+        protected override void InitInspector() { base.InitInspector(); InitDefaultInspector(); }
+
+
+        static Vector2 position = Vector2.zero;
 
         protected override void OnEditSettingsGUI(SceneView sceneView)
         {
             if (Tools.current != Tool.Custom)
                 return;
 
+            GUILayoutUtility.GetRect(298, 0);
+
             // TODO: figure out how to make this work with multiple (different) editors when selecting a combination of nodes
+            using (var scope = new EditorGUILayout.ScrollViewScope(position, GUILayout.ExpandWidth(true), GUILayout.MaxHeight(150)))
+            {
+                OnDefaultSettingsGUI(target, sceneView);
+                position = scope.scrollPosition;
+            }
             ShowInspectorHeader(operationProp);
-            OnDefaultSettingsGUI(target, sceneView);
         }
 
-        protected virtual void OnInspector() { OnDefaultInspector(); }
+        static readonly ChiselEditorMessages warnings = new ChiselEditorMessages();
+        protected virtual void OnMessages(IChiselMessages warnings) { }
 
-        protected virtual void OnTargetModifiedInInspector() { }
-        protected virtual void OnTargetModifiedInScene() { }
-        protected virtual bool OnGeneratorValidate(T generator) { return generator.isActiveAndEnabled && generator.HasValidState(); }
+
+        protected virtual void OnInspector() 
+        { 
+            OnDefaultInspector(); 
+            OnMessages(warnings); 
+        }
+
+        protected virtual void OnTargetModifiedInInspector() { OnShapeChanged(); }
+        protected virtual void OnTargetModifiedInScene() { OnShapeChanged(); }
+        protected virtual bool OnGeneratorActive(T generator) { return generator.isActiveAndEnabled; }
         protected virtual void OnGeneratorSelected(T generator) { }
         protected virtual void OnGeneratorDeselected(T generator) { }
-        protected abstract void OnScene(SceneView sceneView, T generator);
+        protected abstract void OnScene(IChiselHandles handles, T generator);
 
         SerializedProperty operationProp;
         void Reset() { operationProp = null; ResetInspector(); }
@@ -637,24 +780,63 @@ namespace Chisel.Editors
             ChiselEditGeneratorTool.OnEditSettingsGUI = null;
             ChiselEditGeneratorTool.CurrentEditorName = null;
             Tools.hidden = false;
+
+            ToolManager.activeToolChanged -= OnToolModeChanged;
+            ShutdownInspector();
         }
 
         void OnEnable()
         {
             if (!target)
             {
+                Profiler.BeginSample("Reset");
                 Reset();
+                Profiler.EndSample();
                 return;
             }
 
-            ChiselEditGeneratorTool.OnEditSettingsGUI = OnEditSettingsGUI;
-            ChiselEditGeneratorTool.CurrentEditorName = (target as T).NodeTypeName;
-            operationProp = serializedObject.FindProperty(ChiselGeneratorComponent.kOperationFieldName);
-            UpdateSelection();
-
+            Profiler.BeginSample("Setup");
+            ToolManager.activeToolChanged -= OnToolModeChanged;
+            ToolManager.activeToolChanged += OnToolModeChanged;
             UnityEditor.Undo.undoRedoPerformed -= OnUndoRedoPerformed;
             UnityEditor.Undo.undoRedoPerformed += OnUndoRedoPerformed;
+
+            Profiler.BeginSample("CurrentEditorName");
+            if (targets.Length > 1)
+            {
+                ChiselEditGeneratorTool.OnEditSettingsGUI = null;
+                ChiselEditGeneratorTool.CurrentEditorName = string.Empty;
+            } else
+            {
+                ChiselEditGeneratorTool.OnEditSettingsGUI = OnEditSettingsGUI;
+                ChiselEditGeneratorTool.CurrentEditorName = (target as T).NodeTypeName;
+            }
+            Profiler.EndSample();
+            Profiler.BeginSample("FindProperty");
+            operationProp = serializedObject.FindProperty(ChiselGeneratorComponent.kOperationFieldName);
+            Profiler.EndSample();
+            Profiler.EndSample();
+
+            Profiler.BeginSample("UpdateSelection");
+            UpdateSelection();
+            Profiler.EndSample();
+
+            Profiler.BeginSample("InitInspector");
             InitInspector();
+            Profiler.EndSample();
+        }
+
+        void OnToolModeChanged()
+        {
+            if (Tools.current != Tool.Custom)
+            {
+                ChiselEditToolBase.ClearLastRememberedType();
+                return;
+            }
+            if (!typeof(ChiselEditToolBase).IsAssignableFrom(ToolManager.activeToolType))
+            {
+                ChiselEditToolBase.ClearLastRememberedType();
+            }
         }
 
         protected bool HasValidState()
@@ -681,15 +863,15 @@ namespace Chisel.Editors
 
                 if (!knownTargets.Add(target))
                     continue;
-                
+
                 var generator = target as T;
-                if (!OnGeneratorValidate(generator))
+                if (!OnGeneratorActive(generator))
                     continue;
-                
+
                 OnGeneratorSelected(target as T);
                 validTargets.Add(generator);
             }
-            
+
             foreach (var knownTarget in knownTargets)
             {
                 if (!targets.Contains(knownTarget))
@@ -697,6 +879,7 @@ namespace Chisel.Editors
                     var removeTarget = target as T;
                     if (validTargets.Contains(removeTarget))
                     {
+                        handles.generatorStateLookup.Remove(removeTarget);
                         OnGeneratorDeselected(removeTarget);
                         validTargets.Remove(removeTarget);
                     }
@@ -707,6 +890,7 @@ namespace Chisel.Editors
                     if (removeTarget == null ||
                         !selectedGameObject.Contains(removeTarget.gameObject))
                     {
+                        handles.generatorStateLookup.Remove(removeTarget);
                         OnGeneratorDeselected(removeTarget);
                         validTargets.Remove(removeTarget);
                         removeTargets.Add(removeTarget);
@@ -723,6 +907,7 @@ namespace Chisel.Editors
         {
             if (!target)
                 return;
+            Profiler.BeginSample("OnInspectorGUI");
             serializedObject.Update();
 
             base.OnInspectorGUI();
@@ -743,7 +928,10 @@ namespace Chisel.Editors
 
             if (PreviewTextureManager.Update())
                 Repaint();
+            Profiler.EndSample();
         }
+
+        static readonly ChiselEditorHandles handles = new ChiselEditorHandles();
 
         public override void OnSceneGUI()
         {
@@ -756,43 +944,52 @@ namespace Chisel.Editors
                 return;
             }
 
-            var generator = target as T;
-            if (GUIUtility.hotControl == 0)
-            {
-                if (!OnGeneratorValidate(generator))
-                {
-                    if (validTargets.Contains(generator))
-                    {
-                        OnGeneratorDeselected(generator);
-                        validTargets.Remove(generator);
-                    }
-                    return;
-                }
-                if (!validTargets.Contains(generator))
-                {
-                    OnGeneratorSelected(generator);
-                    validTargets.Add(generator);
-                }
-            }
-
+            var generator   = target as T;
             var sceneView   = SceneView.currentDrawingSceneView;
-
-            var modelMatrix     = ChiselNodeHierarchyManager.FindModelTransformMatrixOfTransform(generator.hierarchyItem.Transform);
-            var generatorNode   = generator.TopNode;
-            if (!generatorNode.Valid)
-                return;
+            var modelMatrix = ChiselNodeHierarchyManager.FindModelTransformMatrixOfTransform(generator.hierarchyItem.Transform);
             
+            // NOTE: allow invalid nodes to be edited to be able to recover from invalid state
+
             // NOTE: could loop over multiple instances from here, once we support that
             {
-                using (new UnityEditor.Handles.DrawingScope(UnityEditor.Handles.yAxisColor, modelMatrix * generatorNode.NodeToTreeSpaceMatrix))
+                using (new UnityEditor.Handles.DrawingScope(SceneHandles.handleColor, modelMatrix * generator.LocalTransformationWithPivot))
                 {
-                    EditorGUI.BeginChangeCheck();
+                    handles.Start(generator, sceneView);
                     {
-                        OnScene(sceneView, generator);
-                    }
-                    if (EditorGUI.EndChangeCheck())
-                    {
-                        OnTargetModifiedInScene();
+                        if (GUIUtility.hotControl == 0)
+                        {
+                            if (!OnGeneratorActive(generator))
+                            {
+                                if (validTargets.Contains(generator))
+                                {
+                                    handles.generatorStateLookup.Remove(generator);
+                                    OnGeneratorDeselected(generator);
+                                    validTargets.Remove(generator);
+                                }
+                                return;
+                            }
+                            if (!validTargets.Contains(generator))
+                            {
+                                handles.generatorStateLookup.Remove(generator);
+                                OnGeneratorDeselected(generator);
+                                validTargets.Add(generator);
+                            }
+                        }
+
+                        EditorGUI.BeginChangeCheck();
+                        try
+                        {
+                            OnScene(handles, generator);
+                        }
+                        finally
+                        {
+                            if (EditorGUI.EndChangeCheck())
+                            {
+                                generator.OnValidate();
+                                OnTargetModifiedInScene();
+                            }
+                            handles.End();
+                        }
                     }
                 }
             }

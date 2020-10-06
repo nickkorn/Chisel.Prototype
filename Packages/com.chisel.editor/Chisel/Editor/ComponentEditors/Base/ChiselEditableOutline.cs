@@ -647,7 +647,7 @@ namespace Chisel.Editors
             var vertices = brushMesh.vertices;
             var halfEdges = brushMesh.halfEdges;
 
-            SceneHandles.SetPositionHandleIDs(ref s_TempPositionHandleIDs);
+            SceneHandles.Initialize(ref s_TempPositionHandleIDs);
 
             s_TempPolygonsIDCount   = polygons.Length;
             s_TempVerticesIDCount   = vertices.Length;
@@ -697,13 +697,16 @@ namespace Chisel.Editors
         // This is possible when not all vertices on a polygon actually lie on the same plane and we're forced to split that polygon
         #region FindSoftEdges
         static List<int> s_TempPolygon1ToPolygon2 = new List<int>();
+        static readonly List<ChiselBrushContainerAsset> brushContainers = new List<ChiselBrushContainerAsset>();
         void FindSoftEdges()
         {
             softEdges = new SoftEdge[0];
-            var brushContainers = brush.GetUsedGeneratedBrushes();
+            brushContainers.Clear();
+            if (!brush.GetUsedGeneratedBrushes(brushContainers))
+                return;
 
             // TODO: for now, just assume we have one submesh
-            var brushMeshes = (brushContainers == null || brushContainers.Length != 1) ? null : brushContainers[0].BrushMeshes;
+            var brushMeshes = (brushContainers == null || brushContainers.Count != 1) ? null : brushContainers[0].BrushMeshes;
             var afterBrushMesh = (brushMeshes == null || brushMeshes.Length == 0) ? null : brushMeshes[0];
             if (afterBrushMesh == null)
                 return;
@@ -831,7 +834,6 @@ namespace Chisel.Editors
             return true;
         }
 
-        const KeyCode           kCancelKey          = KeyCode.Escape;
         const EventModifiers    kKeyModifiers       = EventModifiers.Shift | EventModifiers.Control | EventModifiers.Alt | EventModifiers.Command;
         
         const string    kSelectAllCommand       = "SelectAll";
@@ -917,14 +919,14 @@ namespace Chisel.Editors
 
                 case EventType.KeyDown:
                 {
-                    if (evt.keyCode == kCancelKey && ((evt.modifiers & kKeyModifiers) == EventModifiers.None))
+                    if (evt.keyCode == ChiselKeyboardDefaults.kCancelKey && ((evt.modifiers & kKeyModifiers) == EventModifiers.None))
                         evt.Use();
                     break;
                 }
 
                 case EventType.KeyUp:
                 {
-                    if (evt.keyCode == kCancelKey && ((evt.modifiers & kKeyModifiers) == EventModifiers.None))
+                    if (evt.keyCode == ChiselKeyboardDefaults.kCancelKey && ((evt.modifiers & kKeyModifiers) == EventModifiers.None))
                     {
                         evt.Use();
                         return ClickState.DeselectAll;
@@ -1001,10 +1003,12 @@ namespace Chisel.Editors
 
         bool IsPointInsideOutline(Vector3 point)
         {
-            var brushContainers = brush.GetUsedGeneratedBrushes();
+            brushContainers.Clear();
+            if (!brush.GetUsedGeneratedBrushes(brushContainers))
+                return false;
 
             // TODO: for now, just assume we have one submesh
-            var brushMeshes = (brushContainers == null || brushContainers.Length != 1) ? null : brushContainers[0].BrushMeshes;
+            var brushMeshes = (brushContainers.Count != 1) ? null : brushContainers[0].BrushMeshes;
             var afterBrushMesh = (brushMeshes == null) ? null : brushMeshes[0];
             if (afterBrushMesh == null)
                 return false;
@@ -1452,7 +1456,8 @@ namespace Chisel.Editors
 
             prevEdgeIndex = edgeIndex;
             prevNewVertex = newVertex;
-            SceneView.RepaintAll();
+            if (Event.current.type != EventType.Repaint)
+                SceneView.RepaintAll();
         }
 
         void FindSnappedPointOnVertex(int vertexIndex)
@@ -1464,7 +1469,8 @@ namespace Chisel.Editors
 
             prevEdgeIndex = brushMesh.FindAnyHalfEdgeWithVertexIndex(vertexIndex);
             prevNewVertex = newVertex;
-            SceneView.RepaintAll();
+            if (Event.current.type != EventType.Repaint)
+                SceneView.RepaintAll();
         }
 
         void UpdateEdgeHoverPointOnEdge(int edgeIndex)
@@ -1528,10 +1534,10 @@ namespace Chisel.Editors
 
             // TODO: highlight what we're snapping with (grid, vertex, edges)
 
-            SceneHandles.RenderBorderedCircle(prevNewVertex, HandleUtility.GetHandleSize(prevNewVertex) * SceneHandles.kPointScale);
+            SceneHandles.RenderBorderedCircle(prevNewVertex, HandleUtility.GetHandleSize(prevNewVertex) * HandleRendering.kPointScale);
             if (secondVertex)
             {
-                SceneHandles.RenderBorderedCircle(firstNewVertex, HandleUtility.GetHandleSize(firstNewVertex) * SceneHandles.kPointScale);
+                SceneHandles.RenderBorderedCircle(firstNewVertex, HandleUtility.GetHandleSize(firstNewVertex) * HandleRendering.kPointScale);
                 SceneHandles.DrawLine(firstNewVertex, prevNewVertex);
             }
         }
@@ -1624,7 +1630,7 @@ namespace Chisel.Editors
                     continue;
 
                 var position    = vertices[v];
-                var handleSize  = UnityEditor.HandleUtility.GetHandleSize(position) * SceneHandles.kPointScale;
+                var handleSize  = UnityEditor.HandleUtility.GetHandleSize(position) * HandleRendering.kPointScale;
 
                 SceneHandles.color = vertexColors[v];
                 SceneHandles.OutlinedDotHandleCap(id, position, Quaternion.identity, handleSize, evt.type);
@@ -1663,7 +1669,7 @@ namespace Chisel.Editors
                 var id = s_TempPolygonsIDs[p];
                 var polygonCenter   = polygonCenters[p];
                 var handleSize      = UnityEditor.HandleUtility.GetHandleSize(polygonCenter);
-                var pointSize       = handleSize * SceneHandles.kPointScale;
+                var pointSize       = handleSize * HandleRendering.kPointScale;
                 var normal          = isOutlineInsideOut ? -planes[p].xyz : planes[p].xyz;
 
                 SceneHandles.color = polygonColors[p];
@@ -2035,7 +2041,7 @@ namespace Chisel.Editors
             {
                 var id          = s_TempVerticesIDs[v];
                 var position    = vertices[v];
-                var handleSize  = UnityEditor.HandleUtility.GetHandleSize(position) * SceneHandles.kPointScale;
+                var handleSize  = UnityEditor.HandleUtility.GetHandleSize(position) * HandleRendering.kPointScale;
 
                 var offset = Vector3.zero;
                 EditorGUI.BeginChangeCheck();   { offset = SceneHandles.Slider2DHandleOffset(id, position, cameraDirection, capFunction: null); }
@@ -2168,19 +2174,13 @@ namespace Chisel.Editors
             using (new EditorGUI.DisabledScope(!enablePositionHandle))
             {
                 var offset = Vector3.zero;
-                EditorGUI.BeginChangeCheck();   { offset = SceneHandles.PositionHandleOffset(s_TempPositionHandleIDs, vertexSelectionCenter); }
+                EditorGUI.BeginChangeCheck();   { offset = SceneHandles.PositionHandleOffset(ref s_TempPositionHandleIDs, vertexSelectionCenter); }
                 if (EditorGUI.EndChangeCheck()) { MoveSelectedVertices(offset); return true; }
             }
             return false;
         }
 
         bool InAlternateEditMode    { get { return Event.current.shift; } }
-
-        bool IsSceneViewIn2DMode(SceneView sceneView)
-        {
-            return  sceneView.isRotationLocked &&
-                    sceneView.camera.orthographic;
-        } 
 
         // TODO: have a more scalable way to handle brush "edit modes"
         bool InCreateEdgeEditMode   { get { return InAlternateEditMode; } }
@@ -2189,15 +2189,15 @@ namespace Chisel.Editors
 
 
         // This method returns true when the brushMesh has changed
-        public bool DoHandles(SceneView sceneView, bool isOutlineInsideOut)
+        public bool DoHandles(IChiselHandles handles, bool isOutlineInsideOut)
         {
-            var camera = sceneView.camera;
+            var camera = Camera.current;
             if (!UpdateColors(camera))
                 return false;
 
             var isCameraOrtho       = camera.orthographic;
             var cameraDirection     = camera.transform.forward;
-            var in2DMode            = IsSceneViewIn2DMode(sceneView);
+            var in2DMode            = handles.IsIn2DMode;
 
             // Ortho mode
             //      TODO: handle being able to move brushes when dragging from the selected brush itself 

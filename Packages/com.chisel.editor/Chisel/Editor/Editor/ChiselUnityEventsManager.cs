@@ -4,9 +4,13 @@ using UnitySceneExtensions;
 using System;
 using System.Collections.Generic;
 using UnityEditor;
-using UnityEditor.EditorTools;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEditor.EditorTools;
+using UnityEngine.Profiling;
+#if !UNITY_2020_2_OR_NEWER
+using ToolManager = UnityEditor.EditorTools;
+#endif
 
 namespace Chisel.Editors
 { 
@@ -61,6 +65,9 @@ namespace Chisel.Editors
             
             UnityEditor.Undo.willFlushUndoRecord                        -= OnWillFlushUndoRecord;
             UnityEditor.Undo.willFlushUndoRecord                        += OnWillFlushUndoRecord;
+            
+            UnityEditor.SceneView.beforeSceneGui                        -= OnBeforeSceneGUI;
+            UnityEditor.SceneView.beforeSceneGui                        += OnBeforeSceneGUI;
 
             UnityEditor.SceneView.duringSceneGui                        -= OnDuringSceneGUI;
             UnityEditor.SceneView.duringSceneGui                        += OnDuringSceneGUI;
@@ -70,8 +77,8 @@ namespace Chisel.Editors
             ChiselNodeHierarchyManager.NodeHierarchyReset -= OnHierarchyReset;
             ChiselNodeHierarchyManager.NodeHierarchyReset += OnHierarchyReset;
 
-            ChiselNodeHierarchyManager.NodeHierarchyModified -= OnNodeHierarcyModified;
-            ChiselNodeHierarchyManager.NodeHierarchyModified += OnNodeHierarcyModified;
+            ChiselNodeHierarchyManager.NodeHierarchyModified -= OnNodeHierarchyModified;
+            ChiselNodeHierarchyManager.NodeHierarchyModified += OnNodeHierarchyModified;
 
             ChiselNodeHierarchyManager.TransformationChanged -= OnTransformationChanged;
             ChiselNodeHierarchyManager.TransformationChanged += OnTransformationChanged;
@@ -82,8 +89,8 @@ namespace Chisel.Editors
             ChiselGeneratedModelMeshManager.PostReset -= OnPostResetModels;
             ChiselGeneratedModelMeshManager.PostReset += OnPostResetModels;
 
-            EditorTools.activeToolChanged -= OnEditModeChanged;
-            EditorTools.activeToolChanged += OnEditModeChanged;
+            ToolManager.activeToolChanged -= OnEditModeChanged;
+            ToolManager.activeToolChanged += OnEditModeChanged;
 
             ChiselClickSelectionManager.Instance.OnReset();
             ChiselOutlineRenderer.Instance.OnReset();
@@ -112,11 +119,21 @@ namespace Chisel.Editors
             ChiselOutlineRenderer.Instance.OnTransformationChanged();
         }
         
-        
-       
+
+        static void OnBeforeSceneGUI(SceneView sceneView)
+        {
+            Profiler.BeginSample("OnBeforeSceneGUI");
+            ChiselDrawModes.HandleDrawMode(sceneView);
+            Profiler.EndSample();
+        }
 
         static void OnDuringSceneGUI(SceneView sceneView)
         {
+            Profiler.BeginSample("OnDuringSceneGUI");
+            // Workaround where Unity stops redrawing sceneview after a second, which makes hovering over edge visualization stop working
+            if (Event.current.type == EventType.MouseMove)
+                sceneView.Repaint();
+
             var prevSkin = GUI.skin;
             GUI.skin = ChiselSceneGUIStyle.GetSceneSkin();
             try
@@ -139,6 +156,7 @@ namespace Chisel.Editors
             {
                 GUI.skin = prevSkin;
             }
+            Profiler.EndSample();
         }
 
         private static void OnEditModeChanged()//IChiselToolMode prevEditMode, IChiselToolMode newEditMode)
@@ -179,17 +197,28 @@ namespace Chisel.Editors
             ChiselOutlineRenderer.Instance.OnReset();
         }
     
-        private static void OnNodeHierarcyModified()
+        private static void OnNodeHierarchyModified()
         {
             ChiselOutlineRenderer.Instance.OnReset();
+
+            // Prevent infinite loops
+            if (Event.current != null &&
+                Event.current.type == EventType.Repaint)
+                return;
+
             Editors.ChiselManagedHierarchyView.RepaintAll();
             Editors.ChiselInternalHierarchyView.RepaintAll();
-            //SceneView.RepaintAll();
-            UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
+            
+            // THIS IS SLOW! DON'T DO THIS
+            //UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
         }
 
         private static void OnHierarchyReset()
-        {			
+        {
+            // Prevent infinite loops
+            if (Event.current != null &&
+                Event.current.type == EventType.Repaint)
+                return;
             Editors.ChiselManagedHierarchyView.RepaintAll();
             Editors.ChiselInternalHierarchyView.RepaintAll(); 
         }
@@ -201,6 +230,8 @@ namespace Chisel.Editors
 
         private static void OnEditorApplicationUpdate()
         {
+            if (EditorApplication.isPlayingOrWillChangePlaymode)
+                return;
             ChiselNodeHierarchyManager.Update();
             ChiselGeneratedModelMeshManager.UpdateModels();
             ChiselNodeEditorBase.HandleCancelEvent();
@@ -208,17 +239,22 @@ namespace Chisel.Editors
 
         private static void OnHierarchyWindowItemOnGUI(int instanceID, Rect selectionRect)
         {
-            var obj =  UnityEditor.EditorUtility.InstanceIDToObject(instanceID);
-            if (!obj)
-                return;
-            var gameObject = (GameObject)obj;
+            Profiler.BeginSample("OnHierarchyWindowItemOnGUI");
+            try
+            {
+                var obj = UnityEditor.EditorUtility.InstanceIDToObject(instanceID);
+                if (!obj)
+                    return;
+                var gameObject = (GameObject)obj;
 
-            // TODO: implement material drag & drop support for meshes
+                // TODO: implement material drag & drop support for meshes
 
-            var component = gameObject.GetComponent<ChiselNode>();
-            if (!component)
-                return;
-            Editors.ChiselHierarchyWindowManager.OnHierarchyWindowItemGUI(instanceID, component, selectionRect);
+                var component = gameObject.GetComponent<ChiselNode>();
+                if (!component)
+                    return;
+                Editors.ChiselHierarchyWindowManager.OnHierarchyWindowItemGUI(instanceID, component, selectionRect);
+            }
+            finally { Profiler.EndSample(); }
         }
 
         private static void OnPlayModeStateChanged(PlayModeStateChange state)

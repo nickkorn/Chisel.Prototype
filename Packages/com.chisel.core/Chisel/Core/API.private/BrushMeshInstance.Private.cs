@@ -1,5 +1,5 @@
-﻿using System;
-using System.Runtime.InteropServices;
+using System;
+using UnityEngine.Profiling;
 
 namespace Chisel.Core
 {
@@ -34,10 +34,11 @@ namespace Chisel.Core
             return result;
         }
         
-        private static bool UpdateBrushMesh(Int32		brushMeshIndex,
-                                            BrushMesh	brushMesh)
+        private static bool UpdateBrushMesh(Int32		brushMeshID,
+                                            BrushMesh	brushMesh, 
+                                            bool        notifyBrushMeshModified = true)
         {
-            if (brushMeshIndex == 0 ||
+            if (brushMeshID == 0 ||
                 brushMesh.vertices	== null ||
                 brushMesh.halfEdges == null ||
                 brushMesh.polygons	== null)
@@ -51,11 +52,16 @@ namespace Chisel.Core
             if (polygonCount < 4)
                 return false;
 
-            var vertexCount = brushMesh.vertices.Length;
-            var result = UpdateBrushMesh(brushMeshIndex,
+            var result = UpdateBrushMesh(brushMeshID,
                                          brushMesh.vertices,
                                          brushMesh.halfEdges,
                                          brushMesh.polygons);
+            if (notifyBrushMeshModified)
+            {
+                Profiler.BeginSample("CSGManager.NotifyBrushMeshModified");
+                CSGManager.NotifyBrushMeshModified(brushMeshID);
+                Profiler.EndSample();
+            }
             return result;
         }
     }

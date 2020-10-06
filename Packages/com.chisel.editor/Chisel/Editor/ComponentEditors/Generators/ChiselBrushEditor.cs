@@ -1,14 +1,11 @@
-using UnityEngine;
-using UnityEditor;
-using UnityEditor.SceneManagement;
-using System;
 using System.Linq;
 using System.Collections.Generic;
-using Chisel;
 using Chisel.Core;
 using Chisel.Components;
-using UnitySceneExtensions;
-using Unity.Mathematics;
+using CanEditMultipleObjects = UnityEditor.CanEditMultipleObjects;
+using CustomEditor           = UnityEditor.CustomEditor;
+using Undo                   = UnityEditor.Undo;
+using GUIUtility             = UnityEngine.GUIUtility;
 
 namespace Chisel.Editors
 {
@@ -20,15 +17,13 @@ namespace Chisel.Editors
 
         protected override void OnUndoRedoPerformed()
         {
-            CommitChanges();
-
-            // TODO: do we actually need this? 
             var activeGenerators = activeOutlines.Keys.ToArray();
             foreach (var generator in activeGenerators)
             {
                 generator.definition.brushOutline.Validate();
                 generator.definition.brushOutline.CalculatePlanes();
                 activeOutlines[generator] = new ChiselEditableOutline(generator);
+                UpdateEditableOutline(generator);
             }
         }
 
@@ -52,11 +47,11 @@ namespace Chisel.Editors
 
             ChiselTopologySelectionManager.DeselectAll(generator);
             activeOutlines.Remove(generator);
+            if (generator.definition.EnsurePlanarPolygons())
+                generator.OnValidate();
         }
 
-
-
-        protected override void OnScene(SceneView sceneView, ChiselBrush generator)
+        protected override void OnScene(IChiselHandles handles, ChiselBrush generator)
         {
             if (!activeOutlines.TryGetValue(generator, out ChiselEditableOutline editableOutline) ||
                 editableOutline == null)
@@ -64,8 +59,8 @@ namespace Chisel.Editors
 
             var previousHotControl  = GUIUtility.hotControl;
 
-            if (editableOutline.DoHandles(sceneView, generator.definition.IsInsideOut))
-                UpdateEditableOutline(generator, editableOutline.brushMesh.vertices);
+            if (editableOutline.DoHandles(handles, generator.definition.IsInsideOut))
+                UpdateEditableOutline(generator);
 
             var currentHotControl = GUIUtility.hotControl;
             // When we stop/start dragging or clicking something our hotControl changes. 
@@ -80,7 +75,7 @@ namespace Chisel.Editors
         // Creates a new optimized/fixed brushMesh based on the brushMesh inside of the generator
         // this will not be copied to the generator until the current operation is complete. 
         // This prevents, for example, dragging an edge over another edge DURING a dragging operation messing things up.
-        void UpdateEditableOutline(ChiselBrush generator, float3[] vertices)
+        void UpdateEditableOutline(ChiselBrush generator)
         {
             generatorModified = true;
             var outline = activeOutlines[generator];
@@ -93,12 +88,13 @@ namespace Chisel.Editors
             internalBrushMesh.CalculatePlanes();
 
             // If the brush is concave, we set the generator to not be valid, so that when we commit, it will be reverted
-            generator.definition.ValidState = !internalBrushMesh.IsConcave() && // TODO: eventually allow concave shapes
-                                              !internalBrushMesh.IsSelfIntersecting() &&
-                                               internalBrushMesh.HasVolume();
+            generator.definition.ValidState = internalBrushMesh.HasVolume() &&          // TODO: implement this, so we know if a brush is a 0D/1D/2D shape
+                                              !internalBrushMesh.IsConcave() &&         // TODO: eventually allow concave shapes
+                                              !internalBrushMesh.IsSelfIntersecting();  // TODO: in which case this needs to be implemented
 
             generator.definition.brushOutline = internalBrushMesh;
-            
+
+            generator.definition.EnsurePlanarPolygons();
             generator.OnValidate();
 
             outline.Rebuild();
@@ -114,8 +110,8 @@ namespace Chisel.Editors
                 return;
 
             var activeGenerators = activeOutlines.Keys.ToArray();
-
-            Undo.RecordObjects(activeGenerators, activeGenerators.Length == 1 ? "Modified brush" : "Modified brushes");
+            if (activeGenerators.Length > 0)                
+                Undo.RecordObjects(activeGenerators, activeGenerators.Length == 1 ? "Modified brush" : "Modified brushes");
 
             // Remove redundant vertices and fix the selection so that the correct edges/vertices etc. are selected
             foreach (var generator in activeGenerators)
@@ -127,6 +123,9 @@ namespace Chisel.Editors
                 // This makes it a lot easier to find 'soft edges'.
                 outline.vertexRemap = generator.definition.brushOutline.RemoveUnusedVertices();
                 ChiselEditableOutline.RemapSelection(generator.definition.brushOutline, outline.selection, outline.vertexRemap, outline.edgeRemap, outline.polygonRemap);
+
+                // Ensure Undo registers any changes
+                generator.definition.brushOutline = outline.brushMesh;
             }
 
             // Create new outlines for our generators

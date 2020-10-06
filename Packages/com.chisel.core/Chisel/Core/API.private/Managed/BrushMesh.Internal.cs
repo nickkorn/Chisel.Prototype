@@ -24,23 +24,50 @@ namespace Chisel.Core
 
             UpdateHalfEdgePolygonIndices();
             CalculatePlanes();
-
-            var min = new Vector3(float.PositiveInfinity, float.PositiveInfinity, float.PositiveInfinity);
-            var max = new Vector3(float.NegativeInfinity, float.NegativeInfinity, float.NegativeInfinity);
-            for (int v = 0; v < inVertices.Length; v++)
-            {
-                var vertex = inVertices[v];
-                min.x = Mathf.Min(min.x, vertex.x);
-                min.y = Mathf.Min(min.y, vertex.y);
-                min.z = Mathf.Min(min.z, vertex.z);
-
-                max.x = Mathf.Max(max.x, vertex.x);
-                max.y = Mathf.Max(max.y, vertex.y);
-                max.z = Mathf.Max(max.z, vertex.z);
-            }
-
-            localBounds = new Bounds((max + min) * 0.5f, (max - min));
             return true;
+        }
+
+        public void CopyFrom(BrushMesh other)
+        {
+            if (other.vertices != null)
+            {
+                if (vertices == null || vertices.Length != other.vertices.Length)                
+                    vertices = new float3[other.vertices.Length];
+                other.vertices.CopyTo(vertices, 0);
+            } else
+                vertices = null;
+
+            if (other.halfEdges != null)
+            {
+                if (halfEdges == null || halfEdges.Length != other.halfEdges.Length)
+                    halfEdges = new HalfEdge[other.halfEdges.Length];
+                other.halfEdges.CopyTo(halfEdges, 0);
+            } else
+                halfEdges = null;
+
+            if (other.halfEdgePolygonIndices != null)
+            {
+                if (halfEdgePolygonIndices == null || halfEdgePolygonIndices.Length != other.halfEdgePolygonIndices.Length)
+                    halfEdgePolygonIndices = new int[other.halfEdgePolygonIndices.Length];
+                other.halfEdgePolygonIndices.CopyTo(halfEdgePolygonIndices, 0);
+            } else
+                halfEdgePolygonIndices = null;
+
+            if (other.polygons != null)
+            {
+                if (polygons == null || polygons.Length != other.polygons.Length)
+                    polygons = new Polygon[other.polygons.Length];
+                other.polygons.CopyTo(polygons, 0);
+            } else
+                polygons = null;
+
+            if (other.planes != null)
+            {
+                if (planes == null || planes.Length != other.planes.Length)
+                    planes = new float4[other.planes.Length];
+                other.planes.CopyTo(planes, 0);
+            } else
+                planes = null;
         }
 
         internal void Reset()

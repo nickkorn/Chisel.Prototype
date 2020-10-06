@@ -1,7 +1,10 @@
 using Chisel.Core;
 using System;
 using System.Collections.Generic;
+using UnityEditor;
 using UnityEngine;
+using UnityEngine.Profiling;
+using UnityEngine.SceneManagement;
 
 namespace Chisel.Components
 {
@@ -27,16 +30,11 @@ namespace Chisel.Components
 
         public void Unregister(ChiselModel model)
         {
-            RemoveContainerGameObject(model);
+            // If we removed our model component, we should remove the containers
+            if (!model && model.hierarchyItem.GameObject)
+                RemoveContainerGameObjectWithUndo(model);
             
             models.Remove(model);
-        }
-
-        public void RemoveAllGeneratedComponents(ChiselModel model)
-        {
-            model.generated.Destroy();
-            model.generated = null;
-            RemoveContainerGameObject(model);
         }
 
         public static void ForceUpdateDelayedUVGeneration()
@@ -58,7 +56,7 @@ namespace Chisel.Components
             if ((staticFlags & UnityEditor.StaticEditorFlags.ContributeGI) != UnityEditor.StaticEditorFlags.ContributeGI)
                 return false;
 
-            if (model.generated.HasLightmapUVs)
+            if (!model.generated.HasLightmapUVs)
                 return true;
 #endif
             return false;
@@ -83,10 +81,15 @@ namespace Chisel.Components
                 if ((!model.AutoRebuildUVs && !force) || !lightmapStatic)
                     continue;
 
-                for (int i = 0; i < model.generated.renderables.Length; i++)
+                var renderables = model.generated.renderables;
+                if (renderables == null)
+                    continue;
+
+                for (int i = 0; i < renderables.Length; i++)
                 {
-                    var renderable  = model.generated.renderables[i];
+                    var renderable  = renderables[i];
                     if (renderable == null || 
+                        renderable.invalid ||
                         (!force && renderable.uvLightmapUpdateTime == 0))
                         continue;
 
@@ -109,11 +112,11 @@ namespace Chisel.Components
                 model.OnInitialize(); 
             }
 
-            if (!ChiselModelGeneratedObjects.IsValid(model.generated))
+            if (!ChiselGeneratedObjects.IsValid(model.generated))
             {
                 if (model.generated != null)
                     model.generated.Destroy();
-                model.generated = ChiselModelGeneratedObjects.Create(model);
+                model.generated = ChiselGeneratedObjects.Create(model.gameObject);
             }
 
             UpdateModelFlags(model);
@@ -122,8 +125,75 @@ namespace Chisel.Components
 #if UNITY_EDITOR
         static Dictionary<int, VisibilityState> visibilityStateLookup = new Dictionary<int, VisibilityState>();
         public static bool IsBrushVisible(int brushID) { return visibilityStateLookup.TryGetValue(brushID, out VisibilityState state) && state == VisibilityState.AllVisible; }
+
+        static bool updateVisibilityFlag = false;
         public static void OnVisibilityChanged()
         {
+            updateVisibilityFlag = true;
+            UnityEditor.EditorApplication.delayCall -= OnUnityIndeterministicMessageOrderingWorkAround;
+            UnityEditor.EditorApplication.delayCall += OnUnityIndeterministicMessageOrderingWorkAround;
+            UnityEditor.EditorApplication.QueuePlayerLoopUpdate();
+        }
+
+        static void OnUnityIndeterministicMessageOrderingWorkAround()
+        {
+            UnityEditor.EditorApplication.delayCall -= OnUnityIndeterministicMessageOrderingWorkAround;
+            UnityEditor.EditorApplication.QueuePlayerLoopUpdate();
+            SceneView.RepaintAll();
+        }
+
+        public static DrawModeFlags UpdateHelperSurfaceState(DrawModeFlags helperStateFlags, bool ignoreBrushVisibility = true)
+        {
+            foreach (var model in models)
+            {
+                if (!model || !model.isActiveAndEnabled || model.generated == null)
+                    continue;
+                model.generated.UpdateHelperSurfaceState(helperStateFlags, ignoreBrushVisibility);
+            }
+            return helperStateFlags;
+        }
+
+        public static void InitializeOnLoad(Scene scene)
+        {
+            foreach (var go in scene.GetRootGameObjects())
+            {
+                foreach (var model in go.GetComponentsInChildren<ChiselModel>())
+                {
+                    if (!model || !model.isActiveAndEnabled || model.generated == null)
+                        continue;
+                    model.generated.RemoveHelperSurfaces();
+                }
+            }
+        }
+
+        public static void RemoveHelperSurfaces()
+        {
+            var scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene();
+            foreach(var go in scene.GetRootGameObjects())
+            {
+                foreach (var model in go.GetComponentsInChildren<ChiselModel>())
+                {
+                    if (!model || !model.isActiveAndEnabled || model.generated == null)
+                        continue;
+                    model.generated.RemoveHelperSurfaces();
+                }
+            }
+        }
+
+        public static void OnRenderModels(Camera camera, DrawModeFlags helperStateFlags)
+        {
+            foreach (var model in models)
+            {
+                model.OnRenderModel(camera, helperStateFlags);
+            }
+        }
+
+        public static void UpdateVisibility()
+        {
+            if (!updateVisibilityFlag)
+                return;
+
+            updateVisibilityFlag = false;
             // TODO: 1. turn off rendering regular meshes when we have partial visibility of model contents
             //       2. find a way to render partial mesh instead
             //          A. needs to show lightmap of original mesh, even when modified
@@ -151,6 +221,7 @@ namespace Chisel.Components
                     continue;
                 if (!visibilityStateLookup.TryGetValue(model.NodeID, out VisibilityState state))
                 {
+                    visibilityStateLookup[model.NodeID] = VisibilityState.AllVisible;
                     model.generated.visibilityState = VisibilityState.AllVisible;
                     continue;
                 }
@@ -173,8 +244,36 @@ namespace Chisel.Components
             return false;
         }
         
-        internal static bool IsDefaultModel(GameObject gameObject)	{ return gameObject && (gameObject.name == kGeneratedDefaultModelName) && (gameObject.GetComponent<ChiselModel>()); }
-        internal static bool IsDefaultModel(Component component)	{ return component  && (component.name  == kGeneratedDefaultModelName) && (component is ChiselModel || component.GetComponent<ChiselModel>()); }
+        internal static bool IsDefaultModel(GameObject gameObject)
+        {
+            if (!gameObject)
+                return false;
+            var model = gameObject.GetComponent<ChiselModel>();
+            if (!model)
+                return false;
+            return (model.IsDefaultModel);
+        }
+
+        internal static bool IsDefaultModel(Component component)	
+        {
+            if (!component)
+                return false;
+            ChiselModel model = component as ChiselModel;
+            if (!model)
+            {
+                model = component.GetComponent<ChiselModel>();
+                if (!model)
+                    return false;
+            }
+            return (model.IsDefaultModel);
+        }
+
+        internal static bool IsDefaultModel(ChiselModel model)
+        {
+            if (!model)
+                return false;
+            return (model.IsDefaultModel);
+        }
 
         static List<GameObject> __rootGameObjects = new List<GameObject>(); // static to avoid allocations
         internal static ChiselModel CreateDefaultModel(ChiselSceneHierarchy sceneHierarchy)
@@ -207,6 +306,7 @@ namespace Chisel.Components
             try
             {
                 var model = ChiselComponentFactory.Create<ChiselModel>(kGeneratedDefaultModelName);
+                model.IsDefaultModel = true;
                 UpdateModelFlags(model);
                 return model;
             }
@@ -235,6 +335,12 @@ namespace Chisel.Components
                 transform.SetParent(null, false);
                 ChiselObjectUtility.ResetTransform(transform);
             }
+        }
+
+        private void RemoveContainerGameObjectWithUndo(ChiselModel model)
+        {
+            if (model.generated != null)
+                model.generated.DestroyWithUndo();
         }
 
         private void RemoveContainerGameObject(ChiselModel model)
@@ -298,34 +404,29 @@ namespace Chisel.Components
 
 #if UNITY_EDITOR
         // Hacky way to store that a mesh has lightmap UV created
+        // Note: tried storing this in name of mesh, but getting the current mesh name allocates a lot of memory 
         public static bool HasLightmapUVs(UnityEngine.Mesh sharedMesh)
         {
-            var name = sharedMesh.name;
-            if (!string.IsNullOrEmpty(name) &&
-                name[name.Length - 1] == '*')
+            if (!sharedMesh)
                 return true;
-            return false;
+            return (sharedMesh.hideFlags & HideFlags.NotEditable) == HideFlags.NotEditable;
         }
 
         public static void SetHasLightmapUVs(UnityEngine.Mesh sharedMesh, bool haveLightmapUVs)
         {
-            var name = sharedMesh.name;
-            if (haveLightmapUVs)
+            HideFlags hideFlags     = sharedMesh.hideFlags;
+            HideFlags newHideFlags  = hideFlags;
+            if (!haveLightmapUVs)
             {
-                if (!string.IsNullOrEmpty(name) &&
-                    name[name.Length - 1] == '*')
-                    return;
-                sharedMesh.name = name + "*";
+                newHideFlags &= ~HideFlags.NotEditable;
             } else
             {
-                if (string.IsNullOrEmpty(name))
-                    return;
-                if (name[name.Length - 1] != '*')
-                    return;
-                int index = name.IndexOf('*');
-                name = name.Remove(index);
-                sharedMesh.name = name;
+                newHideFlags |= HideFlags.NotEditable;
             }
+
+            if (newHideFlags == hideFlags)
+                return;
+            sharedMesh.hideFlags = newHideFlags;
         }
 
         private static void GenerateLightmapUVsForInstance(ChiselModel model, ChiselRenderObjects renderable, bool force = false)
@@ -435,6 +536,8 @@ namespace Chisel.Components
 
 #if UNITY_EDITOR
             var sceneVisibilityManager = UnityEditor.SceneVisibilityManager.instance;
+            s_IgnoreVisibility = true;
+            BeginDrawModeForCamera(ignoreBrushVisibility: true);
 #endif
 
             foreach (var model in models)
@@ -447,7 +550,7 @@ namespace Chisel.Components
                 {
                     foreach (var renderer in renderers)
                     {
-                        if (renderer == null || !renderer.container)
+                        if (renderer == null || renderer.invalid || !renderer.container)
                             continue;
                         state.generatedComponents[renderer.container] = model;
 #if UNITY_EDITOR
@@ -455,6 +558,24 @@ namespace Chisel.Components
                         {
                             state.rendererOff[renderer.meshRenderer] = true;
                             renderer.meshRenderer.forceRenderingOff = false;
+                        }
+#endif
+                    }
+                }
+
+                var debugHelpers = model.generated.debugHelpers;
+                if (debugHelpers != null)
+                {
+                    foreach (var debugHelper in debugHelpers)
+                    {
+                        if (debugHelper == null || debugHelper.invalid || !debugHelper.container)
+                            continue;
+                        state.generatedComponents[debugHelper.container] = model;
+#if UNITY_EDITOR
+                        if (debugHelper.meshRenderer.forceRenderingOff)
+                        {
+                            state.rendererOff[debugHelper.meshRenderer] = true;
+                            debugHelper.meshRenderer.forceRenderingOff = false;
                         }
 #endif
                     }
@@ -511,8 +632,9 @@ namespace Chisel.Components
             {
                 pair.Key.forceRenderingOff = pair.Value;
             }
+            s_IgnoreVisibility = false;
+            EndDrawModeForCamera();
 #endif
-
             if (object.Equals(pickedObject, null))
                 return false;
 
@@ -531,6 +653,45 @@ namespace Chisel.Components
             }
 
             return pickedGeneratedComponent;
+        }
+
+        static readonly Dictionary<Camera, DrawModeFlags>   s_CameraDrawMode    = new Dictionary<Camera, DrawModeFlags>();
+
+        static bool s_IgnoreVisibility = false;
+
+        public static void ResetCameraDrawMode(Camera camera)
+        {
+            s_CameraDrawMode.Remove(camera);
+        }
+
+        public static void SetCameraDrawMode(Camera camera, DrawModeFlags drawModeFlags)
+        {
+            s_CameraDrawMode[camera] = drawModeFlags;
+        }
+
+        public static DrawModeFlags GetCameraDrawMode(Camera camera)
+        {
+            if (!s_CameraDrawMode.TryGetValue(camera, out var drawModeFlags))
+                drawModeFlags = DrawModeFlags.Default;
+            return drawModeFlags;
+        }
+
+        public static DrawModeFlags BeginDrawModeForCamera(Camera camera = null, bool ignoreBrushVisibility = false)
+        {
+            if (camera == null)
+                camera = Camera.current;
+            var currentState = GetCameraDrawMode(camera);
+            return UpdateHelperSurfaceState(currentState, s_IgnoreVisibility || ignoreBrushVisibility);
+        }
+
+        public static DrawModeFlags EndDrawModeForCamera()
+        {
+            return UpdateHelperSurfaceState(DrawModeFlags.Default, ignoreBrushVisibility: true);
+        }
+
+        public static void Update()
+        {
+            UpdateHelperSurfaceState(DrawModeFlags.Default, ignoreBrushVisibility: true);
         }
     }
 }

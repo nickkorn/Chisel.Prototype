@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using Unity.Burst;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
@@ -13,30 +12,34 @@ namespace Chisel.Core
     internal struct SubMeshSurface
     {
         public int surfaceIndex;
-        public int brushNodeID;
+        public int surfaceParameter;
+        public int brushNodeIndex;
         public BlobAssetReference<ChiselBrushRenderBuffer> brushRenderBuffer;
     }
-
+    /*
     [BurstCompile(CompileSynchronously = true)]
-    unsafe struct GenerateVertexBuffersJob : IJob
+    struct GenerateVertexBuffersJob : IJob
     {   
         [NoAlias, ReadOnly] public MeshQuery    meshQuery;
-        [NoAlias, ReadOnly] public int		    surfaceIdentifier;
+        
+        [NoAlias, ReadOnly] public int		    subMeshIndexCount;
+        [NoAlias, ReadOnly] public int		    subMeshVertexCount;
 
-        [NoAlias, ReadOnly] public int		    submeshIndexCount;
-        [NoAlias, ReadOnly] public int		    submeshVertexCount;
+        [NoAlias, ReadOnly] public int          surfacesOffset;
+        [NoAlias, ReadOnly] public int          surfacesCount;
+        [NoAlias, ReadOnly] public NativeArray<SubMeshSurface> subMeshSurfaces;
 
-        [NoAlias, ReadOnly] public NativeArray<SubMeshSurface> submeshSurfaces;
+        [NoAlias, WriteOnly] public NativeArray<int> generatedMeshBrushIndices;
 
-        [NoAlias] public NativeArray<int>		generatedMeshIndices; 
-        [NoAlias] public NativeArray<int>		generatedMeshBrushIndices; 
+        [NativeDisableContainerSafetyRestriction]
+        [NoAlias] public NativeArray<int>		generatedMeshIndices;
+        [NativeDisableContainerSafetyRestriction]
         [NoAlias] public NativeArray<float3>    generatedMeshPositions;
-        [NativeDisableContainerSafetyRestriction]
-        [NoAlias] public NativeArray<float4>    generatedMeshTangents;
-        [NativeDisableContainerSafetyRestriction]
-        [NoAlias] public NativeArray<float3>    generatedMeshNormals;
-        [NativeDisableContainerSafetyRestriction]
-        [NoAlias] public NativeArray<float2>    generatedMeshUV0; 
+
+        //optional
+        [NativeDisableContainerSafetyRestriction] [NoAlias, WriteOnly] public NativeArray<float4>    generatedMeshTangents;
+        [NativeDisableContainerSafetyRestriction] [NoAlias, WriteOnly] public NativeArray<float3>    generatedMeshNormals;
+        [NativeDisableContainerSafetyRestriction] [NoAlias, WriteOnly] public NativeArray<float2>    generatedMeshUV0; 
             
         static void ComputeTangents(NativeArray<int>        meshIndices,
                                     NativeArray<float3>	    positions,
@@ -44,8 +47,7 @@ namespace Chisel.Core
                                     NativeArray<float3>	    normals,
                                     NativeArray<float4>	    tangents) 
         {
-            if (!meshIndices.IsCreated || !positions.IsCreated || !uvs.IsCreated || !tangents.IsCreated ||
-                meshIndices.Length == 0 ||
+            if (meshIndices.Length == 0 ||
                 positions.Length == 0)
                 return;
 
@@ -114,26 +116,28 @@ namespace Chisel.Core
         }
 
         public void Execute()
-        { 
+        {
+            if (subMeshIndexCount == 0 || subMeshVertexCount == 0)
+                return;
+
             bool useTangents		= (meshQuery.UsedVertexChannels & VertexChannelFlags.Tangent) == VertexChannelFlags.Tangent;
             bool useNormals		    = (meshQuery.UsedVertexChannels & VertexChannelFlags.Normal ) == VertexChannelFlags.Normal;
             bool useUV0s			= (meshQuery.UsedVertexChannels & VertexChannelFlags.UV0    ) == VertexChannelFlags.UV0;
             bool needTempNormals	= useTangents && !useNormals;
             bool needTempUV0		= useTangents && !useUV0s;
-
-            var normals	= needTempNormals ? new NativeArray<float3>(submeshVertexCount, Allocator.Temp) : generatedMeshNormals;
-            var uv0s	= needTempUV0     ? new NativeArray<float2>(submeshVertexCount, Allocator.Temp) : generatedMeshUV0;
+            
+            var normals	= needTempNormals ? new NativeArray<float3>(subMeshVertexCount, Allocator.Temp) : generatedMeshNormals;
+            var uv0s	= needTempUV0     ? new NativeArray<float2>(subMeshVertexCount, Allocator.Temp) : generatedMeshUV0;
 
             // double snap_size = 1.0 / ants.SnapDistance();
 
-            var dstVertices = (float3*)generatedMeshPositions.GetUnsafePtr();
             { 
                 // copy all the vertices & indices to the sub-meshes for each material
-                for (int surfaceIndex = 0, brushIDIndexOffset = 0, indexOffset = 0, vertexOffset = 0, surfaceCount = (int)submeshSurfaces.Length;
-                        surfaceIndex < surfaceCount;
+                for (int surfaceIndex = surfacesOffset, brushIDIndexOffset = 0, indexOffset = 0, vertexOffset = 0, lastSurfaceIndex = surfacesCount + surfacesOffset;
+                        surfaceIndex < lastSurfaceIndex;
                         ++surfaceIndex)
                 {
-                    var subMeshSurface = submeshSurfaces[surfaceIndex];
+                    var subMeshSurface = subMeshSurfaces[surfaceIndex];
                     ref var sourceBuffer = ref subMeshSurface.brushRenderBuffer.Value.surfaces[subMeshSurface.surfaceIndex];
                     if (sourceBuffer.indices.Length == 0 ||
                         sourceBuffer.vertices.Length == 0)
@@ -153,29 +157,10 @@ namespace Chisel.Core
 
                     var sourceVertexCount = sourceBuffer.vertices.Length;
 
-                    var srcVertices = (float3*)sourceBuffer.vertices.GetUnsafePtr();
-                    //fixed (float3* srcVertices = &sourceBuffer.vertices[0])
-                    {
-                        UnsafeUtility.MemCpy(dstVertices + vertexOffset, srcVertices, sourceVertexCount * UnsafeUtility.SizeOf<float3>());
-                        //Array.Copy(sourceBuffer.vertices, 0, generatedMeshPositions, vertexOffset, sourceVertexCount);
-                    }
+                    generatedMeshPositions.CopyFrom(vertexOffset, ref sourceBuffer.vertices, 0, sourceVertexCount);
 
-                    if (useUV0s || needTempUV0)
-                    {
-                        var dstUV0 = (float2*)uv0s.GetUnsafePtr();
-                        var srcUV0 = (float2*)sourceBuffer.uv0.GetUnsafePtr();
-                        {
-                            UnsafeUtility.MemCpy(dstUV0 + vertexOffset, srcUV0, sourceVertexCount * UnsafeUtility.SizeOf<float2>());
-                        }
-                    }
-                    if (useNormals || needTempNormals)
-                    {
-                        var dstNormals = (float3*)normals.GetUnsafePtr();
-                        var srcNormals = (float3*)sourceBuffer.normals.GetUnsafePtr();
-                        {
-                            UnsafeUtility.MemCpy(dstNormals + vertexOffset, srcNormals, sourceVertexCount * UnsafeUtility.SizeOf<float3>());
-                        }
-                    }
+                    if (useUV0s || needTempUV0) uv0s.CopyFrom(vertexOffset, ref sourceBuffer.uv0, 0, sourceVertexCount);
+                    if (useNormals || needTempNormals) normals.CopyFrom(vertexOffset, ref sourceBuffer.normals, 0, sourceVertexCount);
                     vertexOffset += sourceVertexCount;
                 }
             }
@@ -190,4 +175,6 @@ namespace Chisel.Core
             }
         }
     }
+    */
+
 }

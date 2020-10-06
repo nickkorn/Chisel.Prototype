@@ -32,11 +32,17 @@ namespace Chisel.Editors
 
     public sealed class GUIClip
     {
+#if UNITY_2020_2_OR_NEWER
+        const string kFindSelectionBase = "FindSelectionBaseForPicking";
+#else
+        const string kFindSelectionBase = "FindSelectionBase";
+#endif
+
         public delegate Vector2 UnclipDelegate(Vector2 pos);
         public static readonly UnclipDelegate GUIClipUnclip = ReflectionExtensions.CreateDelegate<UnclipDelegate>("UnityEngine.GUIClip", "Unclip");
 
         public delegate GameObject FindSelectionBaseDelegate(GameObject go);
-        public static readonly FindSelectionBaseDelegate FindSelectionBase = typeof(HandleUtility).CreateDelegate<FindSelectionBaseDelegate>("FindSelectionBase");
+        public static readonly FindSelectionBaseDelegate FindSelectionBase = typeof(HandleUtility).CreateDelegate<FindSelectionBaseDelegate>(kFindSelectionBase);
     }
 
     // TODO: clean up, rename
@@ -88,9 +94,13 @@ namespace Chisel.Editors
 
         public delegate bool IntersectRayMeshFunc(Ray ray, Mesh mesh, Matrix4x4 matrix, out RaycastHit hit);
         public static IntersectRayMeshFunc IntersectRayMesh = typeof(HandleUtility).CreateDelegate<IntersectRayMeshFunc>("IntersectRayMesh");
+#if UNITY_2020_2_OR_NEWER
+        public delegate GameObject PickClosestGameObjectFunc(Camera camera, int layers, Vector2 position, GameObject[] ignore, GameObject[] filter, bool drawGizmos, out int materialIndex);
+#else
         public delegate GameObject PickClosestGameObjectFunc(Camera camera, int layers, Vector2 position, GameObject[] ignore, GameObject[] filter, out int materialIndex);
+#endif
         public static PickClosestGameObjectFunc PickClosestGO = typeof(HandleUtility).CreateDelegate<PickClosestGameObjectFunc>("Internal_PickClosestGO");
-
+         
         public void OnReset()
         {
             UpdateSelection();
@@ -286,16 +296,24 @@ namespace Chisel.Editors
         {
             model = null;
             material = null;
+
             var flagState = ChiselGeneratedComponentManager.BeginPicking();
             GameObject gameObject = null;
             bool foundGameObject = false;
             int materialIndex = -1;
             try
-            { 
-                if (PickClosestGO == null)
-                    gameObject = HandleUtility.PickGameObject(pickposition, ignore, out materialIndex);
-                else
+            {
+                if (PickClosestGO != null)
+                {
+#if UNITY_2020_2_OR_NEWER
+                    gameObject = PickClosestGO(camera, layers, pickposition, ignore, filter, true, out materialIndex);
+#else
                     gameObject = PickClosestGO(camera, layers, pickposition, ignore, filter, out materialIndex);
+#endif
+                } else
+                {
+                    gameObject = HandleUtility.PickGameObject(pickposition, ignore, out materialIndex);
+                }
             }
             finally
             {
@@ -361,11 +379,10 @@ namespace Chisel.Editors
             return GetPlaneIntersection(mousePosition);
         }
 
-
-        public static bool FindBrushMaterials(Vector2 position, out ChiselBrushMaterial[] brushMaterials, out ChiselBrushContainerAsset[] brushContainerAssets, bool selectAllSurfaces)
+        public static bool FindBrushMaterials(Vector2 position, out ChiselBrushMaterial[] brushMaterials, List<ChiselBrushContainerAsset> brushContainerAssets, bool selectAllSurfaces)
         {
             brushMaterials = null;
-            brushContainerAssets = null;
+            brushContainerAssets.Clear();
             try
             {
                 ChiselIntersection intersection;
@@ -380,8 +397,8 @@ namespace Chisel.Editors
 
                 if (selectAllSurfaces)
                 {
-                    brushContainerAssets = node.GetUsedGeneratedBrushes();
-                    if (brushContainerAssets == null)
+                    brushContainerAssets.Clear();
+                    if (!node.GetUsedGeneratedBrushes(brushContainerAssets))
                         return false;
                     brushMaterials = node.GetAllBrushMaterials(brush);
                     return true;
@@ -390,8 +407,8 @@ namespace Chisel.Editors
                     var surface = node.FindBrushMaterialBySurfaceIndex(brush, intersection.brushIntersection.surfaceIndex);
                     if (surface == null)
                         return false;
-                    brushContainerAssets = node.GetUsedGeneratedBrushes();
-                    if (brushContainerAssets == null)
+                    brushContainerAssets.Clear();
+                    if (!node.GetUsedGeneratedBrushes(brushContainerAssets))
                         return false;
                     brushMaterials =  new ChiselBrushMaterial[] { surface };
                     return true;
@@ -440,21 +457,20 @@ namespace Chisel.Editors
             intersection = ChiselIntersection.None;
 
             node = null;
-            Material sharedMaterial;
-            var gameObject = PickModelOrGameObject(camera, pickposition, layers, ref ignore, ref filter, out model, out sharedMaterial);
+            var gameObject = PickModelOrGameObject(camera, pickposition, layers, ref ignore, ref filter, out model, out Material sharedMaterial);
             if (object.Equals(gameObject, null))
                 return null;
 
             if (ChiselGeneratedComponentManager.IsValidModelToBeSelected(model))
             { 
-                int filterLayerParameter0 = (sharedMaterial) ? sharedMaterial.GetInstanceID() : 0;
+                //int filterLayerParameter0 = (sharedMaterial) ? sharedMaterial.GetInstanceID() : 0;
                 {
                     var worldRay		= camera.ScreenPointToRay(pickposition);
                     var worldRayStart	= worldRay.origin;
                     var worldRayVector	= (worldRay.direction * (camera.farClipPlane - camera.nearClipPlane));
                     var worldRayEnd		= worldRayStart + worldRayVector;
 
-                    if (ChiselSceneQuery.FindFirstWorldIntersection(model, worldRayStart, worldRayEnd, filterLayerParameter0, layers, ignore, filter, out var tempIntersection))
+                    if (ChiselSceneQuery.FindFirstWorldIntersection(model, worldRayStart, worldRayEnd, layers, ignore, filter, out var tempIntersection))
                     {
                         node = tempIntersection.node;
                         if (node)

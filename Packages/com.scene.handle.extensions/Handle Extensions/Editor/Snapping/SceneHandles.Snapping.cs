@@ -1,32 +1,120 @@
 //#define ENABLE_DEBUG_GRID
 using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using JetBrains.Annotations;
 using UnityEditor;
 using UnityEngine;
 
 namespace UnitySceneExtensions
 {
+    [Flags]
+    public enum SnapSettings
+    {
+        None                    = 0,
+
+        GeometryPivotToGrid     = 1,
+        GeometryBoundsToGrid    = 2,
+        GeometryVertex          = 4,    // TODO: implement
+        GeometryEdge            = 8,    // TODO: implement
+        GeometrySurface         = 16,   // TODO: implement
+
+        AllGeometry             = GeometryPivotToGrid | GeometryBoundsToGrid | GeometryVertex | GeometryEdge | GeometrySurface,
+
+        UVGeometryGrid          = 32,
+        UVGeometryEdges         = 64,
+        UVGeometryVertices      = 128,
+        UVGrid                  = 256,  // TODO: implement
+        UVBounds                = 512,  // TODO: implement
+
+        AllUV                   = UVGeometryGrid | UVGeometryEdges | UVGeometryVertices | UVGrid | UVBounds,
+
+        All                     = ~0
+    }
+
+    [Flags]
+    public enum ActiveTransformSnapping
+    {
+        None                    = 0,
+
+        Scale                   = 1, // TODO: implement
+        Rotate                  = 2, // TODO: implement
+        Translate               = 4,
+
+        All                     = ~0
+    }
+
     public static class Snapping
     {
         public static event Action SnappingSettingsModified;
+        public delegate bool GetCustomSnappingPointsRayDelegate(Vector3 worldRayStart, Vector3 worldRayDirection, int contextIndex, List<Vector3> foundWorldspacePoints);
+        public delegate bool GetCustomSnappingPointsDelegate(Vector3 startWorldPoint, Vector3 currentWorldPoint, Grid worldSlideGrid, int contextIndex, List<Vector3> foundWorldspacePoints);
+        public delegate void CustomSnappedEventDelegate(int index, int context);
+
+        public static GetCustomSnappingPointsRayDelegate FindCustomSnappingPointsRayMethod;
+        public static GetCustomSnappingPointsDelegate FindCustomSnappingPointsMethod;
+        public static CustomSnappedEventDelegate CustomSnappedEvent;
+
+        public static bool GetCustomSnappingPoints(Vector3 worldRayStart, Vector3 worldRayDirection, int contextIndex, List<Vector3> foundWorldspacePoints)
+        {
+            foundWorldspacePoints.Clear();
+            return Snapping.FindCustomSnappingPointsRayMethod == null ? false :
+                    Snapping.FindCustomSnappingPointsRayMethod(worldRayStart, worldRayDirection, contextIndex, foundWorldspacePoints)
+                    && foundWorldspacePoints.Count > 0;
+        }
+
+        public static bool GetCustomSnappingPoints(Vector3 startWorldPoint, Vector3 currentWorldPoint, Grid worldSlideGrid, int contextIndex, List<Vector3> foundWorldspacePoints)
+        {
+            foundWorldspacePoints.Clear();
+            return Snapping.FindCustomSnappingPointsMethod == null ? false :
+                    Snapping.FindCustomSnappingPointsMethod(startWorldPoint, currentWorldPoint, worldSlideGrid, contextIndex, foundWorldspacePoints)
+                    && foundWorldspacePoints.Count > 0;
+        }
+
+
+        public static SnapSettings SnapMask { get; set; } = SnapSettings.All;
+        public static SnapSettings SnapSettings { get; set; } = SnapSettings.All;
+
+        static bool IsFlagEnabled(SnapSettings flag) { return (SnapSettings & flag) == flag; }
+        static void SetFlagEnabled(SnapSettings flag, bool enabled)
+        {
+            var prevEnabled = IsFlagEnabled(flag);
+            if (prevEnabled == enabled)
+                return;
+            if (enabled)
+                SnapSettings |= flag;
+            else
+                SnapSettings &= ~flag;
+            SnappingSettingsModified?.Invoke();
+        }
+        static bool IsFlagActive(SnapSettings flag) { return ((SnapSettings & SnapMask) & flag) == flag; }
         
+
+        public static ActiveTransformSnapping TransformSettings { get; set; } = ActiveTransformSnapping.All;
+        static bool IsFlagEnabled(ActiveTransformSnapping flag) { return (TransformSettings & flag) == flag; }
+        static void SetFlagEnabled(ActiveTransformSnapping flag, bool enabled)
+        {
+            var prevEnabled = IsFlagEnabled(flag);
+            if (prevEnabled == enabled)
+                return;
+            if (enabled)
+                TransformSettings |= flag;
+            else
+                TransformSettings &= ~flag;
+        }
+
         internal static bool	SnappingToggled			{ get { return EditorGUI.actionKey; } }
 
         #region BoundsSnappingEnabled
-        private static bool		_boundsSnappingEnabled = true;
         public static bool		BoundsSnappingEnabled
         {
             get
             {
-                return _boundsSnappingEnabled;
+                return IsFlagEnabled(SnapSettings.GeometryBoundsToGrid);
             }
             set
             {
-                if (_boundsSnappingEnabled == value)
-                    return;
-                _boundsSnappingEnabled = value;
-                if (SnappingSettingsModified != null)
-                    SnappingSettingsModified();
+                SetFlagEnabled(SnapSettings.GeometryBoundsToGrid, value);
             }
         }
         #endregion
@@ -34,27 +122,24 @@ namespace UnitySceneExtensions
         {
             get
             {
+                if (!TranslateSnappingEnabled)
+                    return false;
                 if (SnappingToggled)
-                    return !(BoundsSnappingEnabled || PivotSnappingEnabled);
-                return BoundsSnappingEnabled;
+                    return !(IsFlagActive(SnapSettings.GeometryBoundsToGrid) || IsFlagActive(SnapSettings.GeometryPivotToGrid));
+                return IsFlagActive(SnapSettings.GeometryBoundsToGrid);
             }
         }
-                
+
         #region PivotSnappingEnabled
-        private static bool		_pivotSnappingEnabled = true;
         public static bool		PivotSnappingEnabled
         {
             get
             {
-                return _pivotSnappingEnabled;
+                return IsFlagEnabled(SnapSettings.GeometryPivotToGrid);
             }
             set
             {
-                if (_pivotSnappingEnabled == value)
-                    return;
-                _pivotSnappingEnabled = value;
-                if (SnappingSettingsModified != null)
-                    SnappingSettingsModified();
+                SetFlagEnabled(SnapSettings.GeometryPivotToGrid, value);
             }
         }
         #endregion
@@ -62,31 +147,110 @@ namespace UnitySceneExtensions
         {
             get
             {
+                if (!TranslateSnappingEnabled)
+                    return false;
                 if (SnappingToggled)
-                    return !(BoundsSnappingEnabled || PivotSnappingEnabled);
-                return PivotSnappingEnabled;
+                    return !(IsFlagActive(SnapSettings.GeometryBoundsToGrid) || IsFlagActive(SnapSettings.GeometryPivotToGrid));
+                return IsFlagActive(SnapSettings.GeometryPivotToGrid);
             }
         }
+
         
-        #region RotateSnappingEnabled
-        private static bool		_rotateSnappingEnabled = true;		
-        public static bool		RotateSnappingEnabled
+        public static bool GridSnappingActive
         {
             get
             {
-                return _rotateSnappingEnabled;
+                return BoundsSnappingActive || PivotSnappingActive;
+            }
+        }
+
+
+
+        #region VertexSnappingEnabled
+        public static bool VertexSnappingEnabled
+        {
+            get
+            {
+                return IsFlagEnabled(SnapSettings.GeometryVertex);
             }
             set
             {
-                if (_rotateSnappingEnabled == value)
-                    return;
-                _rotateSnappingEnabled = value;
-                if (SnappingSettingsModified != null)
-                    SnappingSettingsModified();
+                SetFlagEnabled(SnapSettings.GeometryVertex, value);
             }
         }
         #endregion
-        public static bool		RotateSnappingActive
+        public static bool VertexSnappingActive
+        {
+            get
+            {
+                if (!TranslateSnappingEnabled)
+                    return false;
+                return IsFlagActive(SnapSettings.GeometryVertex);
+            }
+        }
+
+        #region EdgeSnappingEnabled
+        public static bool  EdgeSnappingEnabled
+        {
+            get
+            {
+                return IsFlagEnabled(SnapSettings.GeometryEdge);
+            }
+            set
+            {
+                SetFlagEnabled(SnapSettings.GeometryEdge, value);
+            }
+        }
+        #endregion
+        public static bool  EdgeSnappingActive
+        {
+            get
+            {
+                if (!TranslateSnappingEnabled)
+                    return false;
+                return IsFlagActive(SnapSettings.GeometryEdge);
+            }
+        }
+
+        #region SurfaceSnappingEnabled
+        public static bool  SurfaceSnappingEnabled
+        {
+            get
+            {
+                return IsFlagEnabled(SnapSettings.GeometrySurface);
+            }
+            set
+            {
+                SetFlagEnabled(SnapSettings.GeometrySurface, value);
+            }
+        }
+        #endregion
+        public static bool  SurfaceSnappingActive
+        {
+            get
+            {
+                if (!TranslateSnappingEnabled)
+                    return false;
+                return IsFlagActive(SnapSettings.GeometrySurface);
+            }
+        }
+
+
+
+        #region RotateSnappingEnabled
+        public static bool	RotateSnappingEnabled
+        {
+            get
+            {
+                return IsFlagEnabled(ActiveTransformSnapping.Rotate);
+            }
+            set
+            {
+                SetFlagEnabled(ActiveTransformSnapping.Rotate, value);
+            }
+        }
+        #endregion
+        public static bool	RotateSnappingActive
         {
             get
             {
@@ -97,34 +261,113 @@ namespace UnitySceneExtensions
         }
         
         #region ScaleSnappingEnabled
-        private static bool		_scaleSnappingEnabled = true;
-        public static bool		ScaleSnappingEnabled
+        public static bool	ScaleSnappingEnabled
         {
             get
             {
-                return _scaleSnappingEnabled;
+                return IsFlagEnabled(ActiveTransformSnapping.Scale);
             }
             set
             {
-                if (_scaleSnappingEnabled == value)
-                    return;
-                _scaleSnappingEnabled = value;
-                if (SnappingSettingsModified != null)
-                    SnappingSettingsModified();
+                SetFlagEnabled(ActiveTransformSnapping.Scale, value);
             }
         }
         #endregion
-        public static bool		ScaleSnappingActive
+        public static bool	ScaleSnappingActive
         {
             get
             {
                 if (SnappingToggled)
                     return !(BoundsSnappingEnabled || PivotSnappingEnabled);
-                return _scaleSnappingEnabled;
+                return ScaleSnappingEnabled;
             }
         }
+
+
+        #region TranslateSnappingEnabled
+        public static bool TranslateSnappingEnabled
+        {
+            get
+            {
+                return IsFlagEnabled(ActiveTransformSnapping.Translate);
+            }
+            set
+            {
+                SetFlagEnabled(ActiveTransformSnapping.Translate, value);
+            }
+        }
+        #endregion
         
-        
+        #region UVGridSnappingEnabled
+        public static bool UVGridSnappingEnabled
+        {
+            get
+            {
+                return IsFlagEnabled(SnapSettings.UVGeometryGrid);
+            }
+            set
+            {
+                SetFlagEnabled(SnapSettings.UVGeometryGrid, value);
+            }
+        }
+        #endregion
+        public static bool UVGridSnappingActive
+        {
+            get
+            {
+                if (!TranslateSnappingEnabled)
+                    return false;
+                return UVGridSnappingEnabled;
+            }
+        }
+
+        #region UVVertexSnappingEnabled
+        public static bool UVVertexSnappingEnabled
+        {
+            get
+            {
+                return IsFlagEnabled(SnapSettings.UVGeometryVertices);
+            }
+            set
+            {
+                SetFlagEnabled(SnapSettings.UVGeometryVertices, value);
+            }
+        }
+        #endregion
+        public static bool UVVertexSnappingActive
+        {
+            get
+            {
+                if (!TranslateSnappingEnabled)
+                    return false;
+                return UVVertexSnappingEnabled;
+            }
+        }
+
+        #region UVEdgeSnappingEnabled
+        public static bool UVEdgeSnappingEnabled
+        {
+            get
+            {
+                return IsFlagEnabled(SnapSettings.UVGeometryEdges);
+            }
+            set
+            {
+                SetFlagEnabled(SnapSettings.UVGeometryEdges, value);
+            }
+        }
+        #endregion
+        public static bool UVEdgeSnappingActive
+        {
+            get
+            {
+                if (!TranslateSnappingEnabled)
+                    return false;
+                return UVEdgeSnappingEnabled;
+            }
+        }
+
+
         #region MoveSnappingSteps
         public static Vector3	MoveSnappingSteps
         {
@@ -290,33 +533,169 @@ namespace UnitySceneExtensions
 
         public static Vector3 SnapPoint(Vector3 position, Grid grid, Axes enabledAxes = Axes.XYZ)
         {
-            return SnappingUtility.SnapPoint3D(position, Grid.defaultGrid.Spacing, Grid.defaultGrid.Right, Grid.defaultGrid.Up, Grid.defaultGrid.Forward, Grid.defaultGrid.Center, enabledAxes);
+            return SnappingUtility.SnapPoint3D(position, grid.Spacing, grid.Right, grid.Up, grid.Forward, grid.Center, enabledAxes);
         }
 
         public static Vector3 SnapPoint(Vector3 position, Axes enabledAxes = Axes.XYZ)
         {
             return SnapPoint(position, Grid.defaultGrid, enabledAxes);
         }
+
+        public static (float, float, float, float) SnapBounds(Extents1D currentExtents, float snappingStep)
+        {
+            if (!Snapping.BoundsSnappingActive)
+                return (float.PositiveInfinity, float.PositiveInfinity, float.PositiveInfinity, float.PositiveInfinity);
+
+            // Snap current extents against the grid (we're in grid space, so simple snap)
+            var snappedExtents          = currentExtents;
+            snappedExtents.min		    = SnappingUtility.SnapValue(snappedExtents.min, snappingStep);
+            snappedExtents.max		    = SnappingUtility.SnapValue(snappedExtents.max, snappingStep);
+
+            // Determine the offset relative to the current extents
+            var snappedExtentsOffset    = currentExtents - snappedExtents;
+            var quantized_min_extents   = SnappingUtility.Quantize(snappedExtentsOffset.min);
+            var quantized_max_extents   = SnappingUtility.Quantize(snappedExtentsOffset.max);
+            var abs_min_extents         = Mathf.Abs(quantized_min_extents);
+            var abs_max_extents         = Mathf.Abs(quantized_max_extents);
+
+            // Use the smallest distance as the best snap distance
+            if (abs_min_extents < abs_max_extents)
+                return (abs_min_extents, snappedExtentsOffset.min, quantized_min_extents, quantized_max_extents);
+            else
+                return (abs_max_extents, snappedExtentsOffset.max, quantized_min_extents, quantized_max_extents);
+        }
+
+        public static (float, float, float) SnapPoint(float currentPivot, float snappingStep)
+        {
+            if (!Snapping.PivotSnappingActive)
+                return (float.PositiveInfinity, float.PositiveInfinity, float.PositiveInfinity);
+
+            // Snap current pivot position against the grid (we're in grid space, so simple snap)
+            var snappedPivot            = SnappingUtility.SnapValue(currentPivot, snappingStep);
+            var snappedPivotOffset	    = currentPivot - snappedPivot;
+
+            // Determine the offset relative to the current extents
+            var quantized_pivot         = SnappingUtility.Quantize(snappedPivotOffset);
+            var abs_pivot               = Mathf.Abs(quantized_pivot);
+
+            return (abs_pivot, snappedPivotOffset, quantized_pivot);
+        }
+
+        public static (float, float) SnapCustom(List<Vector3> customSnapPoints, float currentPosition, Vector3 slideDirection, float minPointSnap, List<float> customDistances)
+        {
+            if (customSnapPoints.Count == 0)
+                return (float.PositiveInfinity, float.PositiveInfinity);
+
+            float smallest_abs_distance = float.PositiveInfinity;
+            float smallest_distance     = float.PositiveInfinity;
+
+            customDistances.Clear();
+            for (int i = 0; i < customSnapPoints.Count; i++)
+            {
+                var snappedPoint        = SnappingUtility.WorldPointToDistance(customSnapPoints[i], slideDirection);
+
+                // Determine the offset between the current position and the point we want to snap against
+                var snappedPointOffset  = currentPosition - snappedPoint;
+                var quantized_distance  = SnappingUtility.Quantize(snappedPointOffset);
+                var abs_distance        = Mathf.Abs(quantized_distance);
+
+                customDistances.Add(quantized_distance);
+
+                // Use the smallest distance as the best snap distance
+                if (smallest_abs_distance > abs_distance)
+                {
+                    smallest_abs_distance = abs_distance;
+                    smallest_distance = snappedPointOffset;
+                }
+            }
+
+            if (float.IsInfinity(smallest_abs_distance) || smallest_abs_distance > minPointSnap)
+                return (float.PositiveInfinity, float.PositiveInfinity);
+
+            return (smallest_abs_distance, smallest_distance);
+        }
+        
+        public static (Vector3, Vector3) SnapCustom(List<Vector3> customSnapPoints, Vector3 currentPosition, Axes enabledAxes, float minPointSnap, List<Vector3> customDistances)
+        {
+            if (customSnapPoints.Count == 0)
+                return (new Vector3(float.PositiveInfinity, float.PositiveInfinity, float.PositiveInfinity),
+                        new Vector3(float.PositiveInfinity, float.PositiveInfinity, float.PositiveInfinity));
+
+            Vector3 smallest_abs_distance = new Vector3(float.PositiveInfinity, float.PositiveInfinity, float.PositiveInfinity);
+            Vector3 smallest_distance     = new Vector3(float.PositiveInfinity, float.PositiveInfinity, float.PositiveInfinity);
+
+            if ((enabledAxes & Axes.X) != Axes.X) currentPosition.x = 0;
+            if ((enabledAxes & Axes.Y) != Axes.Y) currentPosition.y = 0;
+            if ((enabledAxes & Axes.Z) != Axes.Z) currentPosition.z = 0;
+
+            customDistances.Clear();
+            for (int i = 0; i < customSnapPoints.Count; i++)
+            {
+                var snappedPoint        = customSnapPoints[i];
+                if ((enabledAxes & Axes.X) != Axes.X) snappedPoint.x = 0;
+                if ((enabledAxes & Axes.Y) != Axes.Y) snappedPoint.y = 0;
+                if ((enabledAxes & Axes.Z) != Axes.Z) snappedPoint.z = 0;
+
+                // Determine the offset between the current position and the point we want to snap against
+                var snappedPointOffset  = currentPosition - snappedPoint;
+                var quantized_distance  = SnappingUtility.Quantize(snappedPointOffset);
+                var abs_distance        = new Vector3(Mathf.Abs(quantized_distance.x), Mathf.Abs(quantized_distance.y), Mathf.Abs(quantized_distance.z));
+
+                customDistances.Add(quantized_distance);
+
+                // Use the smallest distance as the best snap distance
+                if (smallest_abs_distance.sqrMagnitude > abs_distance.sqrMagnitude)
+                {
+                    smallest_abs_distance = abs_distance;
+                    smallest_distance = snappedPointOffset;
+                }
+            }
+            if (float.IsInfinity(smallest_abs_distance.x) || 
+                smallest_abs_distance.magnitude > minPointSnap)
+                return (new Vector3(float.PositiveInfinity, float.PositiveInfinity, float.PositiveInfinity), 
+                        new Vector3(float.PositiveInfinity, float.PositiveInfinity, float.PositiveInfinity));
+
+            return (smallest_abs_distance, smallest_distance);
+        }
+        
+        public static void SendCustomSnappedEvents(float quantizedDistance, List<float> customDistances, int context)
+        {
+            for (int i = 0; i< customDistances.Count; i++)
+            {
+                if (quantizedDistance == customDistances[i])
+                    Snapping.CustomSnappedEvent(i, context);
+            }
+        }
+
+        public static void SendCustomSnappedEvents(Vector3 quantizedDistance, List<Vector3> customDistances, int context)
+        {
+            for (int i = 0; i < customDistances.Count; i++)
+            {
+                if (quantizedDistance == customDistances[i])
+                    Snapping.CustomSnappedEvent(i, context);
+            }
+        }
     }
 
     // TODO: better naming
     public class Snapping1D
     {
-        private Vector2			startMousePosition;
+        private Vector2			startMousePosition; 
+        
+        private Vector3			slideStart;             
+        private Vector3			slideOrigin;            // A point on the line that is snapped to the grid
+        private float			startOffset;            // Distance from slideOrigin to start world position along the line
+        private Vector3			slideOffset;            // Delta from slideOrigin to start world position
+        private Extents1D		slideExtents;           // Extents of points along line relative to slideOrigin
+        private Axis			slideAxis;              // Axis we're moving on (used for axis locking)
 
-        private Extents1D		slideExtents;
-        private Vector3			slideOrigin;
-        private Vector3			slideOffset;
-        private Axis			slideAxis;
+        private Vector3			slidePosition;          // Current unsnapped position on the line, relative to slideOrigin
+        private Vector3			snappedPosition;        // Current snapped position on the line, relative to slideOrigin
 
-        private Vector3			slidePosition;
-        private Vector3			snappedPosition;
-
-        private Vector3			slideDirection;
-        private float			snappingStep;
+        private Vector3			slideDirection;         // Direction of the line we're snapping on
+        private float			snappingStep;           // Steps of the grid along the line
 
         private SnapResult1D	snapResult;
-        private float			startOffset;
 
         public Vector3			WorldPosition			{ get { return slidePosition + this.slideOffset; } }
         public Vector3			WorldOffset				{ get { return slidePosition - this.slideOrigin; } }
@@ -336,27 +715,29 @@ namespace UnitySceneExtensions
 
         public SnapResult1D		SnapResult				{ get { return snapResult; } }
 
-        public void Initialize(Vector2 currentMousePosition, Vector3 slideOrigin, Vector3 slideDirection, float snappingStep, Axis axis)
+
+        public void Initialize(Vector2 currentMousePosition, Vector3 slideStart, Vector3 slideDirection, float snappingStep, Axis axis)
         {
             this.slideDirection		= slideDirection;
             this.snappingStep		= snappingStep;
-            
-            this.slideOrigin		= SceneHandleUtility.ProjectPointRay(Grid.ActiveGrid.Center, slideOrigin, slideDirection);
+
+            this.slideStart         = slideStart;
+            this.slideOrigin		=  SceneHandleUtility.ProjectPointRay(Grid.ActiveGrid.Center, slideStart, slideDirection);
             this.slideExtents.min	= 			
             this.slideExtents.max	= 0;
             
             this.snappedPosition	= this.slideOrigin;
             
             this.slidePosition		= this.slideOrigin;
-            this.slideOffset		= slideOrigin - this.slideOrigin;
-            this.startOffset		= SnappingUtility.WorldPointToDistance (this.slidePosition - slideOrigin, slideDirection);
+            this.slideOffset		= slideStart - this.slideOrigin;
+            this.startOffset		= SnappingUtility.WorldPointToDistance(slideStart - this.slidePosition, slideDirection);
 
             this.startMousePosition = currentMousePosition;
             this.slideAxis			= axis;
             
             this.snapResult			= SnapResult1D.None;
-            this.min = slideOrigin + SnappingUtility.DistanceToWorldPoint (slideExtents.min, slideDirection);
-            this.max = slideOrigin + SnappingUtility.DistanceToWorldPoint (slideExtents.max, slideDirection);
+            this.min = slideStart + SnappingUtility.DistanceToWorldPoint (slideExtents.min, slideDirection);
+            this.max = slideStart + SnappingUtility.DistanceToWorldPoint (slideExtents.max, slideDirection);
         }
         
         static Extents1D GetExtentsOfPointArray(Matrix4x4 matrix, Vector3[] points, Vector3 slideOrigin, Vector3 slideDirection)
@@ -380,47 +761,105 @@ namespace UnitySceneExtensions
             this.slideExtents = GetExtentsOfPointArray(matrix, points, this.slideOrigin, this.slideDirection);
         }
         
+        static readonly List<Vector3>       s_CustomSnapPoints    = new List<Vector3>();
+        static readonly List<float>         s_CustomDistances     = new List<float>();
         
-        public Vector3 SnapExtents1D(Extents1D currentExtents, Vector3 currentPosition, Vector3 slideOrigin, Vector3 slideDirection, float snappingStep, out SnapResult1D snapResult)
+        public Vector3 SnapExtents1D(Vector3 currentPosition)
         {
-            snapResult = SnapResult1D.None;
+            this.snapResult = SnapResult1D.None;
 
-            var offsetPos			= currentPosition - slideOrigin;
-            var offsetDistance		= SnappingUtility.WorldPointToDistance(offsetPos, slideDirection);
-            var currDistance		= offsetDistance - this.startOffset;
-            var movedExtents		= currentExtents + offsetDistance;
-            
-            var snappedExtents		= movedExtents;
-            snappedExtents.min		= SnappingUtility.SnapValue(movedExtents.min, snappingStep);
-            snappedExtents.max		= SnappingUtility.SnapValue(movedExtents.max, snappingStep);
+            var boundsActive    = Snapping.BoundsSnappingActive;
+            var pivotActive     = Snapping.PivotSnappingActive;
 
-            var snappedExtentsOffset = snappedExtents - movedExtents;
-            var snappedPivot		 = SnappingUtility.SnapValue(currDistance, snappingStep) - currDistance;
-            
-            if (!Snapping.BoundsSnappingActive && !Snapping.PivotSnappingActive)
+            // Get custom snapping positions along the ray
+            var haveCustomSnapping = Snapping.GetCustomSnappingPoints(this.slideOffset + slidePosition, this.slideDirection, 0, s_CustomSnapPoints);
+            if (!boundsActive && !pivotActive && !haveCustomSnapping)
                 return currentPosition;
-            var abs_pivot		= Snapping.PivotSnappingActive  ? SnappingUtility.Quantize(Mathf.Abs(snappedPivot            )) : float.PositiveInfinity;
-            var abs_min_extents = Snapping.BoundsSnappingActive ? SnappingUtility.Quantize(Mathf.Abs(snappedExtentsOffset.min)) : float.PositiveInfinity;
-            var abs_max_extents = Snapping.BoundsSnappingActive ? SnappingUtility.Quantize(Mathf.Abs(snappedExtentsOffset.max)) : float.PositiveInfinity;
-            var snappedOffsetDistance = (abs_pivot < abs_min_extents && abs_pivot < abs_max_extents) ? snappedPivot : ((abs_min_extents < abs_max_extents) ? snappedExtentsOffset.min : snappedExtentsOffset.max);
-            if (abs_min_extents <= abs_max_extents && abs_min_extents <= abs_pivot) snapResult |= SnapResult1D.Min;
-            if (abs_max_extents <= abs_min_extents && abs_max_extents <= abs_pivot) snapResult |= SnapResult1D.Max;
-            if (abs_pivot       <= abs_min_extents && abs_pivot <= abs_max_extents) snapResult |= SnapResult1D.Pivot;
-            
-            min = slideOrigin + SnappingUtility.DistanceToWorldPoint (snappedExtents.min, slideDirection);
-            max = slideOrigin + SnappingUtility.DistanceToWorldPoint (snappedExtents.max, slideDirection);
 
-            var newOffset = offsetDistance + snappedOffsetDistance;
-            if (Mathf.Abs(snappedOffsetDistance) > Mathf.Abs(offsetDistance)) newOffset = 0;
 
-            var snappedDistance = SnappingUtility.DistanceToWorldPoint (newOffset, slideDirection);
-            var snappedPosition = (snappedDistance + slideOrigin);
+            const float kMinPointSnap = 0.25f;
+            float minPointSnap = !(boundsActive || pivotActive) ? kMinPointSnap : float.PositiveInfinity;
+
+
+            // Offset to snapped position relative to the unsnapped position 
+            // (used to determine which snap value is closest to unsnapped position)
+            // Smallest value is used
+            float snappedOffsetDistance     = float.PositiveInfinity;
+            float snappedOffsetAbsDistance  = float.PositiveInfinity;
+
+
+            var deltaToOrigin		= currentPosition - this.slideOrigin;
+            var distanceToOrigin	= SnappingUtility.WorldPointToDistance(deltaToOrigin, this.slideDirection);
+
+            var quantized_min_extents   = float.PositiveInfinity;
+            var quantized_max_extents   = float.PositiveInfinity;
+            var snappedExtents          = Extents1D.empty;
+            if (boundsActive)
+            {
+                (float abs_distance, float snappedOffset, float quantized_min, float quantized_max) = Snapping.SnapBounds(this.slideExtents + distanceToOrigin, this.snappingStep);
+                quantized_min_extents = quantized_min;
+                quantized_max_extents = quantized_max;
+                snappedExtents.min = this.slideExtents.min + distanceToOrigin + Mathf.Abs(quantized_min_extents);
+                snappedExtents.max = this.slideExtents.min + distanceToOrigin + Mathf.Abs(quantized_max_extents);
+                if (snappedOffsetAbsDistance > abs_distance) { snappedOffsetAbsDistance = abs_distance; snappedOffsetDistance = snappedOffset; }
+            }
+
+            var quantized_pivot = float.PositiveInfinity;
+            if (pivotActive)
+            {
+                (float abs_distance, float snappedOffset, float quantized) = Snapping.SnapPoint(this.startOffset + distanceToOrigin, this.snappingStep);
+                quantized_pivot = quantized;
+                if (snappedOffsetAbsDistance > abs_distance) { snappedOffsetAbsDistance = abs_distance; snappedOffsetDistance = snappedOffset; }
+            }
+
+            if (haveCustomSnapping)
+            {
+                (float abs_distance, float snappedOffset) = Snapping.SnapCustom(s_CustomSnapPoints, this.startOffset + distanceToOrigin, this.slideDirection, minPointSnap, s_CustomDistances);
+                if (snappedOffsetAbsDistance > abs_distance) { snappedOffsetAbsDistance = abs_distance; snappedOffsetDistance = snappedOffset; }
+            }
+
+            // If we didn't actually snap, just return the actual unsnapped position
+            if (float.IsInfinity(snappedOffsetDistance))
+                return currentPosition;
+
+            // Snap against drag start position
+            if (Mathf.Abs(snappedOffsetDistance) > Mathf.Abs(distanceToOrigin)) 
+                snappedOffsetDistance = distanceToOrigin; 
+
+            var quantizedDistance = SnappingUtility.Quantize(snappedOffsetDistance);
+
+            // Figure out what kind of snapping visualization to show, this needs to be done afterwards since 
+            // while we're snapping each type of snap can override the next one. 
+            // Yet at the same time it's possible to snap with multiple snap-types at the same time.
+
+            if (boundsActive)
+            {
+                if (quantizedDistance == quantized_min_extents) this.snapResult |= SnapResult1D.Min;
+                if (quantizedDistance == quantized_max_extents) this.snapResult |= SnapResult1D.Max;
+
+                min = this.slideOrigin + SnappingUtility.DistanceToWorldPoint(snappedExtents.min, this.slideDirection);
+                max = this.slideOrigin + SnappingUtility.DistanceToWorldPoint(snappedExtents.max, this.slideDirection);
+            }
+
+            if (pivotActive)
+            {
+                if (quantizedDistance == quantized_pivot) this.snapResult |= SnapResult1D.Pivot;
+            }
+
+            if (haveCustomSnapping)
+                Snapping.SendCustomSnappedEvents(quantizedDistance, s_CustomDistances, 0);
+
+
+            // Calculate the new position based on the snapped offset
+            var newOffset = distanceToOrigin - snappedOffsetDistance;
+            var snappedDistance = SnappingUtility.DistanceToWorldPoint (newOffset, this.slideDirection);
+            var snappedPosition = (snappedDistance + this.slideOrigin);
             return snappedPosition;
         }
 
         public bool Move(Vector2 currentMousePosition)
         {
-            var distanceOnLine	= SceneHandleUtility.CalcLineTranslation(this.startMousePosition, currentMousePosition, this.slideOrigin, this.slideDirection);
+            var distanceOnLine	= SceneHandleUtility.CalcLineTranslation(this.startMousePosition, currentMousePosition, this.slideStart, this.slideDirection);
             if (distanceOnLine == 0)
                 return false;
 
@@ -431,13 +870,8 @@ namespace UnitySceneExtensions
             
             this.slidePosition	= this.slideOrigin + delta;
 
-            var newSnappedPosition = this.slidePosition;
-            
-            //if (Snapping.BoundsSnappingActive)
-                newSnappedPosition	= SnapExtents1D(this.slideExtents, newSnappedPosition, this.slideOrigin, this.slideDirection, this.snappingStep, out this.snapResult);
-            //else
-            //	this.snapResult = SnapResult1D.None;
-
+            var newSnappedPosition  = this.slidePosition;            
+            newSnappedPosition	    = SnapExtents1D(newSnappedPosition);
             newSnappedPosition		= SnappingUtility.PerformAxisLocking(this.slidePosition, newSnappedPosition, slideAxis);
 
             if ((this.snappedPosition - newSnappedPosition).sqrMagnitude == 0)
@@ -460,6 +894,8 @@ namespace UnitySceneExtensions
     {
         private Vector3     startWorldPlanePosition;
         private Plane       worldSlidePlane;
+        private Vector3     vectorX;
+        private Vector3     vectorZ;
         private Grid        worldSlideGrid;
 
         private Extents3D	gridSlideExtents;
@@ -492,18 +928,20 @@ namespace UnitySceneExtensions
         
         public void Initialize(Grid worldSlideGrid, Vector2 currentGUIPosition, Vector3 localSlideOrigin, Matrix4x4 localToWorldMatrix)
         {
-            this.localToWorldMatrix		= localToWorldMatrix;			
-            this.worldSlidePosition		= this.worldSlideOrigin;
+            this.localToWorldMatrix		= localToWorldMatrix;
             this.worldSlideGrid			= worldSlideGrid;
             
             var worldSlideOrigin		= this.localToWorldMatrix.MultiplyPoint(localSlideOrigin);
             var gridSlideOrigin			= this.worldSlideGrid.WorldToGridSpace.MultiplyPoint(worldSlideOrigin);
+            this.worldSlidePosition		= worldSlideOrigin;
             this.gridSlideExtents.min	= gridSlideOrigin;
             this.gridSlideExtents.max	= gridSlideOrigin;
             this.worldSlideOrigin		= worldSlideOrigin;
             this.worldSnappedPosition	= worldSlideOrigin;
-            
+
             this.worldSlidePlane		= this.worldSlideGrid.PlaneXZ;
+            this.vectorX		        = this.worldSlideGrid.Right;
+            this.vectorZ		        = this.worldSlideGrid.Forward;
             
             this.snapResult				= SnapResult3D.None;
 
@@ -514,6 +952,8 @@ namespace UnitySceneExtensions
         {
             startWorldPlanePosition = Vector3.zero;
             worldSlidePlane         = new Plane(Vector3.up, 0);
+            vectorX		            = Vector3.right;
+            vectorZ		            = Vector3.forward;
             worldSlideGrid          = null;
 
             gridSlideExtents        = new Extents3D(Vector3.zero);
@@ -578,31 +1018,33 @@ namespace UnitySceneExtensions
                 return false;
             }
 
+            var originSnappedPlane = new Plane(worldSlidePlane.normal, worldSlideOrigin);
+
             var worldRay = UnityEditor.HandleUtility.GUIPointToWorldRay(guiPosition);
             var dist = 0.0f;
-
+            
             var camera  = Camera.current;
             var forward = camera.transform.forward;
-            if (Mathf.Abs(Vector3.Dot(worldSlidePlane.normal, forward)) < 0.125f)
+            if (Mathf.Abs(Vector3.Dot(originSnappedPlane.normal, forward)) < 0.125f)
             {
                 var normal = worldSlideGrid.GetClosestAxisVector(forward);
-                var origin = worldSlidePlane.ClosestPointOnPlane(worldSlideOrigin);
+                var origin = originSnappedPlane.ClosestPointOnPlane(worldSlideOrigin);
                 return GetIntersectionOnAlternativePlane(worldRay, normal, origin, out worldPlanePosition);
             }
-            
-            if (!worldSlidePlane.Raycast(worldRay, out dist)) { dist = float.PositiveInfinity; }
+
+            if (!originSnappedPlane.Raycast(worldRay, out dist)) { dist = float.PositiveInfinity; }
 
             float farClipPlaneDistance = camera.farClipPlane * 0.5f;
             if (dist > farClipPlaneDistance)
             {
                 var normal = worldSlideGrid.GetClosestAxisVector(forward);
-                var origin = worldSlidePlane.ClosestPointOnPlane(camera.transform.position) + (normal * farClipPlaneDistance);
+                var origin = originSnappedPlane.ClosestPointOnPlane(camera.transform.position) + (normal * farClipPlaneDistance);
                 return GetIntersectionOnAlternativePlane(worldRay, normal, origin, out worldPlanePosition);
             } else
-            { 
-                if (!worldSlidePlane.SignedRaycast(worldRay, out dist)) { worldPlanePosition = worldSlideOrigin; return false; }
+            {
+                if (!originSnappedPlane.SignedRaycast(worldRay, out dist)) { worldPlanePosition = worldSlideOrigin; return false; }
 
-                worldPlanePosition = worldRay.GetPoint(dist);
+                worldPlanePosition = worldRay.GetPoint(Mathf.Abs(dist));
 #if ENABLE_DEBUG_GRID
                 {
                     var tangent = GeometryUtility.CalculateTangent(worldSlidePlane.normal);
@@ -620,20 +1062,21 @@ namespace UnitySceneExtensions
             if (worldSlideGrid == null)
             {
                 this.worldSnappedPosition = this.worldSlideOrigin;
+                Debug.Log($"({(Decimal)worldSnappedPosition.x}, {(Decimal)worldSnappedPosition.y}, {(Decimal)worldSnappedPosition.z})");
                 return false;
             }
 
             Vector3 worldPlanePosition;
             if (!GetPlaneIntersection(currentGUIPosition, out worldPlanePosition))
                 return false;
-            
+
             var worldDelta = worldPlanePosition - this.startWorldPlanePosition;
             if ((snappingMode != SnappingMode.Always) && worldDelta.sqrMagnitude == 0)
                 return false;
             
             this.worldSlidePosition = this.worldSlideOrigin + worldDelta;
             var newWorldPosition	= (snappingMode == SnappingMode.Never) ? worldSlidePosition :
-                    this.worldSlideGrid.SnapExtents3D(this.gridSlideExtents, this.worldSlidePosition, this.worldSlideOrigin, out this.snapResult, ignoreStartPoint: (snappingMode == SnappingMode.Always));
+                    this.worldSlideGrid.SnapExtents3D(this.gridSlideExtents, this.worldSlidePosition, this.worldSlideOrigin, this.worldSlideGrid, out this.snapResult, ignoreStartPoint: (snappingMode == SnappingMode.Always));
                         
             // this doesn't make sense since we're locking axis in world space, but should be grid space, which we're already doing in SnapExtents3D?
             //newWorldPosition = SnappingUtility.PerformAxisLocking(this.worldSlideOrigin, newWorldPosition);
