@@ -4,9 +4,16 @@ using System;
 using UnityEngine.Profiling;
 using Unity.Jobs;
 using Unity.Collections;
+using System.Collections.Generic;
 
 namespace Chisel.Components
 {
+    public struct ChiselColliderObjectUpdate
+    {
+        public int                  meshIndex;
+        public Mesh.MeshDataArray   meshDataArray;
+    }
+
     [Serializable]
     public class ChiselColliderObjects
     {
@@ -72,35 +79,7 @@ namespace Chisel.Components
             meshCollider.sharedMaterial = physicsMaterial;
         }
 
-        public void Update(ChiselModel model, ref VertexBufferContents contents, int contentsIndex)
-        {
-            var meshIsModified = false;
-
-            // Retrieve the generatedMesh, and store it in the Unity Mesh
-            var modelTree = model.Node;
-            Profiler.BeginSample("CopyFromPositionOnly");
-            meshIsModified = contents.CopyPositionOnlyToMesh(contentsIndex, sharedMesh);
-            Profiler.EndSample();
-
-            if (meshCollider.sharedMesh != sharedMesh)
-                meshIsModified = true;
-
-            var expectedEnabled = sharedMesh.vertexCount > 0;
-            if (meshCollider.enabled != expectedEnabled)
-                meshCollider.enabled = expectedEnabled;
-
-#if UNITY_EDITOR
-            if (meshIsModified)
-            {
-                // MeshCollider doesn't rebuild it's internal collider mesh unless you change it's mesh
-                meshCollider.sharedMesh = sharedMesh;
-                UnityEditor.EditorUtility.SetDirty(meshCollider);
-                UnityEditor.EditorUtility.SetDirty(model);
-            }
-#endif
-        }
-
-        public static void UpdateColliders(ChiselModel model, ChiselColliderObjects[] colliders)
+        public static void UpdateProperties(ChiselModel model, ChiselColliderObjects[] colliders)
         {
             if (colliders == null)
                 return;
@@ -110,6 +89,14 @@ namespace Chisel.Components
                 var meshCollider = colliders[i].meshCollider;
                 if (!meshCollider)
                     continue;
+
+                var sharedMesh = colliders[i].sharedMesh;
+                if (meshCollider.sharedMesh != sharedMesh)
+                    meshCollider.sharedMesh = sharedMesh;
+
+                var expectedEnabled = sharedMesh.vertexCount > 0;
+                if (meshCollider.enabled != expectedEnabled)
+                    meshCollider.enabled = expectedEnabled;
 
                 if (meshCollider.cookingOptions != colliderSettings.cookingOptions)
                     meshCollider.cookingOptions	=  colliderSettings.cookingOptions;
