@@ -14,12 +14,11 @@ namespace Chisel.Components
 {
     public struct ChiselRenderObjectUpdate
     {
-        public int                      meshIndex;
-        public Mesh.MeshDataArray       meshDataArray;
-        public ChiselRenderObjects      instance;
-        public Material                 materialOverride;
-        public bool                     meshIsModified;
-        public ChiselModel              model;
+        public int                  meshIndex;
+        public ChiselRenderObjects  instance;
+        public Material             materialOverride;
+        public bool                 meshIsModified;
+        public ChiselModel          model;
     }
 
     [Serializable]
@@ -172,10 +171,12 @@ namespace Chisel.Components
             {
                 meshRenderer.allowOcclusionWhenDynamic = false;
                 meshRenderer.lightProbeUsage = LightProbeUsage.Off;
-                meshRenderer.scaleInLightmap = 0.0f;
                 meshRenderer.reflectionProbeUsage = ReflectionProbeUsage.Off;
                 meshRenderer.motionVectorGenerationMode = MotionVectorGenerationMode.ForceNoMotion;
                 meshRenderer.shadowCastingMode = ShadowCastingMode.Off;
+#if UNITY_EDITOR
+                meshRenderer.scaleInLightmap = 0.0f;
+#endif
             }
         }
 
@@ -367,6 +368,7 @@ namespace Chisel.Components
                     objectUpdate.meshIsModified = true;
                     objectUpdates[u] = objectUpdate;
                 }
+
                 var expectedEnabled = vertexBufferContents.triangleBrushIndices[contentsIndex].Length > 0;
                 if (instance.meshRenderer.enabled != expectedEnabled)
                     instance.meshRenderer.enabled = expectedEnabled;
